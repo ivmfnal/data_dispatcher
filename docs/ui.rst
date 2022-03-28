@@ -215,6 +215,8 @@ for the specified amount of time. Depending on the outcome, the command will:
         * produce empty output
         * exit with code 10
         
+If the worker uses "-j" option reserving next file, then the JSON data will include project and file attributes attached to the project and the file at the file of project creation.
+        
 Releasing the file
 ..................
 
