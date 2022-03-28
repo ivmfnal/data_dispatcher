@@ -7,11 +7,15 @@ Data Dispatcher
 
 `Docuemntation <http://data-dispatcher.readthedocs.io/>`_
 
-Install: 
-
 .. code-block:: shell
 
+    # install Data Dispatcher Client
     $ pip install --user datadispatcher
+
+    # set up the environment
+    $ export DATA_DISPATCHER_URL=...
+    $ export DATA_DISPATCHER_AUTH_URL=...
+    $ export METACAT_SERVER_URL=...
     
 .. code-block:: shell
 
