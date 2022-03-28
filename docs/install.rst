@@ -1,0 +1,22 @@
+Data Dispatcher Client Installation and Configuration
+=====================================================
+
+To install the Data Dispatcher client, use pip command:
+
+    .. code-block:: shell
+    
+        $ pip install --user datadispatcher
+        
+To configure the client, you need to define the following environment variables:
+
+    * DATA_DISPATCHER_URL - URL for Data Dispatcher data server
+    * DATA_DISPATCHER_AUTH_URL - URL for Data Dispatcher authentication server
+    * METACAT_SERVER_URL - URL for MetaCat data srever
+
+For DUNE, the values are:
+
+    * DATA_DISPATCHER_URL = https://metacat.fnal.gov:9443/dune_dd/data
+    * DATA_DISPATCHER_AUTH_URL - https://metacat.fnal.gov:8143/auth/dune
+    * METACAT_SERVER_URL - https://metacat.fnal.gov:9443/dune_meta_demo/app
+    
+

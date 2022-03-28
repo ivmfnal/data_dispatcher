@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block headline %}File Handle{% endblock %}
+
+{% block content %}
+
+<table class="form">
+    <tr>    <th>Project ID</th> <td><a href="./project?project_id={{handle.ProjectID}}">{{handle.ProjectID}}</a></td> </tr>
+    <tr>    <th>File namespace</th> <td>{{handle.Namespace}}</td></tr>
+    <tr>    <th>File name</th> <td>{{handle.Name}}</td></tr>
+    <tr>    <th>State</th> <td>{{handle.State}}</td></tr>
+    <tr>    <th>Worker</th> <td>{{handle.WorkerID or ""}}</td></tr>
+    <tr>    <th>Attempts</th> <td>{{handle.Attempts}}</td></tr>
+    <tr>    <th>Attributes</th> 
+            <td class="nopadding">
+                {% if handle.Attributes|length %}
+                    <table class="placement attributes dense">
+                        {% for name, value in handle.Attributes.items() %}
+                            <tr><td style="text-align: right">{{name}}:</td><td>{{value}}</td></tr>
+                        {% endfor %}
+                    </table>
+                {% endif %}
+            </td>
+    </tr>
+    <tr>    <th>Replicas</th>
+            <td class="nopadding">
+                <table class="data">
+                    <tr><th>RSE</th><th>Preference</th><th>Path/URL</th><th>Available</th>
+                    {% for r in handle.replicas().values() %}
+                        <tr>
+                            <td>{{r.RSE}}</td>
+                            <td>{{r.Preference}}</td>
+                            <td>path: {{r.Path}}<br/>URL: {{r.URL}}</td>
+                            <td>{{"yes" if r.Available else "no"}}</td>
+                        </tr>
+                    {% endfor %}
+                </table>
+        </td> 
+    </tr>
+</table>
+
+{% endblock %}
+
+
+

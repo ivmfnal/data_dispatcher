@@ -1,0 +1,11 @@
+$ python pin_many.py /pnfs/fnal.gov/usr/test/litvinse/ep047d08.0042dila_p10_1 /pnfs/fnal.gov/usr/test/litvinse/ep047d08.0042dila_p10_2
+(201, 'https://fndca3b.fnal.gov:3880/api/v1/bulk-requests/7357d257-0c0d-4691-85af-e8860fb7e4c1')
+
+$  curl  -L --capath /etc/grid-security/certificates --cert /tmp/x509up_u8637 --cacert /tmp/x509up_u8637 --key  /tmp/x509up_u8637  https://fndca3b.fnal.gov:3880/api/v1/bulk-requests/7357d257-0c0d-4691-85af-e8860fb7e4c1
+{
+  "firstArrived" : 1643742558460,
+  "lastModified" : 1643742558462,
+  "status" : "STARTED",
+  "targets" : 2,
+  "processed" : 0
+}

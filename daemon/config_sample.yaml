@@ -1,0 +1,65 @@
+#
+# Sample for the Data Dispatcher Availability Daemon configuration
+#
+
+ssl:        # optional
+    cert:   cert_file.pem   
+    key:    key_file.pem
+    ca_bundle:  ca_bundle.pem
+
+logging:
+    log:    /path/to/logfile                    # or "-" for stdout (default)
+    errors: /path/to/error_file                 # or "-" for stderr (default)
+    debug:  /path/to/debug_file                 # or "-" for stderr, or false=disabled (default)
+
+database:
+    port: 5432
+    host: ifdb04.fnal.gov
+    user: ivm
+    password: password
+    dbname: data_dispatcher
+    scheme: public
+
+user_database:
+    port: 5432
+    host: ifdb04.fnal.gov
+    user: ivm
+    password: password
+    dbname: dune_metadata
+    schema: production
+
+
+rucio:
+    message_broker:
+        host:   host
+        port:   61613
+        vhost:  /               # default: "/"
+        subscribe:  /topic/rucio.events.dune
+
+rse:
+    RSE_NAME:
+        view:  REAL_RSE_NAME                # this is a "view" RSE for actual RSE "REAL_RSE_NAME"
+        remove_prefix:   /root/path # used to translate transport URL to path, default: ""
+        add_prefix:      /root1/path1 # used to translate transport URL to path, default: ""
+        
+    REAL_RSE_NAME:
+        remove_prefix:   /root/path # used to translate transport URL to path, default: ""
+        preference: 0               # default 0
+        
+        # for tape RSEs only:
+        is_tape:    true            # default: false
+        pin_url:    http://host:port/...
+        query_url:  http://host:port/...
+        max_burst:  100             # default: 100
+    
+    FNAL_DCACHE:
+        is_tape:    true
+        pin_url:    https://fndca3b.fnal.gov:3880/api/v1/bulk-requests
+        query_url:  https://fndca3b.fnal.gov:3880/api/v1/namespace
+    
+    FNAL_DCACHE_XROOTD:
+        alias:      FNAL_DCACHE
+
+daemon_server:
+    port: 8989
+        

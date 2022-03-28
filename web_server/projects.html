@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block headline %}Projects{% endblock %}
+
+{% block content %}
+
+<table class="data">
+	<tr>
+		<th rowspan=2>Project ID</th>
+        <th rowspan=2>User</th>
+		<th rowspan=2>Status</th>
+		<th colspan="{{handle_states|length}}">File counts</th>
+	</tr>
+    <tr>
+        {% for state in handle_states %}
+            <th>{{state}}</th>
+        {% endfor %}
+    </tr>
+	{% for prj in projects %}
+		<tr>
+            <td><a href="./project?project_id={{prj.ID}}">{{prj.ID}}</a></td>
+            <td>{{prj.Owner}}</td>
+            <td>{{prj.State}}</td>
+            {% for state in handle_states %}
+                <td>{{prj.HandleCounts[state]}}</td>
+            {% endfor %}
+        </tr>
+	{% endfor %}
+</table>
+
+{% endblock %}
+
+
+

@@ -1,0 +1,40 @@
+#
+# Sample for the Data Dispatcher Web Server configuration
+#
+
+logging:
+    log:    /path/to/logfile                    # or "-" for stdout (default)
+    errors: /path/to/error_file                 # or "-" for stderr (default)
+    debug:  /path/to/debug_file                 # or "-" for stderr, or false=disabled (default)
+
+daemon_server:      # interface to the Availability Daemon
+    url: http://dbweb3.fnal.gov:8989
+    
+web_server:
+    gui_port: 8080
+    data_port: 8088
+    data_log: /path/to/log_file         # defult "-"
+    
+authentication:
+    secret: "some-random-string"
+    ldap:
+        server_url: ldaps://ldaps.fnal.gov
+        dn_template: "cn=%s,ou=FermiUsers,dc=services,dc=fnal,dc=gov"
+
+database:
+    port: 5432
+    host: ifdb04.fnal.gov
+    user: ivm
+    password: password
+    dbname: data_dispatcher
+    scheme: public
+
+user_database:
+    port: 5432
+    host: ifdb04.fnal.gov
+    user: ivm
+    password: password
+    dbname: dune_metadata
+    schema: production
+
+
