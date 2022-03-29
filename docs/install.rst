@@ -1,12 +1,31 @@
 Data Dispatcher Client Installation and Configuration
 =====================================================
 
+Installation
+------------
+
 To install the Data Dispatcher client, use pip command:
 
     .. code-block:: shell
     
         $ pip install --user datadispatcher
-        
+
+Alternatively:
+
+    .. code-block:: shell
+    
+        $ git clone https://github.com/ivmfnal/metacat.git
+        $ cd metacat
+        $ python setup.py install --user
+        $ cd ..
+        $ git clone https://github.com/ivmfnal/data_dispatcher.git
+        $ cd data_dispatcher
+        $ python setup.py install --user
+
+
+Configuration
+-------------
+
 To configure the client, you need to define the following environment variables:
 
     * DATA_DISPATCHER_URL - URL for Data Dispatcher data server
