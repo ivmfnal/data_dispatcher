@@ -45,7 +45,28 @@ class Handler(BaseHandler):
         #print(specs.get("files"))
         db = self.App.db()
         project = DBProject.create(db, user.Username, attributes=attributes)
-        project.add_files(files)
+        files_converted = []
+        for f in files:
+            if isinstance(f, str):
+                try:
+                    namespace, name = f.split(":")
+                except:
+                    return 400, f"Invalid file specification: {f} - can not parse as namespace:name"
+                files_converted.append({"namespace": namespace, "name":name})
+            elif isinstance(f, dict):
+                if "namespace" not in f or "name" not in f:
+                    return 400, f"Invalid file specification: {f} - namespace or name missing"
+                attrs = f.get("attributes", {})
+                if not isinstance(attrs, dict):
+                    return 400, f"Invalid file specification: {f} - invalid file attributes specification, expected a dictionary"
+                files_converted.append({
+                    "namespace":f["namespace"],
+                    "name":f["name"],
+                    "attributes":attrs
+                })
+            else:
+                return 400, f"Invalid file specification: {f} - unsupported type"
+        project.add_files(files_converted)
         self.App.project_created(project.ID)
         return json.dumps(project.as_jsonable(with_handles=True)), "text/json"
         

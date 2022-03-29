@@ -33,7 +33,6 @@ Commands:
     
     show file [-j] <namespace>:<name>
 
-    list handles [-s <status>] <project_id>                - list file handles, -s filters handles by status
     show handle [-j] <project_id> <namespace>:<name>       - show file handle, -j - as JSON
 
     next [-j] [-t <timeout>] <project_id>                  - get next available file, 

@@ -7,8 +7,9 @@ def show_handle(client, rest):
         if len(args) < 1:
             print(Usage)
             sys.exit(2)
-        did = args[0]
-        handle = client.get_handle(handle_id)
+        project_id, did = args
+        project_id = int(project_id)
+        handle = client.get_handle(project_id, did)
         if not handle:
             print(f"Handle {handle_id} not found")
             sys.exit(1)

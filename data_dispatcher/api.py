@@ -93,7 +93,22 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     
     DefaultWorkerIDFile = ".data_dispatcher_worker_id"
     
-    def __init__(self, server_url, worker_id=None, worker_id_file=None, token = None, token_file = None, auth_server_url=None):
+    def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, token = None, token_file = None):
+        
+        """Initializes the DataDispatcherClient object
+
+        Parameters
+        ----------
+        server_url : str
+            The server endpoint URL. If unspecified, the value of the DATA_DISPATCHER_URL environment will be used
+        auth_server_url : str
+            The endpoint URL for the Authentication server. If unspecified, the value of the DATA_DISPATCHER_AUTH_URL environment will be used
+        worker_id_file : str
+            File path to read/store the worker ID. Default: <cwd>/.data_dispatcher_worker_id
+        worker_id : str
+            Worker ID to use when reserving next file. If unspecified, will be read from the worker ID file.
+        """
+        
         server_url = server_url or os.environ.get("DATA_DISPATCHER_URL")
         auth_server_url = auth_server_url or os.environ.get("DATA_DISPATCHER_AUTH_URL")
         TokenAuthClientMixin.__init__(self, server_url, token, token_file, auth_url=auth_server_url)
@@ -127,6 +142,19 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         return out
         
     def new_worker_id(self, new_id = None, worker_id_file=None):
+        """Sets or generates new worker ID to be used for next file allocation.
+        
+        Parameters
+        ----------
+        new_id : str or None
+            New worker id to use. If None, a random worker_id will be generated.
+        worker_id_file : str or None
+            Path to store the worker id. Default: <cwd>/.data_dispatcher_worker_id
+        
+        Returns
+        -------
+        str with the assigned worker id
+        """
         worker_id_file = worker_id_file or self.DefaultWorkerIDFile
         worker_id = new_id if new_id is not None else self.gen_worker_id()
         #print("generated worker_id:", worker_id)
@@ -138,14 +166,36 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     # projects
     #
     def create_project(self, files, common_attributes={}, project_attributes={}):
+        """Creates new project
+        
+        Parameters
+        ----------
+        files : list
+            Each item in the list is either a dictionary with keys: "namespace", "name", "attributes" (optional)
+            or a string "namespace:name"
+        common_attributes : dict 
+            attributes to attach to each file, will be overridden by the individual file attribute values with the same key
+        project_attributes : dict
+            attriutes to attach to the new project
+
+        Returns
+        -------
+        Dictionary with new project information
+        """
         file_list = []
         for info in files:
-            if not "namespace" in info or not "name" in info:
-                raise ValueError("File specification must include namespace and name")
             attrs = common_attributes.copy()
-            attrs.update(info.get("attributes") or {})
-            item = {"name":info["name"], "namespace":info["namespace"], "attributes":attrs}
-            file_list.append(item)
+            if isinstance(info, dict):
+                if not "namespace" in info or not "name" in info:
+                    raise ValueError("File specification must include namespace and name")
+                attrs.update(info.get("attributes") or {})
+                name = info["name"]
+                namespace = info["namespace"]
+            elif isinstance(info, str):
+                namespace, name = info.split(":", 1)
+            else:
+                raise ValueError(f"Unrecognized file info type: {info}")
+            file_list.append({"name":name, "namespace":namespace, "attributes":attrs})
         return self.post("create_project", json.dumps(
                 {   
                     "files":        file_list,
@@ -155,15 +205,84 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         )
 
     def delete_project(self, project_id):
+        """Deletes a project by id
+
+        Parameters
+        ----------
+        project_id : str
+            Project id
+        """
         return self.get(f"delete_project?project_id={project_id}")
         
     def get_project(self, project_id, with_files=True, with_replicas=False):
+        """Gets information about the project
+        
+        Parameters
+        ----------
+        project_id : str
+            Project id
+        with_files : boolean
+            Whether to include iformation about project files. Default: True
+        with_replicas : boolean
+            Whether to include iformation about project file replicas. Default: False
+    
+        Returns
+        -------
+        Dictionary with project information
+        """
         with_files = "yes" if with_files else "no"
         with_replicas = "yes" if with_replicas else "no"
         uri = f"project?project_id={project_id}&with_files={with_files}&with_replicas={with_replicas}"
         return self.get(uri)
+        
+    def get_handle(self, project_id, namespace, name):
+        """Gets information about a file handle
+        
+        Parameters
+        ----------
+        project_id : str
+            Project id
+        namespace : str
+            File namespace
+        name : str
+            File name
+    
+        Returns
+        -------
+        Dictionary with the file handle information or None if not found
+        """
+        project_info = self.get_project(project_id, with_files=True, with_handles=True)
+        if project_info is None:
+            return None
+        for h in project_info.get("file_handles", []):
+            if h["namespace"] == namespace and h["name"] == name:
+                return h
+        else:
+            return None
     
     def list_projects(self, owner=None, state=None, not_state=None, attributes=None, with_files=True, with_replicas=False):
+        """Lists existing projects
+        
+        Parameters
+        ----------
+        owner : str
+            Include only projects owned by the specified user. Default: all users
+        state : str
+            Include only projects in specified state. Default: all states
+        not_state : str
+            Exclude projects in the specified state. Default: do not exclude
+        attributes : dict
+            Include only projects with specified attribute values. Default: do not filter by attributes
+        with_files : boolean
+            Include information about files. Default: True
+        with_replicas : boolean
+            Include information about file replics. Default: False
+    
+        Returns
+        -------
+        List of dictionaries with information about projects selected
+        """
+        
         suffix = "projects"
         args = []
         if owner: args.append(f"owner={owner}")
@@ -176,36 +295,37 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         return self.get(f"projects{args}")
 
     def next_file(self, project_id):
+        """Reserves next available file from the project
+        
+        Parameters
+        ----------
+        project_id : int
+            Project id to reserve a file from
+        
+        Returns
+        -------
+        Dictionary with file information, or None if no file was available to be reserved. The method does not block and always returns immediately.
+        Use `get_project()` to see if the project is done.
+        """
+        
         if self.WorkerID is None:
             raise ValueError("DataDispatcherClient must be initialized with Worker ID")
         return self.get(f"next_file?project_id={project_id}&worker_id={self.WorkerID}")
         
-    #
-    # File handles
-    #
-    
-    def list_handles(self, project_id=None, state=None, not_state=None, rse=None):
-        args = []
-        if rse: args.append(f"rse={rse}")
-        if project_id: args.append(f"project_id={project_id}")
-        if state: args.append(f"state={state}")
-        if not_state: args.append(f"not_state={not_state}")
-        args = "?" + "&".join(args) if args else ""
-        return self.get(f"handles{args}")
-
-    def find_handle(self, project_id, name=None, file_id=None, namespace=None):
-        if file_id:
-            suffix = f"file_handle?project_id={project_id}&file_id={file_id}"
-        else:
-            suffix = f"file_handle?project_id={project_id}&name={name}"
-            if namespace:
-                suffix += f"&namespace={namespace}"
-        return self.get(suffix)
-
-    def get_handle(self, handle_id):
-        return self.get(f"file_handle?handle_id={handle_id}")
-
     def get_file(self, namespace, name):
+        """Gets information about a file
+        
+        Parameters
+        ----------
+        namespace : str
+            File namespace
+        name : str
+            File name
+    
+        Returns
+        -------
+        Dictionary with the file information or None if not found
+        """
         return self.get(f"file?namespace={namespace}&name={name}")
 
     def replica_available(self, namespace, name, rse, path=None, preference=0, url=None):
