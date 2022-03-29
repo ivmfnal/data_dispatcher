@@ -251,7 +251,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         -------
         Dictionary with the file handle information or None if not found
         """
-        project_info = self.get_project(project_id, with_files=True, with_handles=True)
+        project_info = self.get_project(project_id, with_files=True, with_replicas=True)
         if project_info is None:
             return None
         for h in project_info.get("file_handles", []):
@@ -327,6 +327,15 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Dictionary with the file information or None if not found
         """
         return self.get(f"file?namespace={namespace}&name={name}")
+
+    def list_handles(self, project_id, state=None, not_state=None, rse=None):
+        args = []
+        if rse: args.append(f"rse={rse}")
+        if project_id: args.append(f"project_id={project_id}")
+        if state: args.append(f"state={state}")
+        if not_state: args.append(f"not_state={not_state}")
+        args = "?" + "&".join(args) if args else ""
+        return self.get(f"handles{args}")
 
     def replica_available(self, namespace, name, rse, path=None, preference=0, url=None):
         data = {

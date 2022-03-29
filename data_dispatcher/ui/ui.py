@@ -3,7 +3,7 @@ from data_dispatcher import Version
 from metacat.webapi import MetaCatClient 
 import sys, getopt, os, json
 from .ui_project import create_project, show_project, list_projects
-from .ui_handle import show_handle
+from .ui_handle import show_handle, list_handles
 from .ui_lib import pretty_json
 from .ui_file import show_file, replica_available, replica_unavailable
 import time

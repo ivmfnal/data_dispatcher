@@ -1,5 +1,5 @@
 import getopt, sys
-from .ui_lib import print_handles
+from .ui_lib import print_handles, pretty_json
 
 def show_handle(client, rest):
         opts, args = getopt.getopt(rest, "j")
@@ -9,7 +9,8 @@ def show_handle(client, rest):
             sys.exit(2)
         project_id, did = args
         project_id = int(project_id)
-        handle = client.get_handle(project_id, did)
+        namespace, name = did.split(":", 1)
+        handle = client.get_handle(project_id, namespace, name)
         if not handle:
             print(f"Handle {handle_id} not found")
             sys.exit(1)
@@ -21,9 +22,11 @@ def show_handle(client, rest):
                     print(f"{name:10s}: {val}")
             if "replicas" in handle:
                 print("replicas:")
-                replicas = handle["replicas"] or []
-                replicas = sorted(replicas, key=lambda r: (-r["preference"], r["rse"]))
-                for r in handle["replicas"]:
+                replicas = handle["replicas"]
+                for rse, r in replicas.items():
+                    r["rse"] = rse
+                replicas = sorted(replicas.values(), key=lambda r: (-r["preference"], r["rse"]))
+                for r in replicas:
                     print("  Preference: ", r["preference"])
                     print("  RSE:        ", r["rse"])
                     print("  Path:       ", r["path"] or "")
@@ -36,5 +39,5 @@ def list_handles(client, rest):
         project_id = opts.get("-p")
         if project_id is not None:
             project_id = int(project_id)
-        lst = client.list_handles(project_id=project_id, rse=opts.get("-r"), status=opts.get("-s"))
+        lst = client.list_handles(project_id=project_id, rse=opts.get("-r"), state=opts.get("-s"))
         print_handles(lst)
