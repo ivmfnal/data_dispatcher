@@ -48,8 +48,8 @@ One is to specify a MetaCat query and create the project from the resulting file
 
         $ dd create project -q <file with MetaCat MQL query>
 
-Alternatively, a project can be created with explicit list of files, specified either as a list of their DIDs (namespace:name), or
-using JSON expression of the file list:
+A project can be created with explicit list of files, specified either as a list of their DIDs (namespace:name):
+
 
     .. code-block:: shell
 
@@ -60,11 +60,26 @@ using JSON expression of the file list:
         _EOF_
         $ dd create project -l file_list
 
+
+or JSON-formatted list. The list is composed of items of two types:
+
+    - file DID as string
+    - a dictionary with keys "namespace", "name" and optional "attributes":
+
+    .. code-block:: shell
+
         $ cat /tmp/file_list.json 
         [
-            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0009_dl2.root" },
-            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0009_dl6.root" },
-            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0010_dl10.root" }
+            "protodune-sp:np04_raw_run006834_0009_dl2.root",
+            { 
+                "namespace":"protodune-sp", 
+                "name":"np04_raw_run006834_0009_dl6.root" 
+            },
+            { 
+                "namespace":  "protodune-sp", 
+                "name":       "np04_raw_run006834_0010_dl10.root", 
+                "attributes": {"debug":true} 
+            }
         ]
         $ dd create project -j /tmp/file_list.json
 
