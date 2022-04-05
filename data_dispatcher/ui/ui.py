@@ -153,7 +153,8 @@ def main():
                 if not project_info["active"]:
                     sys.exit(10)    # project finished
                 dt = min(5, t1-time.time())
-                time.sleep(dt)
+                if dt > 0:
+                    time.sleep(dt)
             else:
                 sys.exit(11)        # timeout
 

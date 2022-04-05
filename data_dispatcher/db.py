@@ -183,11 +183,12 @@ class HasLogRecord(object):
             return getattr(self.Data)
 
     def add_log(self, type, data=None, **kwargs):
+        print("add_log:", type, data, kwargs)
         c = self.DB.cursor()
         data = (data or {}).copy()
         data.update(kwargs)
         parent_pk_columns = self.IDColumnsText
-        parent_pk_values = ",".join(["'{v}'" for v in self.pk()])
+        parent_pk_values = ",".join([f"'{v}'" for v in self.pk()])
         c.execute(f"""
             begin;
             insert into {self.LogTable}({parent_pk_columns}, type, data)
@@ -216,7 +217,7 @@ class HasLogRecord(object):
         return (self.DBLogRecord(type, t, message) for type, t, message in cursor_iterator())
         
 
-class DBProject(DBObject):
+class DBProject(DBObject, HasLogRecord):
     
     InitialState = "active"
     
@@ -225,7 +226,7 @@ class DBProject(DBObject):
     PK = ["id"]
     
     def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, retry_count=0, attributes={}):
-        HasLogRecord.__init__(self, "project_log", "project_id")
+        HasLogRecord.__init__(self, "project_log", ["project_id"])
         self.DB = db
         self.ID = id
         self.Owner = owner
@@ -279,6 +280,7 @@ class DBProject(DBObject):
             
         project = DBProject.get(db, id)
         project.add_log("created")
+        return project
 
     @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
@@ -343,8 +345,8 @@ class DBProject(DBObject):
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
         return self.Handles
         
-    def handle(self, namespace=None, name=None):
-        return DBFileHandle.lookup(self.DB, project_id=self.ID, namespace=namespace, name=name)
+    def handle(self, namespace, name):
+        return DBFileHandle.get(self.DB, self.ID, namespace, name)
             
     def add_files(self, files_descs):
         # files_descs is list of disctionaries: [{"namespace":..., "name":...}, ...]
@@ -375,9 +377,12 @@ class DBProject(DBObject):
                 state = "done"
                 data = {}
 
+            self.add_log("ended", state=state)
+
             self.State = state
             self.EndTimestamp = datetime.now(timezone.utc)
             self.save()
+        return handle
 
     def is_active(self, reload=False):
         return any(h.State in ("ready", "reserved") for h in self.handles(reload=reload))
@@ -386,7 +391,6 @@ class DBProject(DBObject):
         handle = DBFileHandle.reserve_next_available(self.DB, self.ID, worker_id)
         if handle is not None:
             did = handle.did()
-            self.add_log("workflow", f"file {did} reserved for {worker_id}")
         return handle
 
     def file_state_counts(self):
@@ -656,7 +660,7 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
 
-class DBFileHandle(DBObject):
+class DBFileHandle(DBObject, HasLogRecord):
 
     Columns = ["project_id", "namespace", "name", "state", "worker_id", "attempts", "attributes"]
     PK = ["project_id", "namespace", "name"]
@@ -667,7 +671,7 @@ class DBFileHandle(DBObject):
     States = ["ready", "reserved", "done", "failed"]
 
     def __init__(self, db, project_id, namespace, name, state=None, worker_id=None, attempts=0, attributes={}):
-        HasLogRecord.__init__(self, "file_handle_log", "file_handle_id")
+        HasLogRecord.__init__(self, "file_handle_log", ["project_id", "namespace", "name"])
         self.DB = db
         self.ProjectID = project_id
         self.Namespace = namespace
