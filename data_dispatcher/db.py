@@ -47,6 +47,9 @@ class DBObject(object):
         else:
             return clist
     
+    def pk(self):       # return PK values as a tuple in the same order as cls.PK
+        raise NotImplementedError()
+    
     @classmethod
     def get(cls, db, *pk_vals):
         pk_cols_values = [f"{c} = %s" for c in cls.PK]
@@ -164,34 +167,38 @@ class DBOneToMany(object):
 
 class HasLogRecord(object):
 
-    def __init__(self, log_table, id_column):
+    def __init__(self, log_table, parent_id_columns):
         self.LogTable = log_table
-        self.IDColumn = id_column
-    
+        self.IDColumns = parent_id_columns
+        self.IDColumnsText = ",".join(parent_id_columns)
+
     class DBLogRecord(object):
-    
-        def __init__(self, type, t, message):
+
+        def __init__(self, type, t, data):
             self.Type = type
             self.T = t
-            self.Message = message
+            self.Data = data
 
-    def id(self):
-        raise NotImplementedError()
+        def __getattr__(self, key):
+            return getattr(self.Data)
 
-    def add_log(self, type, message):
+    def add_log(self, type, data=None, **kwargs):
         c = self.DB.cursor()
+        data = (data or {}).copy()
+        data.update(kwargs)
+        parent_pk_columns = self.IDColumnsText
+        parent_pk_values = ",".join(["'{v}'" for v in self.pk()])
         c.execute(f"""
             begin;
-            
-            insert into {self.LogTable}({self.IDColumn}, type, message)
-            values(%s, %s, %s);
-
+            insert into {self.LogTable}({parent_pk_columns}, type, data)
+                values({parent_pk_values}, %s, %s);
             commit
-        """, (self.ID, type, message))
+        """, (type, json.dumps(data)))
 
-    def log(self, type=None, since=None, reversed=False):
-        my_id = self.id()
-        wheres = [f"column={my_id}"]
+    def get_log(self, type=None, since=None, reversed=False):
+        parent_pk_columns = self.IDColumnsText
+        parent_pk_values = ",".join(["'{v}'" for v in self.pk()])
+        wheres = [f"{c} = '{v}'" for c, v in zip(parent_pk_columns, parent_pk_values)]
         if isinstance(since, (float, int)):
             since = datetime.utcfromtimestamp(since).replace(tzinfo=timezone.utc)
             wheres.append(f"t >= {since}")
@@ -209,15 +216,15 @@ class HasLogRecord(object):
         return (self.DBLogRecord(type, t, message) for type, t, message in cursor_iterator())
         
 
-class DBProject(DBObject, HasLogRecord):
+class DBProject(DBObject):
     
     InitialState = "active"
     
-    Columns = "id,owner,created_timestamp,state,retry_count,attributes".split(",")
+    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes".split(",")
     Table = "projects"
     PK = ["id"]
     
-    def __init__(self, db, id, owner=None, created_timestamp=None, state=None, retry_count=0, attributes={}):
+    def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, retry_count=0, attributes={}):
         HasLogRecord.__init__(self, "project_log", "project_id")
         self.DB = db
         self.ID = id
@@ -228,9 +235,10 @@ class DBProject(DBObject, HasLogRecord):
         self.Attributes = (attributes or {}).copy()
         self.Handles = None
         self.HandleCounts = None
+        self.EndTimestamp = end_timestamp
         
-    def id(self):
-        return str(self.ID)
+    def pk(self):
+        return (self.ID,)
         
     def as_jsonable(self, with_handles=False, with_replicas=False):
         #print("Project.as_jsonable: with_handles:", with_handles, "   with_replicas:", with_replicas)
@@ -269,7 +277,8 @@ class DBProject(DBObject, HasLogRecord):
             db.rollback()
             raise
             
-        return DBProject.get(db, id)
+        project = DBProject.get(db, id)
+        project.add_log("created")
 
     @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
@@ -321,16 +330,16 @@ class DBProject(DBObject, HasLogRecord):
         try:
             c.execute("begin")
             c.execute("""
-                update projects set state=%s
+                update projects set state=%s, end_timestamp=%s
                     where id=%s
-            """, (self.State, self.ID))
+            """, (self.State, self.EndTimestamp, self.ID))
             self.DB.commit()
         except:
             self.DB.rollback()
             raise
         
-    def handles(self, with_replicas=True):
-        if self.Handles is None:
+    def handles(self, with_replicas=True, reload=False):
+        if reload or self.Handles is None:
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
         return self.Handles
         
@@ -346,6 +355,33 @@ class DBProject(DBObject, HasLogRecord):
     def files(self):
         return DBFile.list(self.DB, self.ID)
         
+    def release_handle(self, namespace, name, failed, retry):
+        handle = self.handle(namespace, name)
+        if handle is None:
+            return None
+
+        if failed:
+            handle.failed(retry)
+        else:
+            handle.done()
+
+        if not self.is_active(reload=True) and self.State == "active":
+            failed_handles = [h.did() for h in self.handles() if h.State == "failed"]
+
+            if failed_handles:
+                state = "failed"
+                data = {"failed_handles": failed_handles}
+            else:
+                state = "done"
+                data = {}
+
+            self.State = state
+            self.EndTimestamp = datetime.now(timezone.utc)
+            self.save()
+
+    def is_active(self, reload=False):
+        return any(h.State in ("ready", "reserved") for h in self.handles(reload=reload))
+            
     def reserve_next_file(self, worker_id):
         handle = DBFileHandle.reserve_next_available(self.DB, self.ID, worker_id)
         if handle is not None:
@@ -353,13 +389,6 @@ class DBProject(DBObject, HasLogRecord):
             self.add_log("workflow", f"file {did} reserved for {worker_id}")
         return handle
 
-    def is_active(self):
-        lst = DBFileHandle.list(self.DB, project_id=self.ID, state=["ready", "reserved"])
-        for h in lst:       # lst may be a generator
-            return True
-        else:
-            return False
-            
     def file_state_counts(self):
         counts = {}
         for h in DBFileHandle.list(self.DB, project_id=self.ID):
@@ -632,11 +661,11 @@ class DBFileHandle(DBObject):
     Columns = ["project_id", "namespace", "name", "state", "worker_id", "attempts", "attributes"]
     PK = ["project_id", "namespace", "name"]
     Table = "file_handles"
-    
+
     InitialState = ReadyState = "ready"
     ReservedState = "reserved"
     States = ["ready", "reserved", "done", "failed"]
-    
+
     def __init__(self, db, project_id, namespace, name, state=None, worker_id=None, attempts=0, attributes={}):
         HasLogRecord.__init__(self, "file_handle_log", "file_handle_id")
         self.DB = db
@@ -649,7 +678,10 @@ class DBFileHandle(DBObject):
         self.Attributes = (attributes or {}).copy()
         self.File = None
         self.Replicas = None
-        
+
+    def pk(self):
+        return (self.ProjectID, self.Namespace, self.Name)
+
     def id(self):
         return f"{self.ProjectID}:{self.Namespace}:{self.Name}"
         
@@ -854,7 +886,9 @@ class DBFileHandle(DBObject):
         if not tup:
             return None
         c.execute("commit")
-        return DBFileHandle.from_tuple(db, tup)
+        h = DBFileHandle.from_tuple(db, tup)
+        h.reserved_by(worker_id)
+        return h
         
     @staticmethod
     def available_handles(db, project_id, state):
@@ -871,23 +905,32 @@ class DBFileHandle(DBObject):
         """, (project_id, DBFileHandle.InitialState))
         
         for tup in cursor_iterator(c):
-            h = DBHandle.from_tuple(db, tup[:-1])
+            h = DBFileHandle.from_tuple(db, tup[:-1])
             h.Replicas = tup[-1]
             yield h
 
+    #
+    # workflow
+    #
+
     def is_available(self):
         return any(r.Available for r in self.replicas().values())
-        
+
+    def is_active(self):
+        return self.State not in ("done", "failed")
+
     def done(self):
         self.State = "done"
         self.WorkerID = None
         self.save()
-        
+        self.add_log("done", worker=self.WorkerID)
+
     def failed(self, retry=True):
         self.State = self.ReadyState if retry else "failed"
         self.WorkerID = None
         self.save()
-        
-    def is_active(self):
-        return self.State not in ("done", "failed")
-        
+        self.add_log("failed", worker=self.WorkerID, retry=retry)
+
+    def reserved_by(self, worker_id):
+        # just add a record to the log. Assume the actual reservation was done by reserve_next_available()
+        self.add_log("reserved", worker=worker_id)

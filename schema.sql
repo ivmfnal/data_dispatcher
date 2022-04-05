@@ -62,7 +62,7 @@ create table project_log
     project_id  bigint,
     t           timestamp with time zone     default now(),
     type        text,
-    message     text,
+    data        jsonb,
     primary key (project_id, t)
 );
 
@@ -73,7 +73,7 @@ create table file_handle_log
     name        text,
     t           timestamp with time zone     default now(),
     type        text,
-    message     text,
+    data        jsonb,
     primary key (project_id, namespace, name, t)
 );
 

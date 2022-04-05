@@ -171,14 +171,10 @@ class Handler(BaseHandler):
         failed = failed == "yes"
         retry = retry == "yes"
         
-        handle = DBFileHandle.get(db, project_id, namespace, name)
-        if not handle:
-            return 404, "Hndle not found"
-
-        if failed:
-            handle.failed(retry)
-        else:
-            handle.done()
+        handle = project.release_handle(namespace, name, failed, retry)
+        if handle is None:
+            return 404, "Handle not found"
+        
         return json.dumps(handle.as_jsonable()), "text/json"
         
     def project_files(self, request, relpath, project_id=None, state=None, ready_only="no", **args):
