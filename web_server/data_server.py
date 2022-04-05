@@ -9,8 +9,6 @@ from metacat.auth.server import BaseHandler, BaseApp, AuthHandler
 import json, urllib.parse, yaml, secrets, hashlib
 import requests
 
-import data_dispatcher.db as qq
-print (qq.__file__)
 
 def to_bytes(x):
     if not isinstance(x, bytes):
@@ -134,7 +132,7 @@ class Handler(BaseHandler):
         return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
 
     def next_file(self, request, relpath, project_id=None, worker_id=None, **args):
-        print("next_file...")
+        #print("next_file...")
         user = self.authenticated_user()
         if user is None:
             return "Unauthenticated user", 403

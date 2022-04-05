@@ -183,7 +183,7 @@ class HasLogRecord(object):
             return getattr(self.Data)
 
     def add_log(self, type, data=None, **kwargs):
-        print("add_log:", type, data, kwargs)
+        #print("add_log:", type, data, kwargs)
         c = self.DB.cursor()
         data = (data or {}).copy()
         data.update(kwargs)
