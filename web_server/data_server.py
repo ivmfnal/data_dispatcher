@@ -42,7 +42,7 @@ class Handler(BaseHandler):
             return "Unauthenticated user", 403
         specs = json.loads(to_str(request.body))
         files = specs["files"]
-        attributes = specs.get("attributes", {})
+        attributes = specs.get("project_attributes", {})
         #print(specs.get("files"))
         db = self.App.db()
         project = DBProject.create(db, user.Username, attributes=attributes)
