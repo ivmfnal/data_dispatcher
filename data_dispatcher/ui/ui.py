@@ -46,7 +46,7 @@ Commands:
     delete project <project_id>
     
     list rses [-j]                                         - list RSEs, -j: print as JSON
-    show rse <rse>                                         - show information about RSE
+    show rse [-j] <rse>                                    - show information about RSE
     set rse -a (up|down) <rse>                             - set RSE availability (requires admin privileges)
     
     login x509 <user> <cert> <key>
@@ -158,6 +158,7 @@ def main():
             info = client.next_file(project_id)
             if info:
                 if as_json:
+                    info["replicas"] = sorted(info["replicas"].values(), key=lambda r: -r["preference"])
                     print(pretty_json(info))
                 else:
                     print("%s:%s" % (info["namespace"], info["name"]))

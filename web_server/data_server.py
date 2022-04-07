@@ -149,6 +149,7 @@ class Handler(BaseHandler):
         if handle is None:
             return "null", "text/json"
         info = handle.as_jsonable(with_replicas=True)
+        info["replicas"] = {rse:r for rse, r in info["replicas"].items() if r["available"] and r["rse_available"]}
         info["project_attributes"] = project.Attributes or {}
         return json.dumps(info), "text/json"
         
