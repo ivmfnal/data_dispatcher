@@ -32,12 +32,12 @@ def show_rse(client, args):
 def set_rse(client, args):
     opts, args = getopt.getopt(args, "a:")
     opts = dict(opts)
-    yes_no = opts.get("-a")
-    if not args or "-a" not in opts or yes_no not in ("yes", "no"):
+    up_down = opts.get("-a")
+    if not args or "-a" not in opts or up_down not in ("up", "down"):
         print(Usage)
         sys.exit(2)
     name = args[0]
-    client.set_rse_availability(name, yes_no == "yes")
+    client.set_rse_availability(name, up_down == "up")
     
 def list_rses(client, args):
     opts, args = getopt.getopt(args, "j")

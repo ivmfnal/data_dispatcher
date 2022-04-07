@@ -47,7 +47,7 @@ Commands:
     
     list rses [-j]                                         - list RSEs, -j: print as JSON
     show rse <rse>                                         - show information about RSE
-    set rse <rse> -a (yes|no)                              - set RSE availability (requires admin privileges)
+    set rse -a (up|down) <rse>                             - set RSE availability (requires admin privileges)
     
     login x509 <user> <cert> <key>
     login password <user>
