@@ -230,8 +230,6 @@ for the specified amount of time. Depending on the outcome, the command will:
         * print "done"
         * exit with code 1
         
-If the worker uses "-j" option reserving next file, then the JSON data will include project and file attributes attached to the project and the file at the file of project creation.
-
 Here is an example of using this command:
 
     .. code-block:: shell
@@ -254,6 +252,43 @@ Here is an example of using this command:
                     ;;
             esac
         fi
+        
+If "-j" option is used, then the JSON output will represent complete information about the file handle, including the list of
+available replicas sorted by the RSE preference as well as the file and project attributes defined at the time of the project creation. 
+Replicas located in unavailable RSEs will _not_ be included, even if they are known to be staged in the RSE.
+
+    .. code-block:: shell
+
+        $ dd next -j 70
+        {
+          "attempts": 1,
+          "attributes": {
+            "core.runs": [
+              6534
+            ]
+          },
+          "name": "np04_raw_run006534_0005_dl1_reco_16440189_0_20190217T040518.root",
+          "namespace": "np04_reco_keepup",
+          "project_attributes": {
+            "pi": 3.14,
+            "x": "y"
+          },
+          "project_id": 70,
+          "replicas": [
+            {
+              "available": true,
+              "name": "np04_raw_run006535_0087_dl8_reco_16217100_0_20190217T105045.root",
+              "namespace": "np04_reco_keepup",
+              "path": "/pnfs/fnal.gov/usr/...",
+              "preference": 0,
+              "rse": "FNAL_DCACHE",
+              "rse_available": true,
+              "url": "root://fndca1.fnal.gov:1094/pnfs/fnal.gov/usr/..."
+            }
+          ],
+          "state": "reserved",
+          "worker_id": "hello_there_123"
+        }
 
         
 Releasing the file
@@ -273,4 +308,89 @@ not be retried. Otherwise, the failed file will be moved to the back of the proj
         $ dd failed [-f] <project_id> <file namespace>:<file name>
             
 
+RSEs
+~~~~
 
+Data Dispatcher maintains minimal set of information about known RSEs, including the RSE availability state.
+
+Listing known RSEs
+..................
+
+    .. code-block:: shell
+    
+        $ dd list rses -j
+        [
+          {
+            "add_prefix": "",
+            "description": "FNAL dCache",
+            "is_available": true,
+            "is_tape": true,
+            "name": "FNAL_DCACHE",
+            "pin_url": null,
+            "poll_url": null,
+            "preference": 0,
+            "remove_prefix": ""
+          },
+          {
+            "add_prefix": "",
+            "description": "",
+            "is_available": true,
+            "is_tape": true,
+            "name": "FNAL_DCACHE_TEST",
+            "pin_url": null,
+            "poll_url": null,
+            "preference": 0,
+            "remove_prefix": ""
+          }
+        ]
+        
+        $ dd list rses
+        Name                 Pref Tape Status Description
+        --------------------------------------------------------------------------------------------------------------
+        FNAL_DCACHE             0 tape     up FNAL dCache
+        FNAL_DCACHE_TEST        0 tape     up 
+        
+Showing information about particular RSE
+........................................
+
+    .. code-block:: shell
+    
+        $ dd show rse FNAL_DCACHE
+        RSE:            FNAL_DCACHE
+        Preference:     0
+        Tape:           yes
+        Available:      yes
+        Pin URL:        
+        Poll URL:       
+        Remove prefix:  
+        Add prefix:     
+        
+        $ dd show rse -j FNAL_DCACHE
+        {
+          "add_prefix": "",
+          "description": "FNAL dCache",
+          "is_available": true,
+          "is_tape": true,
+          "name": "FNAL_DCACHE",
+          "pin_url": null,
+          "poll_url": null,
+          "preference": 0,
+          "remove_prefix": ""
+        }
+
+Changing RSE availability
+.........................
+
+This command requires admin privileges.
+
+    .. code-block:: shell
+
+        $ dd set rse -a down FNAL_DCACHE
+        $ dd show rse FNAL_DCACHE
+        RSE:            FNAL_DCACHE
+        Preference:     0
+        Tape:           yes
+        Available:      no
+        ...
+        
+When an RSE is unavailable (down), replicas in this RSE are considered unavailable even if this is a disk RSE or they are known to be staged in a tape RSE.
