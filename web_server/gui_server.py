@@ -131,7 +131,7 @@ class ProjectsHandler(BaseHandler):
         available_handles = 0
         for h in handles:
             h.n_replicas = len(h.Replicas or {})
-            h.n_available_replicas = len([r for r in (h.Replicas or {}).values() if r.Available])
+            h.n_available_replicas = len([r for r in (h.Replicas or {}).values() if r.Available and r.RSEAvailable])
             #print(h.__dict__)
             state = h.State
             handle_counts_by_state[state] = handle_counts_by_state.get(state, 0) + 1

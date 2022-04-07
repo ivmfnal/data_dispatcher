@@ -38,3 +38,30 @@ def set_rse(client, args):
         sys.exit(2)
     name = args[0]
     client.set_rse_availability(name, yes_no == "yes")
+    
+def list_rses(client, args):
+    opts, args = getopt.getopt(args, "j")
+    opts = dict(opts)
+
+    rses = sorted(client.list_rses(), key=lambda r: r["name"])
+
+    if "-j" in opts:
+        print(pretty_json(rses))
+    else:
+        print("%-20s %4s %3s %6s %s" % (
+                "Name", "Pref", "Tape", "Status", "Description"
+            )) 
+        print("%s" % ("-"*110,)) 
+
+        for rse in rses:
+            print("%-20s %4s %3s %6s %s" % (
+                rse["name"],
+                rse["preference"],
+                "tape" if rse["is_tape"] else "    ",
+                "up" if rse["is_available"] else "down",
+                rse["description"]
+            ))
+    
+        
+    
+    

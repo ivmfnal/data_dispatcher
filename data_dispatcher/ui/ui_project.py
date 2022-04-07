@@ -2,7 +2,6 @@ import getopt, json, time, pprint
 from metacat.webapi import MetaCatClient
 from .ui_lib import pretty_json, parse_attrs, print_handles
 
-
 create_project_help = """
 create project [options] [inline MQL query]
         -q <file with MQL query>                    - read MQL query from file instead
@@ -134,7 +133,7 @@ def show_project(client, rest):
                 did = h["namespace"] + ":" + h["name"]
                 state = h["state"]
                 rlist = h["replicas"].values()
-                available = state == "ready" and len([r for r in rlist if r["available"]]) > 0
+                available = state == "ready" and len([r for r in rlist if r["available"] and r["rse_available"]]) > 0
                 if filter_state == "all" or \
                             filter_state in ("done", "ready", "failed", "reserved") and state == filter_state or \
                             filter_state == "available" and available or \
@@ -148,7 +147,7 @@ def show_project(client, rest):
                 if not isinstance(v, (int, float, str, bool)):
                     v = json.dumps(v)
                 print("  %-15s = %s" % (k, v))
-            print("Files:              ")
+            print("Handles:")
             print_replicas = "-r" in opts
             if "file_handles" in info:
                 print_handles(info["file_handles"], print_replicas)

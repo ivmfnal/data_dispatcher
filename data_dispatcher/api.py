@@ -314,6 +314,18 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         if not_state: args.append(f"not_state={not_state}")
         args = "?" + "&".join(args) if args else ""
         return self.get(f"handles{args}")
+        
+    def list_rses(self):
+        """Return information about all RSEs
+        
+        Args:
+        
+        Returns:
+            list of dictionaries with RSE information
+        """
+        
+        return self.get(f"rses")
+
 
     def get_rse(self, name):
         """Returns information about RSE

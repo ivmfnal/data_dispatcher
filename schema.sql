@@ -51,6 +51,12 @@ create table replicas
 
 create index replicas_specs on replicas ((namespace || ':' || name));
 
+create view replicas_with_rse_availability as
+    select replicas.*, rses.is_available as rse_available
+        from replicas, rses
+        where rses.name = replicas.rse
+;
+
 create table file_handles
 (
     project_id  bigint references projects(id) on delete cascade,

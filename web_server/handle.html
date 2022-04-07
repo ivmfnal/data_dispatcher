@@ -25,13 +25,14 @@
     <tr>    <th>Replicas</th>
             <td class="nopadding">
                 <table class="data">
-                    <tr><th>RSE</th><th>Preference</th><th>Path/URL</th><th>Available</th>
+                    <tr><th>RSE</th><th>Preference</th><th>RSE available</th><th>Staged</th><th>Path/URL</th>
                     {% for r in handle.replicas().values() %}
                         <tr>
                             <td>{{r.RSE}}</td>
                             <td>{{r.Preference}}</td>
-                            <td>path: {{r.Path}}<br/>URL: {{r.URL}}</td>
-                            <td>{{"yes" if r.Available else "no"}}</td>
+                            <td class="{{'available' if r.RSEAvailable else 'unavailable'}}">{{"yes" if r.RSEAvailable else "no"}}</td>
+                            <td class="{{'available' if r.Available else 'unavailable'}}">{{"yes" if r.Available else "no"}}</td>
+                            <td>path:&nbsp;{{r.Path}}<br/>URL:&nbsp;{{r.URL}}</td>
                         </tr>
                     {% endfor %}
                 </table>

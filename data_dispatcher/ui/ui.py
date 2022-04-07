@@ -6,7 +6,7 @@ from .ui_project import create_project, show_project, list_projects
 from .ui_handle import show_handle, list_handles
 from .ui_lib import pretty_json
 from .ui_file import show_file, replica_available, replica_unavailable
-from .ui_rse import set_rse, show_rse
+from .ui_rse import set_rse, show_rse, list_rses
 import time
 
 server_url = os.environ.get("DATA_DISPATCHER_URL")
@@ -45,6 +45,7 @@ Commands:
 
     delete project <project_id>
     
+    list rses [-j]                                         - list RSEs, -j: print as JSON
     show rse <rse>                                         - show information about RSE
     set rse <rse> -a (yes|no)                              - set RSE availability (requires admin privileges)
     
@@ -125,6 +126,8 @@ def main():
             list_projects(client, rest)
         elif subcommand == "handles":
             list_handles(client, rest)
+        elif subcommand == "rses":
+            list_rses(client, rest)
         else:
             print(Usage)
             sys.exit(2)
@@ -162,12 +165,14 @@ def main():
             if timeout < 0 or (timeout > 0 and time.time() < t1):
                 project_info = client.get_project(project_id)
                 if not project_info["active"]:
-                    sys.exit(10)    # project finished
+                    print("done")
+                    sys.exit(1)    # project finished
                 dt = min(5, t1-time.time())
                 if dt > 0:
                     time.sleep(dt)
             else:
-                sys.exit(11)        # timeout
+                print("timeout")
+                sys.exit(1)        # timeout
 
     elif command == "done":
         if len(rest) != 2:

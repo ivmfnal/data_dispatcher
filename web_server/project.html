@@ -19,7 +19,7 @@
             {% endif %}
             </td> 
     </tr>
-    <tr>    <th>Files by status</th>
+    <tr>    <th>Handles by status</th>
             <td class="nopadding">
                 <table class="placement dense">
                     {% for state in states -%}
@@ -29,10 +29,10 @@
                 </table>
             <td>
     </tr>
-    <tr>    <th>Files</th>
+    <tr>    <th>Handles</th>
             <td>
                 <table class="data replicas">
-                    <tr><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
+                    <tr><th>DID</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
                     </tr>
                     {% for handle in handles %}
                         <tr>
@@ -42,7 +42,9 @@
                             </td>
                             {% set state = "available" if handle.State == "ready" and handle.is_available() else handle.State %}
                             <td class="{{state}}">{{state}}</td>
-                            <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
+                            <td>
+                                {{handle.n_replicas}} ({{handle.n_available_replicas}})
+                            </td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
                         </tr>

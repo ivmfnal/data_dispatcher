@@ -237,6 +237,10 @@ class Handler(BaseHandler):
         project_id = int(project_id)
         lst = DBFileHandle.list(db, project_id=project_id, rse=rse, not_state=not_state, state=state)
         return json.dumps([h.as_jsonable() for h in lst]), "text/json"
+        
+    def rses(self, request, relpath, **args):
+        rses = DBRSE.list(self.App.db())
+        return json.dumps([r.as_jsonable() for r in rses]), "text/json"
     
     def get_rse(self, request, relpath, name=None, **args):
         name = name or relpath

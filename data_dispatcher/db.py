@@ -518,6 +518,8 @@ class DBFile(DBObject):
     
 class DBReplica(DBObject):
     Table = "replicas"
+    ViewWithRSEStatus = "replicas_with_rse_availability"
+    
     Columns = ["namespace", "name", "rse", "path", "url", "preference", "available"]
     PK = ["namespace", "name", "rse"]
     
@@ -530,7 +532,8 @@ class DBReplica(DBObject):
         self.Path = path
         self.Preference = preference
         self.Available = available
-        
+        self.RSEAvailable = None            # optional, set by joining the rses table
+
     def did(self):
         return f"{self.Namespace}:{self.Name}"
 
@@ -543,15 +546,20 @@ class DBReplica(DBObject):
         columns = DBReplica.columns(as_text=True)
         table = DBReplica.Table
         c.execute(f"""
-            select {columns} from {table}
+            select {columns}, rse_available from {DBReplica.ViewWithRSEStatus}
             where {wheres}
         """)
-        return (DBReplica.from_tuple(db, tup) for tup in cursor_iterator(c))
+        for tup in cursor_iterator(c):
+            r = DBReplica.from_tuple(db, tup[:-1])
+            r.RSEAvailable = tup[-1]
+            yield r
         
     def as_jsonable(self):
         return dict(name=self.Name, namespace=self.Namespace, path=self.Path, 
             url=self.URL, rse=self.RSE,
-            preference=self.Preference, available=self.Available)
+            preference=self.Preference, available=self.Available,
+            rse_available=self.RSEAvailable
+        )
 
     @staticmethod
     def create(db, namespace, name, rse, path, url, preference=0, available=False, error_if_exists=False):
@@ -559,10 +567,6 @@ class DBReplica(DBObject):
         table = DBReplica.Table
         try:
             c.execute("begin")
-            c.execute("""
-                insert into rses (name) values (%s)
-                    on conflict (name) do nothing
-            """ % (rse,))
             c.execute(f"""
                 insert into {table}(namespace, name, rse, path, url, preference, available)
                     values(%s, %s, %s, %s, %s, %s, %s)
@@ -801,11 +805,13 @@ class DBFileHandle(DBObject, HasLogRecord):
         h_columns = DBFileHandle.columns("h", as_text=True)
         r_columns = DBReplica.columns("r", as_text=True)
         h_n_columns = len(DBFileHandle.Columns)
+        r_n_columns = len(DBReplica.Columns)
+        replicas_view = DBReplica.ViewWithRSEStatus
         if with_replicas:
             sql = f"""
-                select {h_columns}, {r_columns}
+                select {h_columns}, {r_columns}, rse_available
                     from file_handles h
-                        left outer join replicas r on (r.name = h.name and r.namespace = h.namespace)
+                        left outer join {replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
                         where {wheres}
                         order by h.namespace, h.name
             """
@@ -814,7 +820,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             h = None
             for tup in cursor_iterator(c):
                 #print("DBFileHandle.list:", tup)
-                h_tuple, r_tuple = tup[:h_n_columns], tup[h_n_columns:]
+                h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
                 if h is None:
                     h = DBFileHandle.from_tuple(db, h_tuple)
                 h1 = DBFileHandle.from_tuple(db, h_tuple)
@@ -825,6 +831,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                     h = h1
                 if r_tuple[0] is not None:
                     r = DBReplica.from_tuple(db, r_tuple)
+                    r.RSEAvailable = rse_available
                     h.Replicas = h.Replicas or {}
                     h.Replicas[r.RSE] = r
             if h is not None:
@@ -924,7 +931,7 @@ class DBFileHandle(DBObject, HasLogRecord):
     #
 
     def is_available(self):
-        return any(r.Available for r in self.replicas().values())
+        return any(r.Available and r.RSEAvailable for r in self.replicas().values())
 
     def is_active(self):
         return self.State not in ("done", "failed")

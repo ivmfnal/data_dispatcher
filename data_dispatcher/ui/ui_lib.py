@@ -44,7 +44,7 @@ def print_handles(handles, print_replicas):
     
     for f in handles:
         rlist = f["replicas"].values()
-        available_replicas = len([r for r in rlist if r["available"]])
+        available_replicas = len([r for r in rlist if r["available"] and r["rse_available"]])
         nreplicas = len(rlist)
         state = f["state"]
         if state == "ready" and available_replicas:

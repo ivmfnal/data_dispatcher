@@ -222,15 +222,39 @@ for the specified amount of time. Depending on the outcome, the command will:
        
     * If the command times out
     
-        * produce empty output
-        * exit with code 11
+        * print "timeout"
+        * exit with code 1
         
     * If the project finishes (all the files are either done or failed permanently)
     
-        * produce empty output
-        * exit with code 10
+        * print "done"
+        * exit with code 1
         
 If the worker uses "-j" option reserving next file, then the JSON data will include project and file attributes attached to the project and the file at the file of project creation.
+
+Here is an example of using this command:
+
+    .. code-block:: shell
+
+        #!/bin/bash
+        
+        ...
+        
+        out=$(dd next -j $my_project)
+        if [ $? -eq 0 ]
+        then
+             # process the file using $out as the JSON data
+        else
+            case $out in
+                done)
+                    # project is done
+                    ;;
+                timeout)
+                    # timed out
+                    ;;
+            esac
+        fi
+
         
 Releasing the file
 ..................
