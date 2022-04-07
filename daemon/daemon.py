@@ -167,7 +167,7 @@ class RSEConfig(Logged):
 
         dbrse = DBRSE.get(self.DB, actual_rse)
         if dbrse is None:
-            raise KeyErorr(f"RSE {dbrse} aliased as {rse} not found")
+            raise KeyError(f"RSE {dbrse} aliased as {rse} not found")
             
         cfg = dbrse.as_dict()
         if add_prefix is not None:
@@ -198,7 +198,7 @@ class RSEConfig(Logged):
         return self[rse]["pin_url"]
         
     def poll_url(self, rse):
-        return self[rse]["query_url"]
+        return self[rse]["poll_url"]
         
     def remove_prefix(self, rse):
         return self[rse].get("remove_prefix", "")
@@ -265,6 +265,7 @@ class ProjectMonitor(Logged):
         for h in active_handles:
             for rse, replica in h.replicas().items():
                 if self.RSEConfig.is_tape(rse):
+                    #print("tape_replicas_by_rse(): Tape RSE:", rse)
                     tape_replicas_by_rse.setdefault(rse, {})[replica.did()] = replica.Path
         return tape_replicas_by_rse
         
@@ -516,7 +517,11 @@ def main():
     config = opts.get("-c") or os.environ.get("DATA_DISPATCHER_CFG")
     config = yaml.load(open(config, "r"), Loader=yaml.SafeLoader)
 
-    rse_config = RSEConfig(config.get("rses", {}))
+    dbconfig = config["database"]
+    connstr="host=%(host)s port=%(port)s dbname=%(dbname)s user=%(user)s password=%(password)s" % dbconfig
+    connection_pool = ConnectionPool(postgres=connstr)
+
+    rse_config = RSEConfig(config.get("rses", {}), connection_pool)
     ssl_config = config.get("ssl", {})
     rucio_config = config["rucio"]
     
@@ -532,10 +537,6 @@ def main():
     
     replica_client = ReplicaClient()        # read standard Rucio config file for now
     
-    dbconfig = config["database"]
-    connstr="host=%(host)s port=%(port)s dbname=%(dbname)s user=%(user)s password=%(password)s" % dbconfig
-    connection_pool = ConnectionPool(postgres=connstr)
-
     pollers = {}
 
     for rse in rse_config.rses():
