@@ -1,5 +1,5 @@
 from webpie import WPApp, WPHandler
-from data_dispatcher.db import DBProject, DBFileHandle
+from data_dispatcher.db import DBProject, DBFileHandle, DBRSE
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
 import urllib, os, yaml
@@ -148,7 +148,72 @@ class ProjectsHandler(BaseHandler):
         if handle is None:
             self.redirect(f"./project?project_id={project_id}&error=Handle+not+found")
         return self.render_to_response("handle.html", project_id=project_id, handle=handle)
+
+
+class RSEHandler(BaseHandler):
+    
+    def rses(self, request, relpath, **args):
+        user = self.authenticated_user()
+        is_admin = user is not None and user.is_admin()
+        rses = list(DBRSE.list(self.App.db()))
+        rses = sorted(rses, key=lambda r: r.Name)
+        return self.render_to_response("rses.html", rses=rses, is_admin=is_admin)
+    
+    index = rses
+    
+    def rse(self, request, relpath, name=None, **args):
+        name = name or relpath
+        rse = DBRSE.get(self.App.db(), name)
+        if rse is None:
+            self.redirect("./rses")
+        user = self.authenticated_user()
+        is_admin = user is not None and user.is_admin()
+        mode = "edit" if is_admin else "view"
+        return self.render_to_response("rse.html", rse=rse, mode=mode)
+    
+    def create(self, request, relpath, **args):
+        user = self.authenticated_user()
+        is_admin = user is not None and user.is_admin()
+        if not is_admin:
+            self.redirect("./rses")
+        return self.render_to_response("rse.html", is_admin=is_admin, mode="create")
         
+    def do_create(self, request, relpath, **args):
+        user = self.authenticated_user()
+        is_admin = user is not None and user.is_admin()
+        if not is_admin:
+            self.redirect("./rses")
+        
+        name = request.POST["name"]
+        rse = DBRSE.create(self.App.db(), name)
+        self._do_update(rse, request)
+        self.redirect(f"./rses")
+        
+    def do_update(self, request, relpath, **args):
+        user = self.authenticated_user()
+        is_admin = user is not None and user.is_admin()
+        if not is_admin:
+            self.redirect("./rses")
+        
+        name = request.POST["name"]
+        rse = DBRSE.get(self.App.db(), name)
+        if rse is None:
+            self.redirect("./rses")
+        self._do_update(rse, request)
+        self.redirect(f"./rses")
+        
+    def _do_update(self, rse, request):
+        rse.Tape = request.POST.get("is_tape", "no") != "no"
+        rse.Available = request.POST.get("is_available", "no") != "no"
+        rse.RemovePrefix = request.POST.get("remove_pefix", "")
+        rse.AddPrefix = request.POST.get("add_pefix", "")
+        rse.PollURL = request.POST.get("poll_url") or None
+        rse.PinURL = request.POST.get("pin_url") or None
+        rse.Description = request.POST.get("description", "")
+        rse.Preference = int(request.POST.get("preference", 0))
+        rse.save()
+
+
 class TopHandler(BaseHandler):
     
     def __init__(self, request, app):
@@ -156,11 +221,12 @@ class TopHandler(BaseHandler):
         self.U = UsersHandler(request, app)
         self.P = ProjectsHandler(request, app)
         self.A = AuthHandler(request, app)
+        self.R = RSEHandler(request, app)
         
     def index(self, request, relpath, **args):
         self.redirect("P/projects")
-    
-        
+
+
 class App(BaseApp):
     
     def __init__(self, config):

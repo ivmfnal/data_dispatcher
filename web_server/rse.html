@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block headline %}
+    {%- if mode == "create" -%}
+        Create RSE
+    {%- else -%}
+        RSE {{rse.Name}}
+    {%- endif -%}
+{% endblock %}
+
+{% block content %}
+
+{% if mode == "create" %}
+<form action="./do_create" method="POST">
+{% elif mode == "edit" %}
+<form action="./do_update" method="POST">
+{% endif %}
+
+<table class="form">
+    <tr>
+        <th>Name</th>
+        <td>{% if mode == "create" %}
+                <input name="name" type="text"/>
+            {% else %}
+                {{rse.Name}}
+                {% if mode == "edit" %}<input type="hidden" name="name" value="{{rse.Name}}"/>
+                {% endif %}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Description</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="description" type="text" size="120" {% if mode=="edit" %}value="{{rse.Description}}"{% endif %}/>
+            {% else %}
+                {{rse.Description}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Tape</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="is_tape" type="checkbox" {% if mode=="edit" and rse.Tape %}checked="checked"{% endif %}/>
+            {% else %}
+                {{"yes" if rse.Tape else "no"}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Preference</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="preference" type="number" size="6" value="{% if mode=='edit' %}{{rse.Preference}}{% else %}0{% endif %}"/>
+            {% else %}
+                {{rse.Preference}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Available</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="is_available" type="checkbox" {% if mode=="edit" and rse.Available %}checked="checked"{% endif %}/>
+            {% else %}
+                {{"yes" if rse.Available else "no"}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>URL to path conversion</th>
+    </tr>
+    <tr>
+        <th>Remove prefix</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="remove_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.RemovePrefix}}"{% endif %}/>
+            {% else %}
+                {{rse.RemovePrefix}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Add prefix</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="add_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.AddPrefix}}"{% endif %}/>
+            {% else %}
+                {{rse.AddPrefix}}
+            {% endif %}
+        </td>
+    </tr>
+    
+    {% if mode == "create" or mode == "edit" %}
+        <tr>
+            <td></td>
+            <td><input type="submit" value="Save"/>
+            </td>
+        </tr>
+    {% endif %}
+    
+</table>
+
+{% if mode == "create" or mode == "edit" %}
+</form>
+{% endif %}
+
+{% endblock %}

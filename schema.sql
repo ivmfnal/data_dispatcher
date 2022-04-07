@@ -23,13 +23,24 @@ create table files
     primary key(namespace, name)
 );
 
-create index files_spec on files ((namespace || ':' || name));
-    
+create table rses
+(
+    name            text    primary key,
+    description     text    default '',
+    is_available    boolean default false,
+    is_tape         boolean default false,
+    pin_url         text,
+    poll_url        text,
+    remove_prefix   text    default '',
+    add_prefix      text    default '',
+    preference      int     default 0
+);
+
 create table replicas
 (
     namespace   text,
     name        text,
-    rse         text,
+    rse         text        references rses(name) on delete cascade,
     path        text,
     url         text,
     available   boolean     default false,

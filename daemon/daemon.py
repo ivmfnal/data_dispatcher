@@ -1,5 +1,5 @@
 import stompy, pprint, urllib, requests, json, time
-from data_dispatcher.db import DBFile, DBProject, DBReplica
+from data_dispatcher.db import DBFile, DBProject, DBReplica, DBRSE
 from pythreader import PyThread, Primitive, Scheduler, synchronized, LogFile, LogStream
 from data_dispatcher.logs import Logged
 from daemon_web_server import DaemonWebServer
@@ -147,9 +147,10 @@ class PinRequest(Logged):
 
 class RSEConfig(Logged):
     
-    def __init__(self, config):
+    def __init__(self, config, db):
         Logged.__init__(self)
         self.Config = config
+        self.DB = db
 
     def unview(self, rse):
         cfg = self.Config[rse]
@@ -163,7 +164,12 @@ class RSEConfig(Logged):
         add_prefix = cfg.get("add_prefix")
         remove_prefix = cfg.get("remove_prefix")
         actual_rse = self.unview(rse)
-        cfg = self.Config[actual_rse].copy()
+
+        dbrse = DBRSE.get(self.DB, actual_rse)
+        if dbrse is None:
+            raise KeyErorr(f"RSE {dbrse} aliased as {rse} not found")
+            
+        cfg = dbrse.as_dict()
         if add_prefix is not None:
             cfg["add_prefix"] = add_prefix
         if remove_prefix is not None:
@@ -392,7 +398,29 @@ class ProjectMaster(PyThread, Logged):
         self.Scheduler.remove(project_id)
         self.log("project removed:", project_id, "  reason:", reason)
         
+
+class RSEMonitor(Logged):
+    Interval = 60             # regular check interval
+    ReadAvailabilityMask = 4
+    
+    def __init__(self, master, rse, rucio_client):
+        self.Master = master
+        self.RSE = rse
+        self.RucioClient = rucio_client
+        self.LastAvailability = None
         
+    def run(self):
+        try:
+            rse_info = self.RucioClient.get_rse(self.RSE)
+            available = (rse_info["availability"] & self.ReadAvailabilityMask) != 0
+        except Exception as e:
+            self.error(f"Can not get RSE {self.RSE} availability: {e}")
+        else:
+            if self.LastAvailability != available:
+                self.LastAvailability = available
+                self.Master.change_availability(self.RSE, available)
+
+
 """
 Sample message from Rucio
 

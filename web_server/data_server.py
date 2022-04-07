@@ -1,6 +1,6 @@
 from webpie import WPApp, WPHandler
 from wsdbtools import ConnectionPool
-from data_dispatcher.db import DBProject, DBFileHandle, DBFile
+from data_dispatcher.db import DBProject, DBFileHandle, DBFile, DBRSE
 from data_dispatcher.logs import Logged, init_logger
 from data_dispatcher import Version
 from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, \
@@ -237,8 +237,33 @@ class Handler(BaseHandler):
         project_id = int(project_id)
         lst = DBFileHandle.list(db, project_id=project_id, rse=rse, not_state=not_state, state=state)
         return json.dumps([h.as_jsonable() for h in lst]), "text/json"
+    
+    def get_rse(self, request, relpath, name=None, **args):
+        name = name or relpath
+        rse = DBRSE.get(self.App.db(), name)
+        if rse is None:
+            return 404, f"RSE {name} not found"
+        return json.dumps(rse.as_jsonable()), "text/json"
+    
+    def set_rse_availability(self, request, relpath, name=None, available=None, **args):
+        user = self.authenticated_user()
+        if user is None or not user.is_admin():
+            return "Not authorized", 403
+
+        if available not in ("yes", "no"):
+            return 400, 'availability value must be specified as "yes" or "no"'
+
+        name = name or relpath
+        rse = DBRSE.get(self.App.db(), name)
+        if rse is None:
+            return 404, f"RSE {name} not found"
+
+        rse.Available = available == "yes"
+        rse.save()
         
-                
+        return json.dumps(rse.as_jsonable()), "text/json"
+
+
 class App(BaseApp, Logged):
 
     def __init__(self, config):

@@ -75,7 +75,7 @@ class DBObject(object):
             raise
     
     @classmethod
-    def list(db, cls):
+    def list(cls, db):
         columns = cls.columns(as_text=True)
         table = cls.Table
         c = db.cursor()
@@ -559,6 +559,10 @@ class DBReplica(DBObject):
         table = DBReplica.Table
         try:
             c.execute("begin")
+            c.execute("""
+                insert into rses (name) values (%s)
+                    on conflict (name) do nothing
+            """ % (rse,))
             c.execute(f"""
                 insert into {table}(namespace, name, rse, path, url, preference, available)
                     values(%s, %s, %s, %s, %s, %s, %s)
@@ -868,12 +872,14 @@ class DBFileHandle(DBObject, HasLogRecord):
                     where h.project_id=%s
                         and row(h.namespace, h.name) in
                         (       select hh.namespace, hh.name
-                                        from file_handles hh, replicas r
+                                        from file_handles hh, replicas r, rses rse
                                         where hh.project_id=%s
                                                     and hh.state=%s
                                                     and hh.namespace = r.namespace 
                                                     and hh.name = r.name 
                                                     and r.available
+                                                    and r.rse = rse.name
+                                                    and rse.is_available
                                         order by hh.attempts
                                         limit 1
                         )
@@ -938,3 +944,75 @@ class DBFileHandle(DBObject, HasLogRecord):
     def reserved_by(self, worker_id):
         # just add a record to the log. Assume the actual reservation was done by reserve_next_available()
         self.add_log("reserved", worker=worker_id)
+
+
+class DBRSE(DBObject):
+    
+    Columns = ["name", "description", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "preference"]
+    PK = ["name"]
+    Table = "rses"
+
+    def __init__(self, db, name, description="", is_available=True, is_tape=False, pin_url=None, poll_url=None, 
+                remove_prefix=None, add_prefix=None, preference=0):
+        self.DB = db
+        self.Name = name
+        self.Description = description
+        self.Available = is_available
+        self.Tape = is_tape
+        self.PinURL = pin_url
+        self.PollURL = poll_url
+        self.RemovePrefix = remove_prefix
+        self.AddPrefix = add_prefix
+        self.Preference = preference
+
+    def as_dict(self):
+        return dict(
+            name            =   self.Name,
+            description     =   self.Description,
+            is_available    =   self.Available,
+            is_tape         =   self.Tape,
+            pin_url         =   self.PinURL,
+            poll_url        =   self.PollURL,
+            remove_prefix   =   self.RemovePrefix,
+            add_prefix      =   self.AddPrefix,
+            preference      =   self.Preference   
+        )
+
+    as_jsonable = as_dict
+
+    @staticmethod
+    def create(db, name, description="", is_available=True, is_tape=False, pin_url=None, poll_url=None, 
+                remove_prefix=None, add_prefix=None, preference=0):
+        c = db.cursor()
+        try:
+            c.execute("begin")
+            c.execute("""
+                begin;
+                insert into rses(name, description, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, preference)
+                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict(name) do nothing;
+                """, (name, description, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, preference)
+            )
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+        
+        return DBRSE.get(db, name)
+
+    def save(self):
+        c = self.DB.cursor()
+        try:
+            c.execute("begin")
+            c.execute("""
+                begin;
+                update rses 
+                    set description=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, preference=%s
+                    where name=%s
+                """, (self.Description, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, self.AddPrefix, self.Preference, self.Name)
+            )
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+        

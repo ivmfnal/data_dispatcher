@@ -6,6 +6,7 @@ from .ui_project import create_project, show_project, list_projects
 from .ui_handle import show_handle, list_handles
 from .ui_lib import pretty_json
 from .ui_file import show_file, replica_available, replica_unavailable
+from .ui_rse import set_rse, show_rse
 import time
 
 server_url = os.environ.get("DATA_DISPATCHER_URL")
@@ -44,6 +45,9 @@ Commands:
 
     delete project <project_id>
     
+    show rse <rse>                                         - show information about RSE
+    set rse <rse> -a (yes|no)                              - set RSE availability (requires admin privileges)
+    
     login x509 <user> <cert> <key>
     login password <user>
 """
@@ -79,22 +83,29 @@ def main():
             print(Usage)
             sys.exit(2)
         create_project(client, rest)
-    
+
     elif command == "show":
         subcommand, rest = rest[0], rest[1:]
-        if subcommand not in ("file", "project", "handle"):
-            print(Usage)
-            sys.exit(2)
         if subcommand == "project":
             show_project(client, rest)
         elif subcommand == "handle":
             show_handle(client, rest)
         elif subcommand == "file":
             show_file(client, rest)
+        elif subcommand == "rse":
+            show_rse(client, rest)
         else:
             print(Usage)
             sys.exit(2)
-        
+
+    elif command == "set":
+        subcommand, rest = rest[0], rest[1:]
+        if subcommand == "rse":
+            set_rse(client, rest)
+        else:
+            print(Usage)
+            sys.exit(2)
+
     elif command == "replica":
         subcommand, rest = rest[0], rest[1:]
         if subcommand == "available":

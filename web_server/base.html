@@ -228,7 +228,13 @@
         background-color: #FF8;
     }
 
-
+    .rses td.available {
+        background-color: #AFA;        
+    }
+    
+    .rses td.unavailable {
+        background-color: #FAA;        
+    }
     
     </style>
     
@@ -260,6 +266,7 @@
 	<table class="placement link_menu" width="100%">
     	<tr>
     	    <td><a href="{{GLOBAL_AppTopPath}}/P/projects">projects</a></td>
+    	    <td><a href="{{GLOBAL_AppTopPath}}/R/index">RSEs</a></td>
             <td style="width:100%"></td>
     		<td>
                         {% if GLOBAL_User %}

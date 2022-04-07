@@ -44,7 +44,7 @@ class HTTPClient(object):
         self.ServerURL = server_url
         self.Token = token
 
-    def get(self, uri_suffix):
+    def get(self, uri_suffix, none_if_not_found=False):
         if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
         url = "%s%s" % (self.ServerURL, uri_suffix)
         headers = {}
@@ -53,6 +53,8 @@ class HTTPClient(object):
         response = requests.get(url, headers =headers)
         #print("response status code:", response.status_code)
         if response.status_code != 200:
+            if none_if_not_found and response.status_code == 404:
+                return None
             raise APIError(url, response.status_code, response.text)
         if response.headers.get("Content-Type", "").startswith("text/json"):
             data = json.loads(response.text)
@@ -216,7 +218,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         with_files = "yes" if with_files else "no"
         with_replicas = "yes" if with_replicas else "no"
         uri = f"project?project_id={project_id}&with_files={with_files}&with_replicas={with_replicas}"
-        return self.get(uri)
+        return self.get(uri, none_if_not_found=True)
         
     def get_handle(self, project_id, namespace, name):
         """Gets information about a file handle
@@ -289,7 +291,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Returns:
             dictionary with the file information or None if not found
         """
-        return self.get(f"file?namespace={namespace}&name={name}")
+        return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found)
 
     def list_handles(self, project_id, state=None, not_state=None, rse=None):
         """Returns information about project file handles, selecting them by specified criteria
@@ -313,6 +315,33 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         args = "?" + "&".join(args) if args else ""
         return self.get(f"handles{args}")
 
+    def get_rse(self, name):
+        """Returns information about RSE
+        
+        Args:
+            name (str): RSE name
+        
+        Returns:
+            dictionary with RSE information or None if not found
+        """
+        
+        return self.get(f"get_rse?name={name}", none_if_not_found=True)
+
+    def set_rse_availability(self, name, available):
+        """Changes RSE availability flag. The user must be an admin.
+
+        Args:
+            name (str): RSE name
+            available (boolean): RSE availability
+
+        Returns:
+            dictionary with updated RSE information or None if not found
+        """
+
+        available = "yes" if available else "no"
+        return self.get(f"set_rse_availability?name={name}&available={available}", none_if_not_found=True)
+
+
     def replica_available(self, namespace, name, rse, path=None, preference=0, url=None):
         data = {
             "path": path,
@@ -334,8 +363,4 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         handle_id = f"{project_id}:{did}"
         retry = "yes" if retry else "no"
         return self.get(f"release?handle_id={handle_id}&failed=yes&retry={retry}")
-        
-    
-        
-        
-        
+
