@@ -7,6 +7,7 @@
 <table class="form">
     <tr>    <th>Project ID</th>         <td>{{project.ID}}</td> </tr>
     <tr>    <th>User</th>               <td>{{project.Owner}}</td> </tr>
+    <tr>    <th>Created</th>            <td>{{project.CreatedTimestamp}}</td> </tr>
 
     <tr>    <th>Status</th>             <td>{{project.State}}</td> </tr>
     <tr>    <th>Attributes</th>         <td class="nopadding">
@@ -32,7 +33,7 @@
     <tr>    <th>Handles</th>
             <td>
                 <table class="data replicas">
-                    <tr><th>DID</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
+                    <tr><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
                     </tr>
                     {% for handle in handles %}
                         <tr>
@@ -47,6 +48,34 @@
                             </td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            </td>
+    </tr>
+    <tr>    <th>Processing log</th>
+            <td>
+                <table class="data">
+                    <tr>
+                        <th colspan=2>Time</th>
+                        <th>Event</th>
+                        <th>File</th>
+                        <th>Worker</th>
+                        <th>Data</th>
+                    </tr>
+                    {% for l in handle_log %}
+                        <tr>
+                            <td>{{l.T}}</td>
+                            <td>{{project.time_since_created(l.T)|pretty_time_delta}}</td>
+                            <td class="{{l.Type}}">{{l.Type}}</td>
+                            <td>{{l.Namespace}}:{{l.Name}}</td>
+                            <td>{{l.Data.get("worker") or ""}}</td>
+                            <td>{% for n, v in l.Data.items() %}
+                                    {% if n != "worker" %}
+                                        {{n}}: {{v}} {% if not loop.last %}<br/>{% endif %}
+                                    {% endif %}
+                                {% endfor %}
+                            </td>
                         </tr>
                     {% endfor %}
                 </table>

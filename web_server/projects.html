@@ -4,11 +4,55 @@
 
 {% block content %}
 
+<script type="text/javascript">
+    
+    var Colors={
+        "ready": "#CCE", 
+        "available": "#AFA", 
+        "failed": "#FAA", 
+        "reserved": "#FF8",
+        "done": "#CCC" 
+    };
+    
+    var States = ["ready", "available", "reserved", "done", "failed"];
+    
+    function show_fractions(canvas, counts)
+    {
+        var width = parseInt(canvas.getAttribute("width"));
+        var height = parseInt(canvas.getAttribute("height"));
+
+        var total = 0;
+        for( state in counts )
+            total += counts[state];
+
+        var dx = width/total;
+        if ( dx > height )
+            dx = height;
+
+        var ctx = canvas.getContext("2d");
+        ctx.clearRect(0,0,width,height);      
+        var x = 0.0;
+        for ( state of States )
+        {
+            var n = counts[state];
+            if( n )
+            {
+                var w = counts[state] * dx;
+                var c = Colors[state];
+                ctx.fillStyle = c;
+                ctx.fillRect(x,0,w,height);
+                x += w;
+            }
+        }
+    }
+
+</script>
+
 <table class="data">
 	<tr>
 		<th rowspan=2>Project ID</th>
         <th rowspan=2>User</th>
-		<th rowspan=2>Status</th>
+		<th rowspan=2 colspan=2>Status</th>
 		<th colspan="{{handle_states|length}}">File counts</th>
 	</tr>
     <tr>
@@ -21,6 +65,16 @@
             <td><a href="./project?project_id={{prj.ID}}">{{prj.ID}}</a></td>
             <td>{{prj.Owner}}</td>
             <td>{{prj.State}}</td>
+            <td style="vertical-align:middle"><canvas height=10 width=200 id="cnv_{{prj.ID}}"></canvas>
+                
+                <script type="text/javascript">
+                    var counts = {};
+                    {% for state, count in prj.HandleCounts.items() %}
+                        counts["{{state}}"] = {{count}};
+                    {% endfor %}
+                    show_fractions(document.getElementById("cnv_{{prj.ID}}"), counts);
+                </script>
+            </td>
             {% for state in handle_states %}
                 <td>{{prj.HandleCounts[state]}}</td>
             {% endfor %}

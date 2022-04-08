@@ -102,7 +102,10 @@ class ProjectsHandler(BaseHandler):
 
     def projects(self, request, relpath, message="", **args):
         db = self.App.db()
-        projects = DBProject.list(db, with_handle_counts=True)
+        projects = list(DBProject.list(db, with_handle_counts=True))
+        for project in projects:
+            ntotal = sum(project.HandleCounts.values())
+            project._HandleShares = {state:float(count)/ntotal for state, count in project.HandleCounts.items()}
         if message:   message = urllib.parse.unquote_plus(message)
         return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.States, message=message)
 
@@ -110,10 +113,11 @@ class ProjectsHandler(BaseHandler):
 
         status_order = {
             "ready":        0,
-            "reserved":     1,
-            "initial":      2,
-            "done":         3,
-            "failed":       4
+            "available":    1, 
+            "reserved":     2,
+            "initial":      3,
+            "done":         4,
+            "failed":       5
         }
 
         db = self.App.db()
@@ -134,13 +138,20 @@ class ProjectsHandler(BaseHandler):
             h.n_available_replicas = len([r for r in (h.Replicas or {}).values() if r.Available and r.RSEAvailable])
             #print(h.__dict__)
             state = h.State
-            handle_counts_by_state[state] = handle_counts_by_state.get(state, 0) + 1
             if state == "ready" and h.is_available():
                 available_handles += 1
+                h.State = "available"
+            print(h.State)
+            handle_counts_by_state[h.State] = handle_counts_by_state.get(h.State, 0) + 1
+        
+        handle_log = project.handles_log()
+
         return self.render_to_response("project.html", project=project, 
                     handles=handles,
                     available_handles=available_handles,
-                    handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.States)
+                    handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.States,
+                    handle_log = handle_log
+        )
 
     def handle(self, request, relpath, project_id=None, namespace=None, name=None, **args):
         db = self.App.db()
@@ -227,6 +238,38 @@ class TopHandler(BaseHandler):
         self.redirect("P/projects")
 
 
+def pretty_time_delta(t):
+    if t == None:   return ""
+    sign = ''
+    if t < 0:   
+        sign = '-'
+        t = -t
+    seconds = t
+    if seconds < 60:
+        out = '%.1fs' % (seconds,)
+    elif seconds < 3600:
+        seconds = int(seconds)
+        minutes = seconds // 60
+        seconds = seconds % 60
+        out = '%dm%ds' % (minutes, seconds)
+    elif seconds < 3600*24:
+        seconds = int(seconds)
+        minutes = seconds // 60
+        hours = minutes // 60
+        minutes = minutes % 60
+        out = '%dh%02dm' % (hours, minutes)
+    else:
+        seconds = int(seconds)
+        minutes = seconds // 60
+        hours = minutes // 60
+        minutes = minutes % 60
+        days = hours // 24
+        hours = hours % 24
+        out = "%dd%02dh%02dm" % (days, hours, minutes)
+        
+    return sign + out
+
+
 class App(BaseApp):
     
     def __init__(self, config):
@@ -240,6 +283,9 @@ class App(BaseApp):
             globals={
                 "GLOBAL_Version": Version, 
                 "GLOBAL_SiteTitle": self.Config.get("site_title", "DEMO Data Dispatcher")
+            },
+            filters = {
+                "pretty_time_delta": pretty_time_delta
             }
         )
 

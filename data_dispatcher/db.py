@@ -165,22 +165,22 @@ class DBOneToMany(object):
     def __iter__(self):
         return self.list()
 
+class DBLogRecord(object):
+
+    def __init__(self, type, t, data):
+        self.Type = type
+        self.T = t
+        self.Data = data
+
+    def __getattr__(self, key):
+        return getattr(self.Data)
+
 class HasLogRecord(object):
 
     def __init__(self, log_table, parent_id_columns):
         self.LogTable = log_table
         self.IDColumns = parent_id_columns
         self.IDColumnsText = ",".join(parent_id_columns)
-
-    class DBLogRecord(object):
-
-        def __init__(self, type, t, data):
-            self.Type = type
-            self.T = t
-            self.Data = data
-
-        def __getattr__(self, key):
-            return getattr(self.Data)
 
     def add_log(self, type, data=None, **kwargs):
         #print("add_log:", type, data, kwargs)
@@ -241,6 +241,14 @@ class DBProject(DBObject, HasLogRecord):
     def pk(self):
         return (self.ID,)
         
+    def time_since_created(self, t):
+        if self.CreatedTimestamp is None or t is None:
+            return None
+        t_created = self.CreatedTimestamp.timestamp()
+        if isinstance(t, datetime):
+            t = t.timestamp()
+        return t - t_created
+
     def as_jsonable(self, with_handles=False, with_replicas=False):
         #print("Project.as_jsonable: with_handles:", with_handles, "   with_replicas:", with_replicas)
         out = dict(
@@ -297,6 +305,34 @@ class DBProject(DBObject, HasLogRecord):
         columns = DBProject.columns("p", as_text=True)
         if with_handle_counts:
             h_table = DBFileHandle.Table
+            rse_table = DBRSE.Table
+            rep_table = DBReplica.Table
+
+            #
+            # Get active replicas counts per project
+            #
+            
+            available_by_project = {}
+            c.execute(f"""
+                select count(*), project_id
+                    from (
+                        select distinct p.id as project_id, h.namespace, h.name
+                            from {table} p
+                            inner join {h_table} h on p.id = h.project_id
+                            left outer join {rep_table} r on r.namespace = h.namespace and r.name = h.name
+                            inner join {rse_table} s on s.name = r.rse
+                            where s.is_available and r.available and h.state = 'ready'
+                        ) tmp
+                    group by project_id
+            """)
+            available_counts = {project_id:n for n, project_id in cursor_iterator(c)}
+            
+            print("available counts:", available_counts)
+            
+            #
+            # Get handle counts, adjusting "ready" counts according to the collected "available" counts
+            #
+
             c.execute(f"""
                 select {columns}, h.state, count(*)
                     from {table} p, {h_table} h
@@ -310,11 +346,15 @@ class DBProject(DBObject, HasLogRecord):
                 #print(tup)
                 p_tuple, h_state, count = tup[:len(DBProject.Columns)], tup[-2], tup[-1]
                 p1 = DBProject.from_tuple(db, p_tuple)
+                available_count = available_counts.get(p1.ID, 0)
                 if p is None or p.ID != p1.ID:
                     if p is not None:
                         yield p
                     p = p1
                     p.HandleCounts = {state:0 for state in DBFileHandle.States}
+                    p.HandleCounts["available"] = available_count
+                if h_state == "ready":
+                    count -= available_count
                 p.HandleCounts[h_state] = count
             if p is not None:
                 yield p
@@ -400,6 +440,21 @@ class DBProject(DBObject, HasLogRecord):
             counts[s] = counts.get(s, 0) + 1
         return out
         
+    def handles_log(self):
+        c = self.DB.cursor()
+        c.execute("""
+            select namespace, name, t, type, data
+                from file_handle_log
+                where project_id=%s
+                order by t, namespace, name
+        """, (self.ID,))
+        for tup in cursor_iterator(c):
+            namespace, name, t, type, data = tup
+            log_record = DBLogRecord(type, t, data)
+            log_record.Namespace = namespace
+            log_record.Name = name
+            yield log_record
+
 class DBFile(DBObject):
     
     Columns = ["namespace", "name"]
@@ -944,9 +999,9 @@ class DBFileHandle(DBObject, HasLogRecord):
 
     def failed(self, retry=True):
         self.State = self.ReadyState if retry else "failed"
+        self.add_log("failed", worker=self.WorkerID or None, retry=retry)
         self.WorkerID = None
         self.save()
-        self.add_log("failed", worker=self.WorkerID, retry=retry)
 
     def reserved_by(self, worker_id):
         # just add a record to the log. Assume the actual reservation was done by reserve_next_available()
