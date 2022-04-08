@@ -1,4 +1,4 @@
-import stompy, pprint, urllib, requests, json, time
+import stompy, pprint, urllib, requests, json, time, traceback
 from data_dispatcher.db import DBFile, DBProject, DBReplica, DBRSE
 from pythreader import PyThread, Primitive, Scheduler, synchronized, LogFile, LogStream
 from data_dispatcher.logs import Logged
@@ -163,6 +163,7 @@ class RSEConfig(Logged):
         cfg = self.Config[rse]
         add_prefix = cfg.get("add_prefix")
         remove_prefix = cfg.get("remove_prefix")
+        ssl_config = cfg.get("ssl")
         actual_rse = self.unview(rse)
 
         dbrse = DBRSE.get(self.DB, actual_rse)
@@ -170,6 +171,7 @@ class RSEConfig(Logged):
             raise KeyError(f"RSE {dbrse} aliased as {rse} not found")
             
         cfg = dbrse.as_dict()
+        cfg["ssl"] = ssl_config
         if add_prefix is not None:
             cfg["add_prefix"] = add_prefix
         if remove_prefix is not None:
@@ -306,12 +308,16 @@ class ProjectMonitor(Logged):
         self.Scheduler.add(self.run)
  
     def create_pin_request(self, rse, replicas):
-        ssl_config = self.RSEConfig.ssl_config(rse)
-        self.PinRequests[rse] = pin_request = PinRequest(self.ProjectID, self.RSEConfig.pin_url(rse), 
-            ssl_config, replicas
-        )
-        pin_request.send()
-        return pin_request
+        try:
+            ssl_config = self.RSEConfig.ssl_config(rse)
+            self.PinRequests[rse] = pin_request = PinRequest(self.ProjectID, self.RSEConfig.pin_url(rse), 
+                ssl_config, replicas
+            )
+            pin_request.send()
+            return pin_request
+        except Exception as e:
+            self.error("Error in create_pin_request:", traceback.format_exc())
+            raise
 
     def run(self):
         
