@@ -406,28 +406,6 @@ class ProjectMaster(PyThread, Logged):
         self.log("project removed:", project_id, "  reason:", reason)
         
 
-class RSEMonitor(Logged):
-    Interval = 60             # regular check interval
-    ReadAvailabilityMask = 4
-    
-    def __init__(self, master, rse, rucio_client):
-        self.Master = master
-        self.RSE = rse
-        self.RucioClient = rucio_client
-        self.LastAvailability = None
-        
-    def run(self):
-        try:
-            rse_info = self.RucioClient.get_rse(self.RSE)
-            available = (rse_info["availability"] & self.ReadAvailabilityMask) != 0
-        except Exception as e:
-            self.error(f"Can not get RSE {self.RSE} availability: {e}")
-        else:
-            if self.LastAvailability != available:
-                self.LastAvailability = available
-                self.Master.change_availability(self.RSE, available)
-
-
 """
 Sample message from Rucio
 
