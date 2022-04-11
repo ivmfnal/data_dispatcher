@@ -39,5 +39,5 @@ def list_handles(client, rest):
         project_id = opts.get("-p")
         if project_id is not None:
             project_id = int(project_id)
-        lst = client.list_handles(project_id=project_id, rse=opts.get("-r"), state=opts.get("-s"))
+        lst = client.list_handles(project_id=project_id, rse=opts.get("-r"), state=opts.get("-s"), with_replicas=True)
         print_handles(lst)

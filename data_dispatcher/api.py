@@ -293,7 +293,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
         return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found)
 
-    def list_handles(self, project_id, state=None, not_state=None, rse=None):
+    def list_handles(self, project_id, state=None, not_state=None, rse=None, with_replicas=False):
         """Returns information about project file handles, selecting them by specified criteria
         
         Args:
@@ -303,7 +303,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             state (str): select only handles in the specified state
             not_state (str): exclude handles in the specified state
             rse (str): include only handles with replicas in the specified RSE
-    
+            with_replicas (boolean): include information about replicas
+
         Returns:
             list of dictionaries with inofrmation about selected file handles
         """

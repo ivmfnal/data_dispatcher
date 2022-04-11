@@ -20,13 +20,14 @@
             {% endif %}
             </td> 
     </tr>
-    <tr>    <th>Handles by status</th>
+    <tr>    <th>Handles by state</th>
             <td class="nopadding">
                 <table class="placement dense">
+                    <tr>
                     {% for state in states -%}
-                        <tr><td>{{state}}</td><td>{{handle_counts_by_state[state]}}
-                            {%- if state == "ready" %}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;available:{{available_handles}}{% endif %}</td></tr>
+                        <td class="{{state}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</td>
                     {% endfor %}
+                    </tr>
                 </table>
             <td>
     </tr>
@@ -41,7 +42,7 @@
                                     {{handle.Namespace}}:{{handle.Name}}
                                 </a>
                             </td>
-                            {% set state = "available" if handle.State == "ready" and handle.is_available() else handle.State %}
+                            {% set state = handle.state() %}
                             <td class="{{state}}">{{state}}</td>
                             <td>
                                 {{handle.n_replicas}} ({{handle.n_available_replicas}})
@@ -53,7 +54,14 @@
                 </table>
             </td>
     </tr>
-    <tr>    <th>Processing log</th>
+    {#
+    <tr>    <th>Progress</th>
+            <td><canvas id="progress_chart" width=600 height=400></svg></td>
+    </tr>
+    #}
+    
+    <tr>
+            <td></td>
             <td>
                 <table class="data">
                     <tr>
@@ -81,6 +89,103 @@
                 </table>
             </td>
     </tr>
+    
+    {#
+    <script type="text/javascript">
+        var project_handle_counts_log = [
+            {% for log_record in handle_log %}
+                // {{log_record}}
+                [ {{log_record.T.timestamp()}}, "{{log_record.Type}}", {{"true" if log_record.Data.get("retry") else "false"}} ]
+                            {%- if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+        var n_handles = {{handles|length}}
+        var n_ready = n_handles;
+        var n_reserved = 0;
+        var n_done = 0;
+        var n_failed = 0;
+        var t0 = Math.round({{project.CreatedTimestamp.timestamp()}});
+        var t1 = Math.round(new Date().valueOf()/1000);
+        var t = t0;
+        var counts_log = [];
+        for( item of project_handle_counts_log )
+        {
+            var tt = Math.floor(item[0]);
+            if( tt != t )
+            {
+                if( t != null )
+                    counts_log.push([t-t0, n_ready, n_reserved, n_done, n_failed]);
+                t = tt;
+            }
+            var type = item[1];
+            if( type == "reserved" )
+            {
+                n_reserved += 1;
+                n_ready -= 1;
+            }
+            else if ( type == "failed" )
+            {
+                n_reserved -= 1;
+                if ( item[2] )
+                    n_ready += 1;
+                else
+                    n_failed += 1;
+            }
+            else if ( type == "done" )
+            {
+                n_reserved -= 1;
+                n_done += 1;
+            }
+        }
+        counts_log.push([t-t0, n_ready, n_reserved, n_done, n_failed]);
+        counts_log.push([t1-t0, n_ready, n_reserved, n_done, n_failed]);
+
+        var canvas = document.getElementById("progress_chart");
+        var width = parseInt(canvas.getAttribute("width"));
+        var height = parseInt(canvas.getAttribute("height"));
+        var ctx = canvas.getContext("2d");
+        ctx.clearRect(0,0,width,height);      
+        
+        var dt = Math.max(t1-t0, 1.0);
+        var dxdt = Math.min(width/dt, 10.0);
+        var dydn = Math.min(height/n_handles, 10);
+        
+        var colors = [
+            "#CCE",         // ready
+            "#FF8",         // reserved
+            "#DDE",         // done
+            "#FAA"          // failed
+        ];
+        
+        var tup0 = counts_log[0];
+        for( var i = 1; i < counts_log.length; i++ )
+        {
+            var tup1 = counts_log[i];
+            var y = 0;
+            var tt0 = tup0[0];
+            var tt1 = tup1[0];
+            var xx0 = tt0 * dxdt;
+            var dx = (tt1-tt0) * dxdt;
+            
+            for( var k = 0; k < 4; k++ )
+            {
+                var n = tup0[k+1];
+                if( n > 0 )
+                {
+                    var c = colors[k];
+                    var dy = n * dydn;
+                    ctx.fillStyle = c;
+                    ctx.fillRect(xx0,y,dx,dy);
+                    y += dy;
+                }
+            }
+            tup0 = tup1;
+        }
+        
+
+
+    </script>
+    #}
 </table>
 
 {% endblock %}

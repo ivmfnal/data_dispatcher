@@ -202,7 +202,15 @@ class Handler(BaseHandler):
         #print("project(): with handles/replicas: ", with_files, with_replicas)
         jsonable = project.as_jsonable(with_handles=with_files, with_replicas=with_replicas)
         return json.dumps(jsonable), "text/json"
-    
+
+    def project_handles_log(self, request, relpath, project_id=None):
+        project_id = int(project_id)
+        project = DBProject.get(db, project_id)
+        if not project:
+            return 403
+        project_log = (x.as_jsonable() for x in project.handles_log())
+        return json.dumps(project_log), "text/json"
+
     def projects(self, request, relpath, state=None, not_state=None, owner=None, attributes="", 
                 with_handles="yes", with_replicas="yes", **args):
         with_handles = with_handles == "yes"
@@ -233,10 +241,10 @@ class Handler(BaseHandler):
             return "null", "text/json"
         return json.dumps(handle.as_jsonable(with_replicas=True)), "text/json"
     
-    def handles(self, request, relpath, project_id=None, state=None, rse=None, not_state=None):
+    def handles(self, request, relpath, project_id=None, state=None, rse=None, not_state=None, with_replicas="no"):
         db = self.App.db()
         project_id = int(project_id)
-        lst = DBFileHandle.list(db, project_id=project_id, rse=rse, not_state=not_state, state=state)
+        lst = DBFileHandle.list(db, project_id=project_id, rse=rse, not_state=not_state, state=state, with_replicas=with_replicas=="yes")
         return json.dumps([h.as_jsonable() for h in lst]), "text/json"
         
     def rses(self, request, relpath, **args):

@@ -23,6 +23,8 @@ create table files
     primary key(namespace, name)
 );
 
+
+
 create table rses
 (
     name            text    primary key,
@@ -92,5 +94,16 @@ create table file_handle_log
     type        text,
     data        jsonb,
     primary key (project_id, namespace, name, t)
+);
+
+create table file_log
+(
+    namespace   text,
+    name        text,
+    t           timestamp with time zone     default now(),
+    type        text,
+    data        jsonb,
+    primary key (namespace, name, t),
+    foreign key (namespace, name) references files(namespace, name) on delete cascade
 );
 

@@ -100,6 +100,8 @@ class UsersHandler(BaseHandler):
                     
 class ProjectsHandler(BaseHandler):
 
+
+
     def projects(self, request, relpath, message="", **args):
         db = self.App.db()
         projects = list(DBProject.list(db, with_handle_counts=True))
@@ -107,18 +109,11 @@ class ProjectsHandler(BaseHandler):
             ntotal = sum(project.HandleCounts.values())
             project._HandleShares = {state:float(count)/ntotal for state, count in project.HandleCounts.items()}
         if message:   message = urllib.parse.unquote_plus(message)
-        return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.States, message=message)
+        return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates, message=message)
 
     def project(self, request, relpath, project_id=None, **args):
 
-        status_order = {
-            "ready":        0,
-            "available":    1, 
-            "reserved":     2,
-            "initial":      3,
-            "done":         4,
-            "failed":       5
-        }
+        state_order = {state:i for i, state in enumerate(DBFileHandle.DerivedStates)}
 
         db = self.App.db()
         project_id = int(project_id)
@@ -129,27 +124,26 @@ class ProjectsHandler(BaseHandler):
             self.redirect(f"./projects?message={message}")
         
         handles = sorted(project.handles(with_replicas=True), 
-                key=lambda h: (status_order.get(h.State, 100), 0 if h.is_available() else 1, h.Attempts, h.Namespace, h.Name))
+                key=lambda h: (state_order.get(h.State, 100), h.Attempts, h.Namespace, h.Name))
         
-        handle_counts_by_state = {state:0 for state in DBFileHandle.States}     # {state -> count}
+        handle_counts_by_state = {state:0 for state in DBFileHandle.DerivedStates}     # {state -> count}
         available_handles = 0
         for h in handles:
-            h.n_replicas = len(h.Replicas or {})
-            h.n_available_replicas = len([r for r in (h.Replicas or {}).values() if r.Available and r.RSEAvailable])
-            #print(h.__dict__)
-            state = h.State
-            if state == "ready" and h.is_available():
-                available_handles += 1
-                h.State = "available"
-            print(h.State)
-            handle_counts_by_state[h.State] = handle_counts_by_state.get(h.State, 0) + 1
-        
-        handle_log = project.handles_log()
+            replicas = h.replicas()
+            h.n_replicas = len(replicas)
+            h.n_available_replicas = len([r for r in replicas.values() if r.is_available()]) 
+            state = h.state()
+            print("handle State:", h.State, "  state():", state)
+            handle_counts_by_state[state] = handle_counts_by_state.get(state, 0) + 1
+            
+
+        handle_log = list(project.handles_log())
+        print("length of handle_log:", len(handle_log))
 
         return self.render_to_response("project.html", project=project, 
                     handles=handles,
                     available_handles=available_handles,
-                    handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.States,
+                    handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.DerivedStates,
                     handle_log = handle_log
         )
 

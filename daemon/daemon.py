@@ -376,8 +376,7 @@ class ProjectMaster(PyThread, Logged):
 
     def run(self):
         while not self.Stop:
-            active_projects = DBProject.list(self.DB, state="active", with_handle_counts=True)
-            active_projects = set(p.ID for p in active_projects if p.HandleCounts.get("ready",0) + p.HandleCounts.get("reserved",0) > 0)
+            active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
             monitor_projects = set(self.Monitors.keys())
             #self.debug("run: active projects:", len(active_projects),"   known projects:", len(monitor_projects))
             with self:

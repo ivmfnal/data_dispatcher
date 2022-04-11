@@ -20,11 +20,11 @@ def parse_attrs(text):
                 v = {"null":None, "true":True, "false":False}.get(v, v)
         out[k]=v
     return out
-
+    
 def print_handles(handles, print_replicas):
     
     state_order = {
-        "ready":    0,
+        "initial":      0,
         "reserved":     1,
         "done":         3,
         "failed":       4
@@ -38,16 +38,16 @@ def print_handles(handles, print_replicas):
     handles = list(handles)
 
     for h in handles:
-        h["is_available"] = any(r["available"] for r in h["replicas"].values())
-    
+        h["is_available"] = any(r["available"] and r.get("rse_available") for r in h["replicas"].values())
+
     handles = sorted(handles, key=lambda h: (0 if h["is_available"] else 1, state_order[h["state"]], h["attempts"], h["namespace"], h["name"]))
-    
+
     for f in handles:
         rlist = f["replicas"].values()
         available_replicas = len([r for r in rlist if r["available"] and r["rse_available"]])
         nreplicas = len(rlist)
         state = f["state"]
-        if state == "ready" and available_replicas:
+        if state == "initial" and available_replicas:
             state = "available"
         print("%10s %4d/%-4d %8s %10s %s:%s" % (
             state,

@@ -6,15 +6,25 @@
 
 <script type="text/javascript">
     
-    var Colors={
-        "ready": "#CCE", 
-        "available": "#AFA", 
-        "failed": "#FAA", 
-        "reserved": "#FF8",
-        "done": "#CCC" 
+    var FillColors={
+        "initial": "#DDD", 
+        "found": "#ACA", 
+        "available": "#8F8", 
+        "failed": "#F44", 
+        "reserved": "#FD8",
+        "done": "#88F"
     };
     
-    var States = ["ready", "available", "reserved", "done", "failed"];
+    var StrokeColors={
+        "initial": "#DDD", 
+        "found": "#ACA", 
+        "available": "#8F8", 
+        "failed": "#F44", 
+        "reserved": "#FD8",
+        "done": "#88F" 
+    };
+    
+    var States = {{handle_states}};
     
     function show_fractions(canvas, counts)
     {
@@ -38,9 +48,14 @@
             if( n )
             {
                 var w = counts[state] * dx;
-                var c = Colors[state];
-                ctx.fillStyle = c;
+                var f = FillColors[state];
+                var s = StrokeColors[state];
+                ctx.beginPath();
+                ctx.fillStyle = f;
+                ctx.strokeStyle = s;
                 ctx.fillRect(x,0,w,height);
+                ctx.rect(x,0,w,height);
+                ctx.stroke();
                 x += w;
             }
         }

@@ -174,6 +174,13 @@ class DBLogRecord(object):
 
     def __getattr__(self, key):
         return getattr(self.Data)
+        
+    def as_jsonable(self):
+        return dict(
+            type = self.Type,
+            t = self.T.timestamp(),
+            data = self.Data
+        )
 
 class HasLogRecord(object):
 
@@ -214,7 +221,7 @@ class HasLogRecord(object):
         """
         c = self.DB.cursor()
         c.execute(sql)
-        return (self.DBLogRecord(type, t, message) for type, t, message in cursor_iterator())
+        return (DBLogRecord(type, t, message) for type, t, message in cursor_iterator())
         
 
 class DBProject(DBObject, HasLogRecord):
@@ -299,7 +306,7 @@ class DBProject(DBObject, HasLogRecord):
         if attributes is not None:
             for name, value in attributes.items():
                 wheres.append("p.attributes @> '{\"%s\": %s}'::jsonb" % (name, json_literal(value)))
-        wheres = " and ".join(wheres)
+        p_wheres = " and ".join(wheres)
         c = db.cursor()
         table = DBProject.Table
         columns = DBProject.columns("p", as_text=True)
@@ -314,47 +321,58 @@ class DBProject(DBObject, HasLogRecord):
             
             available_by_project = {}
             c.execute(f"""
-                select count(*), project_id
-                    from (
-                        select distinct p.id as project_id, h.namespace, h.name
-                            from {table} p
-                            inner join {h_table} h on p.id = h.project_id
-                            left outer join {rep_table} r on r.namespace = h.namespace and r.name = h.name
-                            inner join {rse_table} s on s.name = r.rse
-                            where s.is_available and r.available and h.state = 'ready'
-                        ) tmp
-                    group by project_id
+                with 
+                    found_files as  
+                    (
+                        select distinct h.project_id, r.namespace, r.name, true as found
+                            from {rep_table} r, {h_table} h, {table} p
+                            where h.namespace = r.namespace
+                                and h.name = r.name
+                                and h.state = 'initial'
+                                and p.id = h.project_id
+                                and {p_wheres}
+                    ),
+                    available_files as 
+                    (
+                        select distinct ff.project_id, ff.namespace, ff.name, true as available
+                            from found_files ff, {rep_table} r, {rse_table} s
+                            where ff.namespace = r.namespace
+                                and ff.name = r.name
+                                and r.available
+                                and s.name = r.rse and s.is_available
+                    ),
+                    handle_states as
+                    (
+                        select h.project_id, h.namespace, h.name, 
+                                case
+                                    when af.available = true then 'available'
+                                    when ff.found = true then 'found'
+                                    else h.state
+                                end as state
+                            from {table} p, {h_table} h
+                                left outer join found_files ff on ff.namespace = h.namespace and ff.name = h.name
+                                left outer join available_files af on af.namespace = h.namespace and af.name = h.name
+                            where p.id = h.project_id
+                    )
+                    
+                select {columns}, hs.state, count(*)
+                    from handle_states hs, projects p
+                        where p.id = hs.project_id
+                        and {p_wheres}
+                    group by p.id, hs.state
+                    order by p.id, hs.state
             """)
-            available_counts = {project_id:n for n, project_id in cursor_iterator(c)}
-            
-            print("available counts:", available_counts)
-            
-            #
-            # Get handle counts, adjusting "ready" counts according to the collected "available" counts
-            #
 
-            c.execute(f"""
-                select {columns}, h.state, count(*)
-                    from {table} p, {h_table} h
-                    where {wheres}
-                        and p.id = h.project_id
-                    group by {columns}, h.state
-                    order by p.id
-            """)
             p = None
             for tup in cursor_iterator(c):
                 #print(tup)
                 p_tuple, h_state, count = tup[:len(DBProject.Columns)], tup[-2], tup[-1]
                 p1 = DBProject.from_tuple(db, p_tuple)
-                available_count = available_counts.get(p1.ID, 0)
                 if p is None or p.ID != p1.ID:
                     if p is not None:
                         yield p
                     p = p1
-                    p.HandleCounts = {state:0 for state in DBFileHandle.States}
-                    p.HandleCounts["available"] = available_count
-                if h_state == "ready":
-                    count -= available_count
+                    p.HandleCounts = {}
                 p.HandleCounts[h_state] = count
             if p is not None:
                 yield p
@@ -425,7 +443,8 @@ class DBProject(DBObject, HasLogRecord):
         return handle
 
     def is_active(self, reload=False):
-        return any(h.State in ("ready", "reserved") for h in self.handles(reload=reload))
+        print("projet", self.ID, "  handle states:", [h.State for h in self.handles(reload=reload)])
+        return self.State == "active" and not all(h.State in ("done", "failed") for h in self.handles(reload=reload))
             
     def reserve_next_file(self, worker_id):
         handle = DBFileHandle.reserve_next_available(self.DB, self.ID, worker_id)
@@ -453,15 +472,17 @@ class DBProject(DBObject, HasLogRecord):
             log_record = DBLogRecord(type, t, data)
             log_record.Namespace = namespace
             log_record.Name = name
+            print("log_record:", log_record)
             yield log_record
 
-class DBFile(DBObject):
+class DBFile(DBObject, HasLogRecord):
     
     Columns = ["namespace", "name"]
     PK = ["namespace", "name"]
     Table = "files"
     
     def __init__(self, db, namespace, name):
+        HasLogRecord.__init__(self, "file_log", ["namespace", "name"])
         self.DB = db
         self.Namespace = namespace
         self.Name = name
@@ -578,7 +599,7 @@ class DBReplica(DBObject):
     Columns = ["namespace", "name", "rse", "path", "url", "preference", "available"]
     PK = ["namespace", "name", "rse"]
     
-    def __init__(self, db, namespace, name, rse, path, url, preference=0, available=False):
+    def __init__(self, db, namespace, name, rse, path, url, preference=0, available=None, rse_available=None):
         self.DB = db
         self.Namespace = namespace
         self.Name = name
@@ -587,10 +608,14 @@ class DBReplica(DBObject):
         self.Path = path
         self.Preference = preference
         self.Available = available
-        self.RSEAvailable = None            # optional, set by joining the rses table
+        self.RSEAvailable = rse_available            # optional, set by joining the rses table
 
     def did(self):
         return f"{self.Namespace}:{self.Name}"
+        
+    def is_available(self):
+        assert self.Available is not None and self.RSEAvailable is not None
+        return self.Available and self.RSEAvailable
 
     @staticmethod
     def list(db, namespace=None, name=None):
@@ -695,9 +720,21 @@ class DBReplica(DBObject):
                     select t.ns, t.n, t.r, t.p, t.u, t.pr, false from {temp_table} t
                     on conflict (namespace, name, rse)
                         do nothing;
+                """)
+
+            if False:
+                c.execute(f"""
+                    insert into file_log (namespace, name, type, data)
+                        select t.ns, t.n, 'replica added', ('{"rse":"' || t.r || '", "url":"' || t.u || '", "preference":' || t.pr::text || '}')::jsonb
+                        from {temp_table} t
+                        on conflict (namespace, name, t) do nothing
+                """)
+
+            c.execute(f"""
                 drop table {temp_table};
                 commit
-                """)
+            """)
+
         except Exception as e:
             c.execute("rollback")
             raise
@@ -708,6 +745,7 @@ class DBReplica(DBObject):
         if not dids:    return
         table = DBReplica.Table
         val = "true" if available else "false"
+        undids = [did.split(":", 1) for did in dids]
         c = db.cursor()
         c.execute("begin")
         try:
@@ -716,9 +754,9 @@ class DBReplica(DBObject):
                     set available=%s
                     where namespace || ':' || name = any(%s)
                         and rse = %s;
-                commit
             """
             c.execute(sql, (val, dids, rse))
+            c.execute("commit")
         except:
             c.execute("rollback")
             raise
@@ -729,9 +767,18 @@ class DBFileHandle(DBObject, HasLogRecord):
     PK = ["project_id", "namespace", "name"]
     Table = "file_handles"
 
-    InitialState = ReadyState = "ready"
+    InitialState = ReadyState = "initial"
     ReservedState = "reserved"
-    States = ["ready", "reserved", "done", "failed"]
+    States = ["initial", "reserved", "done", "failed"]
+    DerivedStates = [
+            "initial",
+            "found",
+            "available", 
+            "reserved",
+            "done",
+            "failed"
+        ]
+
 
     def __init__(self, db, project_id, namespace, name, state=None, worker_id=None, attempts=0, attributes={}):
         HasLogRecord.__init__(self, "file_handle_log", ["project_id", "namespace", "name"])
@@ -770,6 +817,17 @@ class DBFileHandle(DBObject, HasLogRecord):
             self.Replicas = self.get_file().replicas()
         return self.Replicas
         
+    def state(self):
+        # returns the handle state, including derived states like "available" and "found"
+        if self.State == "initial":
+            replicas = list(self.replicas().values())
+            if replicas:
+                if any(r.is_available() for r in replicas):
+                    return "available"
+                else:
+                    return "found"
+        return self.State
+
     def sorted_replicas(self):
         replicas = self.replicas().values()
         return sorted(replicas,
@@ -962,25 +1020,6 @@ class DBFileHandle(DBObject, HasLogRecord):
         h.reserved_by(worker_id)
         return h
         
-    @staticmethod
-    def available_handles(db, project_id, state):
-        columns = self.columns("h", as_text=True)
-        ncols = len(self.Columns)
-        c = db.cursor()
-        c.execute(f"""
-            select {columns}, f.replicas
-                from file_handles h
-                    inner join files f on f.namespace = h.namespace and f.name = h.name
-                where h.project_id=%s and h.state=%s and
-                    f.replicas @? '$.* ? (@.available == true)';
-                order h.attempts
-        """, (project_id, DBFileHandle.InitialState))
-        
-        for tup in cursor_iterator(c):
-            h = DBFileHandle.from_tuple(db, tup[:-1])
-            h.Replicas = tup[-1]
-            yield h
-
     #
     # workflow
     #
