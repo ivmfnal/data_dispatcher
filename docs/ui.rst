@@ -248,13 +248,16 @@ Data Dispatcher.
     .. code-block:: shell
         
         $ dd worker -n          # - generate random worker id
+        9e0124f8
         
         $ dd worker <assigned worker id>
         # example
         $ my_id=`hostname`_`date +%s`
         $ dd worker $my_id
+        fnpc123_1645849756
         
         $ dd worker             # - prints current worker id
+        fnpc123_1645849756
 
 Getting next file to process
 ............................
