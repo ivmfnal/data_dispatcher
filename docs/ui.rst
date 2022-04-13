@@ -116,7 +116,7 @@ Data Dispatcher provides a way to pass some arbitrary metadata about the project
 The metadata is attached to the project and/or project files at the time of the project creation. Project and file metadata can be any JSON dictionary. 
 If the project is created using a MetaCat query, Data Dispatcher can copy some portions of file metadata from MetaCat to avoid unnecessary
 querying MetaCat at the run time.
-When the worker issues `dd next -j ...` command, the output includes the project and the metadata as part of the JSON output.
+When the worker issues ``dd next -j ...`` command, the output includes the project and the metadata as part of the JSON output.
 
 Note that project file attributes defined at the project cteation time do not get stored in MetaCat. Also, because file
 attributes are associated with project file handles instead of files, if two projects include the same
@@ -144,7 +144,7 @@ To copy some metadata attributes from MetaCat:
         $ dd create project -c core.runs files from ...
         $ dd create project -c detector.hv_value,core.data_tier files from ...
 
-To associate common attributes with each file in the project, use `-a` option:
+To associate common attributes with each file in the project, use ``-a`` option:
 
     .. code-block:: shell
 
