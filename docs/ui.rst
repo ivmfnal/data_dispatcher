@@ -81,53 +81,8 @@ or JSON-formatted list. The list is composed of items of two types:
                 "attributes": {"debug":true} 
             }
         ]
-        $ dd create project -j /tmp/file_list.json
+        $ dd create project /tmp/file_list.json
 
-Project and file attributes
-...........................
-
-Optionally, the project and/or each file of the project can carry some metadata, which can be retrieved by the worker when the project runs.
-
-There are several ways to specify project level metadata attributes:
-
-    .. code-block:: shell
-
-        # inline:
-        $ dd create project -A "name1=value1 name2=value2" ...
-        
-        # as a JSON file:
-        $ dd create project -A @<JSON file>
-        
-File attributes can be copied from MetaCat and/or set when the project is created. To copy some metadata attributes from MetaCat:
-
-    .. code-block:: shell
-
-        $ dd create project -c core.runs files from ...
-        $ dd create project -c detector.hv_value,core.data_tier files from ...
-
-Also, common file attributes can be added using "-a" option:
-
-    .. code-block:: shell
-
-        $ dd create project -a "name1=value name1=value" ...
-        $ dd create project -a @<JSON file>
-
-If the file list is specified explicitly using JSON file, then each file dictionary may optionally include file attributes:
-
-    .. code-block:: shell
-
-        $ cat /tmp/file_list.json 
-        [
-            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0009_dl2.root", 
-                    "attributes":   {   "pi":3.14, "debug":true } 
-            },
-            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0009_dl6.root",
-                    "attributes":   {   "skip_events": 10   }
-            },
-            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0010_dl10.root" }
-        ]
-        $ dd create project -j /tmp/file_list.json
-        
 The "dd create project" command prints information about the created project in 3 different formats, depending on "-p" option:
 
     .. code-block:: shell
@@ -153,6 +108,102 @@ The "dd create project" command prints information about the created project in 
          ...
         }
 
+
+Project and project file attributes
+...................................
+
+Data Dispatcher provides a way to pass some arbitrary metadata about the project as a whole and/or each individual project file to the worker.
+The metadata is attached to the project and/or project files at the time of the project creation. Project and file metadata can be any JSON dictionary. 
+If the project is created using a MetaCat query, Data Dispatcher can copy some portions of file metadata from MetaCat to avoid unnecessary
+querying MetaCat at the run time.
+When the worker issues `dd next -j ...` command, the output includes the project and the metadata as part of the JSON output.
+
+Note that project file attributes defined at the project cteation time do not get stored in MetaCat. Also, because file
+attributes are associated with project file handles instead of files, if two projects include the same
+file, they can define project file attributes independently without interfering with each other.
+
+There are several ways to specify project level metadata attributes:
+
+    .. code-block:: shell
+
+        # inline:
+        $ dd create project -A "email_errors=user@fnal.gov step=postprocess" ...
+        
+        # as a JSON file:
+        $ cat project_attrs.json
+        {
+            "email_errors": "user@fnal.gov",
+            "step": "postprocess"
+        }
+        $ dd create project -A @project_attrs.json
+        
+To copy some metadata attributes from MetaCat:
+
+    .. code-block:: shell
+
+        $ dd create project -c core.runs files from ...
+        $ dd create project -c detector.hv_value,core.data_tier files from ...
+
+To associate common attributes with each file in the project, use `-a` option:
+
+    .. code-block:: shell
+
+        $ dd create project -a "name1=value1 name2=value2" ...
+        $ dd create project -a @<JSON file>
+
+If the file list is specified explicitly using JSON file, then each file dictionary may optionally include file attributes:
+
+    .. code-block:: shell
+
+        $ cat /tmp/file_list.json 
+        [
+            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0009_dl2.root", 
+                    "attributes":   {   "pi":3.14, "debug":true } 
+            },
+            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0009_dl6.root",
+                    "attributes":   {   "skip_events": 10   }
+            },
+            { "namespace":"protodune-sp", "name":"np04_raw_run006834_0010_dl10.root" }
+        ]
+        $ dd create project -j /tmp/file_list.json
+        
+When the worker gets next file to process, the JSON representation of file inofrmation includes project and project file attributes:
+
+    .. code-block:: shell
+
+        $ dd next -j 70
+        {
+          "attempts": 1,
+          "attributes": {                   # file attributes
+            "pi": 3.14,
+            "debug": true,
+            "detector.hv_value": 37.7801,   # copied from MetaCat
+            "core.runs": [ 1789, 1795 ]
+          },
+          "name": "np04_raw_run006834_0009_dl2.root",
+          "namespace": "protodune-sp",
+          "project_attributes": {           # project attributes
+            "email_errors": "user@fnal.gov",
+            "step": "postprocess"
+          },
+          "project_id": 70,
+          "replicas": [
+            {
+              "available": true,
+              "name": "np04_raw_run006834_0009_dl2.root",
+              "namespace": "protodune-sp",
+              "path": "/pnfs/fnal.gov/usr/...",
+              "preference": 0,
+              "rse": "FNAL_DCACHE",
+              "rse_available": true,
+              "url": "root://fndca1.fnal.gov:1094/pnfs/fnal.gov/usr/..."
+            }
+          ],
+          "state": "reserved",
+          "worker_id": "fnpc123_pid4563"
+        }
+
+        
 Viewing projects
 ................
 
@@ -161,7 +212,7 @@ Viewing projects
         $ dd list projects
             -j                                              - JSON output
             -u <owner>                                      - filter by project owner
-            -a "name=value name=value ..."                  - filter by project attributes
+            -a "name1=value1 name2=value2 ..."              - filter by project attributes
 
         $ dd show project [options] <project_id>            - show project info (-j show as JSON)
                 -a                                          - show project attributes only
@@ -185,8 +236,12 @@ The following commands are used by the worker process. The worker is assumed to 
 Setting worker id
 .................
 
-Each worker is identified by a unique worker id. Worker id can be either generated randomly by the Data Dispatcher UI command or assigned by the client.
-In case when the worker id is assigned by the client, it is the client responsibility to make sure the worker id is unique.
+Each worker is identified by a unique worker id.
+Data Dispatcher does not use the worker id in any way other than to inform the user which file is reserved by which worker. 
+That is why the Data Dispatcher does not maintain the list of worker ids nor does it ensure their uniqueness.
+It is the responsibility of the worker to choose a unique worker id, which has some meaning for the user.
+
+The worker can either assign a worker id explicitly, or have the Data Dispatcher client generate a random worker id.
 In both cases, the worker id will be stored in CWD/.worker_id file and will be used to identify the worker in the future interactions with the
 Data Dispatcher.
 
