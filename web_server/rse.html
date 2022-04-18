@@ -46,6 +46,28 @@
             {% endif %}
         </td>
     </tr>
+    
+    <tr>
+        <th>Pin URL</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="pin_url" type="text" size=50 {% if mode=="edit" %}value="{{rse.PinURL or ''}}"{% endif %}/>
+                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
+            {% else %}
+                {{rse.PinURL or ''}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Poll URL</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="poll_url" type="text" size=50 {% if mode=="edit" %}value="{{rse.PollURL or ''}}"{% endif %}/>
+                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
+            {% else %}
+                {{rse.PollURL or ''}}
+            {% endif %}
+        </td>
+    </tr>
+    
     <tr>
         <th>Preference</th>
         <td>{% if mode == "create" or mode == "edit" %}
@@ -70,18 +92,18 @@
     <tr>
         <th>Remove prefix</th>
         <td>{% if mode == "create" or mode == "edit" %}
-                <input name="remove_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.RemovePrefix}}"{% endif %}/>
+                <input name="remove_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.RemovePrefix or ''}}"{% endif %}/>
             {% else %}
-                {{rse.RemovePrefix}}
+                {{rse.RemovePrefix or ''}}
             {% endif %}
         </td>
     </tr>
     <tr>
         <th>Add prefix</th>
         <td>{% if mode == "create" or mode == "edit" %}
-                <input name="add_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.AddPrefix}}"{% endif %}/>
+                <input name="add_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.AddPrefix or ''}}"{% endif %}/>
             {% else %}
-                {{rse.AddPrefix}}
+                {{rse.AddPrefix or ''}}
             {% endif %}
         </td>
     </tr>

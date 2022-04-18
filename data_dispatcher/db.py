@@ -1181,6 +1181,7 @@ class DBRSE(DBObject):
     def save(self):
         c = self.DB.cursor()
         try:
+            print("saving urls:", self.PinURL, self.PollURL)
             c.execute("begin")
             c.execute("""
                 begin;
