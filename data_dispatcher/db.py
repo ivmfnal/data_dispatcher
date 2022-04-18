@@ -205,7 +205,7 @@ class HasLogRecord(object):
             commit
         """, (type, json.dumps(data)))
 
-    @sclassmethod
+    @classmethod
     def add_log_bulk(cls, db, records):
         """
             records: list of tuples:
