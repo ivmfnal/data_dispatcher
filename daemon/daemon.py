@@ -96,6 +96,8 @@ class PinRequest(Logged):
         self.CertTuple = (self.Cert, self.Key) if self.Cert else None
         self.Error = False
         self.ErrorText = True
+        self.debug("created with base url:", self.BaseURL)
+        
 
     def send(self):
         headers = { "accept" : "application/json",
@@ -165,12 +167,14 @@ class RSEConfig(Logged):
         remove_prefix = cfg.get("remove_prefix")
         ssl_config = cfg.get("ssl")
         actual_rse = self.unview(rse)
+        #print("get_actual_config(", rse, "): ", cfg)
 
         dbrse = DBRSE.get(self.DB, actual_rse)
         if dbrse is None:
             raise KeyError(f"RSE {dbrse} aliased as {rse} not found")
             
         cfg = dbrse.as_dict()
+        #self.debug("get_actual_config: rse:", rse, "  cfg:", cfg)
         cfg["ssl"] = ssl_config
         if add_prefix is not None:
             cfg["add_prefix"] = add_prefix
@@ -197,7 +201,8 @@ class RSEConfig(Logged):
         return self.get(rse).get("ssl")
 
     def pin_url(self, rse):
-        return self[rse]["pin_url"]
+        url = self[rse]["pin_url"]
+        return url
         
     def poll_url(self, rse):
         return self[rse]["poll_url"]
@@ -306,10 +311,13 @@ class ProjectMonitor(Logged):
             #self.debug("replicas found in", rse, " : ", len(replicas))
         self.log(f"project loading done")
         self.Scheduler.add(self.run)
+        self.debug("initialized")
  
     def create_pin_request(self, rse, replicas):
         try:
             ssl_config = self.RSEConfig.ssl_config(rse)
+            pin_url = self.RSEConfig.pin_url(rse)
+            self.debug("create_pin_request: rse:", rse, "   pin_url:", pin_url)
             self.PinRequests[rse] = pin_request = PinRequest(self.ProjectID, self.RSEConfig.pin_url(rse), 
                 ssl_config, replicas
             )
@@ -320,6 +328,7 @@ class ProjectMonitor(Logged):
             raise
 
     def run(self):
+        self.debug("run...")
         
         active_handles = self.active_handles()
         if active_handles is None:
@@ -337,6 +346,8 @@ class ProjectMonitor(Logged):
         tape_replicas_by_rse = self.tape_replicas_by_rse(active_handles)               # {rse -> {did -> path}}
         
         next_run = self.Interval
+
+        self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
 
         for rse, replicas in tape_replicas_by_rse.items():
             pin_request = self.PinRequests.get(rse)
@@ -495,7 +506,7 @@ def main():
     from rucio.client.replicaclient import ReplicaClient
     from data_dispatcher.logs import init_logger
 
-    opts, args = getopt.getopt(sys.argv[1:], "c:")
+    opts, args = getopt.getopt(sys.argv[1:], "c:d")
     opts = dict(opts)
     config = opts.get("-c") or os.environ.get("DATA_DISPATCHER_CFG")
     config = yaml.load(open(config, "r"), Loader=yaml.SafeLoader)
@@ -512,7 +523,10 @@ def main():
     log_out = logging_config.get("log", "-")
 
     debug_out = logging_config.get("debug", False)
-    debug_enabled = not not debug_out
+    debug_enabled = "-d" in opts or not not debug_out 
+    if debug_enabled: debug_out = debug_out or "-"
+
+    print("debug_enabled:", debug_enabled, "   debug_out:", debug_out)
     
     error_out = logging_config.get("errors", "-")
     

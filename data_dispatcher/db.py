@@ -476,7 +476,7 @@ class DBProject(DBObject, HasLogRecord):
         return handle
 
     def is_active(self, reload=False):
-        print("projet", self.ID, "  handle states:", [h.State for h in self.handles(reload=reload)])
+        #print("projet", self.ID, "  handle states:", [h.State for h in self.handles(reload=reload)])
         return self.State == "active" and not all(h.State in ("done", "failed") for h in self.handles(reload=reload))
             
     def reserve_next_file(self, worker_id):
@@ -505,7 +505,7 @@ class DBProject(DBObject, HasLogRecord):
             log_record = DBLogRecord(type, t, data)
             log_record.Namespace = namespace
             log_record.Name = name
-            print("log_record:", log_record)
+            #print("log_record:", log_record)
             yield log_record
 
 class DBFile(DBObject, HasLogRecord):
