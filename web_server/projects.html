@@ -5,24 +5,17 @@
 {% block content %}
 
 <script type="text/javascript">
-    
+
     var FillColors={
-        "initial": "#DDD", 
-        "found": "#ACA", 
-        "available": "#8F8", 
-        "failed": "#F44", 
-        "reserved": "#FD8",
-        "done": "#88F"
+        "initial": "#EEE", 
+        "found": "#CCF", 
+        "available": "#CFF", 
+        "failed": "#FCC", 
+        "reserved": "#FFC",
+        "done": "#CFC"
     };
     
-    var StrokeColors={
-        "initial": "#DDD", 
-        "found": "#ACA", 
-        "available": "#8F8", 
-        "failed": "#F44", 
-        "reserved": "#FD8",
-        "done": "#88F" 
-    };
+    var StrokeColors = FillColors;
     
     var States = {{handle_states}};
     

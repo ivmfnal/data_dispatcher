@@ -1,9 +1,9 @@
 from webpie import WPApp, WPHandler
-from data_dispatcher.db import DBProject, DBFileHandle, DBRSE
+from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBUser
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
 import urllib, os, yaml
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, unquote_plus
 from wsdbtools import ConnectionPool
 
 class UsersHandler(BaseHandler):
@@ -152,7 +152,7 @@ class ProjectsHandler(BaseHandler):
         handle = DBFileHandle.get(db, int(project_id), namespace, name)
         if handle is None:
             self.redirect(f"./project?project_id={project_id}&error=Handle+not+found")
-        return self.render_to_response("handle.html", project_id=project_id, handle=handle)
+        return self.render_to_response("handle.html", project_id=project_id, handle=handle, handle_log = list(handle.get_log(reversed=True)))
 
 
 class RSEHandler(BaseHandler):

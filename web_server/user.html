@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block headline %}
+	{% if mode=="create" %}
+		Create User
+    {% else %}
+		User profile {{user.Username}} ({{user.Name}})
+	{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<form method=POST action="./save_user" id="the_form">
+    
+<input type="hidden" name="new_user" value="{{'yes' if mode=='create' else 'no'}}"/>
+
+<table class="form">
+	<tr>
+		<th>Username</th>
+		<td>
+			{% if mode=="create" %}
+				<input type="text" name="username"/>
+			{% else %}
+				<input type="hidden" name="username" value="{{user.Username}}"/>
+				{{user.Username}}
+			{% endif %}
+		</td>
+	</tr>
+	<tr>
+		<th>Name</th>
+		<td>
+			{% if mode == "create" %}
+				<input type="text" name="name"/>
+			{% elif mode == "edit" %}
+				<input type="text" name="name" value="{{user.Name}}"/>
+            {% else %}
+                {{user.Name}}
+			{% endif %}
+		</td>
+	</tr>
+	<tr>
+		<th>EMail</th>
+		<td>
+			{% if mode == "create" %}
+				<input type="text" name="email"/>
+			{% elif mode == "edit" %}
+				<input type="text" name="email" value="{{user.EMail}}"/>
+            {% else %}
+                {{user.EMail}}
+			{% endif %}
+		</td>
+	</tr>
+	<tr>
+		<th>Flags</th>
+		<td>
+            {% if mode == "create" %}
+			    <input type="text" name="flags"/>
+		    {% elif mode == "edit" %}
+                {% if admin %}
+                    <input type="text" name="flags" value="{{user.Flags}}"/>
+                {% else %}
+                    {{user.Flags}}
+                {% endif %}
+            {% else %}
+                {{user.Flags}}
+		    {% endif %}
+		</td>
+	</tr>
+    {% if mode == "create" or mode == "edit" %}
+        <tr>
+            <th>Password</th>
+            <td><input type="hidden" name="hashed_password"/>
+                <input type="password" name="password1"/>
+            </td>
+            <td id="error" class="error" style="visibility:hidden; display:none"></td>
+        </tr>
+        <tr>
+            <th>Repeat password</th>
+            <td><input type="password" name="password2"/></td>
+        </tr>
+        {% if ldap_url %}
+            <tr>
+                <th>Allow LDAP authentication</th>
+                <td>
+                        <input type="checkbox" name="allow_ldap" 
+                            {%- if user.auth_method_enabled("ldap") %} checked="checked"{% endif %}
+                            {%- if not admin %} disabled="disabled"{% endif -%}
+                        />&nbsp;<span style="color:#AAA">server: {{ldap_url}}</span>
+                </td>
+            </tr>
+        {% endif %}
+    {% endif %}
+
+    {% if mode == "create" or mode == "edit" %}
+        {% if ldap_url %}
+            <tr>
+                <th>Allow LDAP authentication</th>
+                <td>
+                        <input type="checkbox" name="allow_ldap" 
+                            {%- if user.auth_method_enabled("ldap") %} checked="checked"{% endif %}
+                            {%- if not admin %} disabled="disabled"{% endif -%}
+                        />&nbsp;<span style="color:#AAA">server: {{ldap_url}}</span>
+                </td>
+            </tr>
+        {% endif %}
+		
+		<tr>
+			{% set dn_list=user.authenticator("x509").Info %}
+			<th>X.509 DNs</th>
+			<td>
+				<table class="form">
+					<tr>
+						<td><input name="new_dn" type="text" size="120"/></td>
+						<td><input type="submit" value="add" name="add_dn"/></td>
+					</tr>
+					{% for dn in dn_list %}
+						<tr>
+							<td>{{dn}}</td>
+							<td><input type="submit" value="remove" name="remove_dn:{{dn}}"/></td>
+						</tr>
+					{% endfor %}
+				</table>
+			</td>
+		</tr>
+		
+	{% endif %}
+    
+    
+	{% if mode == "edit" or mode == "create" %}
+		<tr><td></td><td><input type="submit" value="Save" name="save_user"
+			onclick="return do_submit();"/></td>
+		</tr>
+        
+        <script type="text/javascript">
+            function show_error(error)
+            {
+                var p = document.getElementById("error")
+                p.innerHTML = error;
+                p.style.visibility = "visible";
+                p.style.display = "";
+            }
+
+            function do_submit()
+            {
+                var form = document.getElementById("the_form");
+                var password1_input = form.elements.namedItem("password1");
+                var password2_input = form.elements.namedItem("password2");
+                var password1 = password1_input.value;
+                var password2 = password2_input.value;
+                var username =  "{{user.Username}}";
+                if( password1 != password2 )
+                {
+                    show_error("Password mismatch. Please re-enter");
+                    password1_input.value = "";
+                    password2_input.value = "";
+                    return false;
+                }
+                else
+                {
+                    var h = password_hash(username, password1);
+                    e = form.elements.namedItem("hashed_password");
+                    e.value = h;
+                    console.log("hashed:"+h);
+                    return true;
+                }
+            }
+        </script>
+        
+        
+        
+	{% endif %}
+    
+</table>
+</form>
+
+{% endblock %}
+	

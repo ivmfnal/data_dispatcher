@@ -211,31 +211,41 @@
 
 
     td.failed {
-        background-color: #F44;
+        background-color: #FCC;
     }
 
     td.done {
-        background-color: #88F;
+        background-color: #CFC;
     }
 
     td.initial {
-        background-color: #DDD;
+        background-color: #EEE;
     }
 
     td.reserved {
-        background-color: #FD8;
+        background-color: #FFC;
     }
 
     td.found {
-        background-color: #ACA;        
+        background-color: #CCF;        
     }
     
     td.available {
-        background-color: #8F8;        
+        background-color: #CFF;             // #AFA        
     }
     
     td.unavailable {
-        background-color: #FAA;        
+        background-color: #FFC;        
+    }
+    
+    a, a:visited {
+        color: #228;
+    }
+    
+    a.button, a.button:visited {
+        color: gray;
+        font-weight: bold;
+        padding: 3px 5px;  
     }
     
     </style>
@@ -267,14 +277,14 @@
 <div id="main_menu">
 	<table class="placement link_menu" width="100%">
     	<tr>
-    	    <td><a href="{{GLOBAL_AppTopPath}}/P/projects">projects</a></td>
-    	    <td><a href="{{GLOBAL_AppTopPath}}/R/index">RSEs</a></td>
+    	    <td><a class=button href="{{GLOBAL_AppTopPath}}/P/projects">projects</a></td>
+    	    <td><a class=button href="{{GLOBAL_AppTopPath}}/R/index">RSEs</a></td>
             <td style="width:100%"></td>
     		<td>
                         {% if GLOBAL_User %}
-                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;<a href="{{GLOBAL_AppTopPath}}/U/user?username={{GLOBAL_User.Username}}">{{GLOBAL_User.Username}}</a>&nbsp;</span><a href="{{GLOBAL_AppTopPath}}/A/logout?redirect={{GLOBAL_AppTopPath}}/index">log out</a>
+                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;<a href="{{GLOBAL_AppTopPath}}/U/user?username={{GLOBAL_User.Username}}">{{GLOBAL_User.Username}}</a>&nbsp;</span><a class=button  href="{{GLOBAL_AppTopPath}}/A/logout?redirect={{GLOBAL_AppTopPath}}/index">log out</a>
                         {% else %}
-                            <a href="{{GLOBAL_AppTopPath}}/A/login?redirect={{GLOBAL_AppTopPath}}/index">log in</a>
+                            <a class=button href="{{GLOBAL_AppTopPath}}/A/login?redirect={{GLOBAL_AppTopPath}}/index">log in</a>
                         {% endif %}
     		</td>
     	</tr>

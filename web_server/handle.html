@@ -38,6 +38,25 @@
                 </table>
         </td> 
     </tr>
+    {% if handle_log is not none and handle_log|length %}
+    <tr>    <th>Handle log</th>
+            <td class="nopadding">
+                <table class="data">
+                    <tr><th>Time</th><th>Event</th><th>Data</th></tr>
+                    {% for log_record in handle_log %}
+                        <tr>
+                            <td>{{log_record.T}}</td>
+                            <td class="{{log_record.Type}}">{{log_record.Type}}</td>
+                            <td>{% for n, v in log_record.Data.items() %}
+                                    {{n}} = {{v}}{% if not loop.last %}<br/>{% endif %}
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            </td>
+    </tr>
+    {% endif %}
 </table>
 
 {% endblock %}

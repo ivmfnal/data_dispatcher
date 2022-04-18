@@ -183,18 +183,20 @@ class DBLogRecord(object):
         )
 
 class HasLogRecord(object):
-
-    def __init__(self, log_table, parent_id_columns):
-        self.LogTable = log_table
-        self.IDColumns = parent_id_columns
-        self.IDColumnsText = ",".join(parent_id_columns)
+    
+    #
+    # uses class attributes:
+    #
+    #   LogTable        - name of the table to store the log
+    #   LogIDColumns    - list of columns in the log table identifying the parent
+    #
 
     def add_log(self, type, data=None, **kwargs):
         #print("add_log:", type, data, kwargs)
         c = self.DB.cursor()
         data = (data or {}).copy()
         data.update(kwargs)
-        parent_pk_columns = self.IDColumnsText
+        parent_pk_columns = ",".join(self.LogIDColumns)
         parent_pk_values = ",".join([f"'{v}'" for v in self.pk()])
         c.execute(f"""
             begin;
@@ -203,26 +205,55 @@ class HasLogRecord(object):
             commit
         """, (type, json.dumps(data)))
 
+    @sclassmethod
+    def add_log_bulk(cls, db, records):
+        """
+            records: list of tuples:
+                (
+                    (
+                        id_column1_value,
+                        id_column2_value, ...
+                    ),
+                    type,
+                    { data }
+                )
+        """
+        csv = []
+        for id_values, type, data in records:
+            row = '\t'.join([str(v) for v in id_values] + [type, json.dumps(data)])
+            csv.append(row)
+        csv = io.StringIO("\n".join(csv))
+
+        table = cls.LogTable
+        columns = cls.LogIDColumns + ["type", "data"]
+        c = db.cursor()
+        try:
+            c.execute("begin")
+            c.copy_from(csv, table, columns=columns)
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
     def get_log(self, type=None, since=None, reversed=False):
-        parent_pk_columns = self.IDColumnsText
-        parent_pk_values = ",".join(["'{v}'" for v in self.pk()])
+        parent_pk_columns = self.LogIDColumns
+        parent_pk_values = self.pk()
         wheres = [f"{c} = '{v}'" for c, v in zip(parent_pk_columns, parent_pk_values)]
         if isinstance(since, (float, int)):
             since = datetime.utcfromtimestamp(since).replace(tzinfo=timezone.utc)
             wheres.append(f"t >= {since}")
         if type is not None:
             wheres.append(f"type = '{type}'")
-        wheres = "" if not wheres else " and " + " and ".join(wheres)
+        wheres = " and ".join(wheres)
         desc = "desc" if reversed else ""
         sql = f"""
-            select type, t, message from {self.LogTable}
-                {wheres}
+            select type, t, data from {self.LogTable}
+                where {wheres}
                 order by t {desc}
         """
         c = self.DB.cursor()
         c.execute(sql)
-        return (DBLogRecord(type, t, message) for type, t, message in cursor_iterator())
-        
+        return (DBLogRecord(type, t, message) for type, t, message in cursor_iterator(c))
 
 class DBProject(DBObject, HasLogRecord):
     
@@ -232,8 +263,10 @@ class DBProject(DBObject, HasLogRecord):
     Table = "projects"
     PK = ["id"]
     
+    LogIDColumns = ["project_id"]
+    LogTable = "project_log"
+    
     def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, retry_count=0, attributes={}):
-        HasLogRecord.__init__(self, "project_log", ["project_id"])
         self.DB = db
         self.ID = id
         self.Owner = owner
@@ -481,8 +514,10 @@ class DBFile(DBObject, HasLogRecord):
     PK = ["namespace", "name"]
     Table = "files"
     
+    LogIDColumns = ["namespace", "name"]
+    LogTable = "file_log"
+    
     def __init__(self, db, namespace, name):
-        HasLogRecord.__init__(self, "file_log", ["namespace", "name"])
         self.DB = db
         self.Namespace = namespace
         self.Name = name
@@ -511,7 +546,10 @@ class DBFile(DBObject, HasLogRecord):
     def create_replica(self, rse, path, url, preference=0, available=False):
         DBReplica.create(self.DB, self.Namespace, self.Name, rse, path, url, preference=preference, available=available)
         self.Replicas = None	# force re-load from the DB
-        
+        self.add_log("found", rse=rse, path=path, url=url)
+        if available:
+            self.add_log("available", rse=rse)
+
     def get_replica(self, rse):
         return self.replicas().get(rse)
         
@@ -659,7 +697,7 @@ class DBReplica(DBObject):
         except:
             c.execute("rollback")
             raise
-            
+        
         return DBReplica.get(db, namespace, name, rse)
 
     def save(self):
@@ -697,6 +735,19 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
 
+        log_records = (
+            (
+                did.split(":", 1),
+                "removed",
+                {
+                    "rse":  rse,
+                }
+            )
+            for did in dids
+        )
+
+        DBFile.add_log_bulk(db, log_records)
+
     @staticmethod
     def create_bulk(db, rse, preference, replicas):
         # replicas: {(namespace, name) -> {"path":.., "url":..}}
@@ -705,29 +756,23 @@ class DBReplica(DBObject):
         csv = ['%s\t%s\t%s\t%s\t%s\t%s' % (namespace, name, rse, info["path"], info["url"], preference) 
             for (namespace, name), info in replicas.items()]
         #print("DBReplica.create_bulk: csv:", csv)
-        data = io.StringIO("\n".join(csv))
+        csv = io.StringIO("\n".join(csv))
         table = DBReplica.Table
         columns = DBReplica.columns(as_text=True)
+        
         c = db.cursor()
         try:
             t = int(time.time()*1000)
             temp_table = f"file_replicas_temp_{t}"
             c.execute("begin")
             c.execute(f"create temp table {temp_table} (ns text, n text, r text, p text, u text, pr int)")
-            c.copy_from(data, temp_table)
+            c.copy_from(csv, temp_table)
+            csv = None         # to release memory
             c.execute(f"""
                 insert into {table}({columns}) 
                     select t.ns, t.n, t.r, t.p, t.u, t.pr, false from {temp_table} t
                     on conflict (namespace, name, rse)
                         do nothing;
-                """)
-
-            if False:
-                c.execute(f"""
-                    insert into file_log (namespace, name, type, data)
-                        select t.ns, t.n, 'replica added', ('{"rse":"' || t.r || '", "url":"' || t.u || '", "preference":' || t.pr::text || '}')::jsonb
-                        from {temp_table} t
-                        on conflict (namespace, name, t) do nothing
                 """)
 
             c.execute(f"""
@@ -738,6 +783,21 @@ class DBReplica(DBObject):
         except Exception as e:
             c.execute("rollback")
             raise
+
+        log_records = (
+            (
+                (namespace, name),
+                "found",
+                {
+                    "url":  info["url"],
+                    "rse":  rse,
+                    "path": info["path"]
+                }
+            )
+            for (namespace, name), info in replicas.items()
+        )
+
+        DBFile.add_log_bulk(db, log_records)
 
     @staticmethod
     def update_availability_bulk(db, available, rse, dids):
@@ -761,6 +821,21 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
 
+        event = "available" if available else "unavailable"
+        log_records = (
+            (
+                (namespace, name),
+                event,
+                {
+                    "rse":  rse
+                }
+            )
+            for (namespace, name) in undids
+        )
+
+        DBFile.add_log_bulk(db, log_records)
+
+
 class DBFileHandle(DBObject, HasLogRecord):
 
     Columns = ["project_id", "namespace", "name", "state", "worker_id", "attempts", "attributes"]
@@ -780,8 +855,10 @@ class DBFileHandle(DBObject, HasLogRecord):
         ]
 
 
+    LogIDColumns = ["project_id", "namespace", "name"]
+    LogTable = "file_handle_log"
+
     def __init__(self, db, project_id, namespace, name, state=None, worker_id=None, attempts=0, attributes={}):
-        HasLogRecord.__init__(self, "file_handle_log", ["project_id", "namespace", "name"])
         self.DB = db
         self.ProjectID = project_id
         self.Namespace = namespace
@@ -1032,13 +1109,13 @@ class DBFileHandle(DBObject, HasLogRecord):
 
     def done(self):
         self.State = "done"
+        self.add_log("done", worker=self.WorkerID)
         self.WorkerID = None
         self.save()
-        self.add_log("done", worker=self.WorkerID)
 
     def failed(self, retry=True):
         self.State = self.ReadyState if retry else "failed"
-        self.add_log("failed", worker=self.WorkerID or None, retry=retry)
+        self.add_log("failed", worker=self.WorkerID or None, final=not retry)
         self.WorkerID = None
         self.save()
 

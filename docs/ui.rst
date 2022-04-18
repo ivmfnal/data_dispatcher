@@ -116,11 +116,12 @@ Data Dispatcher provides a way to pass some arbitrary metadata about the project
 The metadata is attached to the project and/or project files at the time of the project creation. Project and file metadata can be any JSON dictionary. 
 If the project is created using a MetaCat query, Data Dispatcher can copy some portions of file metadata from MetaCat to avoid unnecessary
 querying MetaCat at the run time.
-When the worker issues ``dd next -j ...`` command, the output includes the project and the metadata as part of the JSON output.
+When the worker asks for the next file to process, the Data Dispatcher responds with the file information, which includes the project and the 
+file metadata.
 
-Note that project file attributes defined at the project cteation time do not get stored in MetaCat. Also, because file
+Note that the project file attributes defined at the project creation time do not get stored in MetaCat. Also, because file
 attributes are associated with project file handles instead of files, if two projects include the same
-file, they can define project file attributes independently without interfering with each other.
+file, they can define file attributes independently without interfering with each other.
 
 There are several ways to specify project level metadata attributes:
 
@@ -218,10 +219,10 @@ Viewing projects
                 -a                                          - show project attributes only
                 -r                                          - show replicas information
                 -j                                          - show as JSON
-                -f [active|ready|available|all|reserved|failed|done]    - list files (namespace:name) only
+                -f [active|initial|available|all|reserved|failed|done]   - list files (namespace:name) only
                                                                all       - all files, including done and failed
                                                                active    - all except done and failed
-                                                               ready     - ready files only
+                                                               initial   - in initial state
                                                                available - available files only
                                                                reserved  - reserved files only
                                                                failed    - failed files only
