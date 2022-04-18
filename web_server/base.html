@@ -211,11 +211,11 @@
 
 
     td.failed {
-        background-color: #FCC;
+        background-color: #FAA;
     }
 
     td.done {
-        background-color: #CFC;
+        background-color: #AFA;
     }
 
     td.initial {
@@ -223,19 +223,19 @@
     }
 
     td.reserved {
-        background-color: #FFC;
+        background-color: #FFA;
     }
 
     td.found {
-        background-color: #CCF;        
+        background-color: #AAF;        
     }
     
     td.available {
-        background-color: #CFF;             // #AFA        
+        background-color: #AFF;             // #AFA        
     }
     
     td.unavailable {
-        background-color: #FFC;        
+        background-color: #FFA;        
     }
     
     a, a:visited {
@@ -282,7 +282,7 @@
             <td style="width:100%"></td>
     		<td>
                         {% if GLOBAL_User %}
-                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;<a href="{{GLOBAL_AppTopPath}}/U/user?username={{GLOBAL_User.Username}}">{{GLOBAL_User.Username}}</a>&nbsp;</span><a class=button  href="{{GLOBAL_AppTopPath}}/A/logout?redirect={{GLOBAL_AppTopPath}}/index">log out</a>
+                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;{{GLOBAL_User.Username}}&nbsp;</span><a class=button  href="{{GLOBAL_AppTopPath}}/A/logout?redirect={{GLOBAL_AppTopPath}}/index">log out</a>
                         {% else %}
                             <a class=button href="{{GLOBAL_AppTopPath}}/A/login?redirect={{GLOBAL_AppTopPath}}/index">log in</a>
                         {% endif %}
