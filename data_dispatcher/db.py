@@ -546,9 +546,10 @@ class DBFile(DBObject, HasLogRecord):
     def create_replica(self, rse, path, url, preference=0, available=False):
         DBReplica.create(self.DB, self.Namespace, self.Name, rse, path, url, preference=preference, available=available)
         self.Replicas = None	# force re-load from the DB
-        self.add_log("found", rse=rse, path=path, url=url)
-        if available:
-            self.add_log("available", rse=rse)
+        if False:
+            self.add_log("found", rse=rse, path=path, url=url)
+            if available:
+                self.add_log("available", rse=rse)
 
     def get_replica(self, rse):
         return self.replicas().get(rse)
@@ -735,18 +736,19 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
 
-        log_records = (
-            (
-                did.split(":", 1),
-                "removed",
-                {
-                    "rse":  rse,
-                }
+        if False:
+            log_records = (
+                (
+                    did.split(":", 1),
+                    "removed",
+                    {
+                        "rse":  rse,
+                    }
+                )
+                for did in dids
             )
-            for did in dids
-        )
 
-        DBFile.add_log_bulk(db, log_records)
+            DBFile.add_log_bulk(db, log_records)
 
     @staticmethod
     def create_bulk(db, rse, preference, replicas):
@@ -784,20 +786,21 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
 
-        log_records = (
-            (
-                (namespace, name),
-                "found",
-                {
-                    "url":  info["url"],
-                    "rse":  rse,
-                    "path": info["path"]
-                }
+        if False:
+            log_records = (
+                (
+                    (namespace, name),
+                    "found",
+                    {
+                        "url":  info["url"],
+                        "rse":  rse,
+                        "path": info["path"]
+                    }
+                )
+                for (namespace, name), info in replicas.items()
             )
-            for (namespace, name), info in replicas.items()
-        )
 
-        DBFile.add_log_bulk(db, log_records)
+            DBFile.add_log_bulk(db, log_records)
 
     @staticmethod
     def update_availability_bulk(db, available, rse, dids):
@@ -821,19 +824,20 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
 
-        event = "available" if available else "unavailable"
-        log_records = (
-            (
-                (namespace, name),
-                event,
-                {
-                    "rse":  rse
-                }
+        if False:
+            event = "available" if available else "unavailable"
+            log_records = (
+                (
+                    (namespace, name),
+                    event,
+                    {
+                        "rse":  rse
+                    }
+                )
+                for (namespace, name) in undids
             )
-            for (namespace, name) in undids
-        )
 
-        DBFile.add_log_bulk(db, log_records)
+            DBFile.add_log_bulk(db, log_records)
 
 
 class DBFileHandle(DBObject, HasLogRecord):
