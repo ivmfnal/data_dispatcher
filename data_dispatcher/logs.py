@@ -11,14 +11,15 @@ class Logged(object):
         self.Debug = debug if debug is not None else DebugEnabled
         
     def debug(self, *params, sep=" "):
-        if self.Debug:
-            LogOut.log("%s [DEBUG]: %s" % (self.LogName, sep.join([str(p) for p in params])))
+        if self.Debug and DebugOut is not None:
+            DebugOut.log("%s [DEBUG]: %s" % (self.LogName, sep.join([str(p) for p in params])))
 
     def log(self, *params, sep=" "):
         LogOut.log("%s: %s" % (self.LogName, sep.join([str(p) for p in params])))
 
     def error(self, *params, sep=" "):
-        LogOut.log("%s [ERROR]: %s" % (self.LogName, sep.join([str(p) for p in params])))
+        if ErrorOut is not None:
+            ErrorOut.log("%s [ERROR]: %s" % (self.LogName, sep.join([str(p) for p in params])))
 
 def make_log(output, dash_stream, **params):
     if output is None:  
