@@ -8,11 +8,11 @@
 
     var FillColors={
         "initial": "#EEE", 
-        "found": "#AAF", 
-        "available": "#AFF", 
-        "failed": "#FAA", 
-        "reserved": "#FFA",
-        "done": "#AFA"
+        "found": "#88F", 
+        "available": "#8FF", 
+        "failed": "#F88", 
+        "reserved": "#FF8",
+        "done": "#8F8"
     };
     
     var StrokeColors = FillColors;
@@ -72,7 +72,7 @@
 		<tr>
             <td><a href="./project?project_id={{prj.ID}}">{{prj.ID}}</a></td>
             <td>{{prj.Owner}}</td>
-            <td>{{prj.State}}</td>
+            <td class="{{prj.State}}">{{prj.State}}</td>
             <td style="vertical-align:middle"><canvas height=10 width=200 id="cnv_{{prj.ID}}"></canvas>
                 
                 <script type="text/javascript">
@@ -84,7 +84,7 @@
                 </script>
             </td>
             {% for state in handle_states %}
-                <td>{{prj.HandleCounts[state]}}</td>
+                <td {% if prj.HandleCounts[state] %}class="{{state}}"{% endif %}>{{prj.HandleCounts[state]}}</td>
             {% endfor %}
         </tr>
 	{% endfor %}
