@@ -8,8 +8,14 @@
     <tr>    <th>Project ID</th>         <td>{{project.ID}}</td> </tr>
     <tr>    <th>User</th>               <td>{{project.Owner}}</td> </tr>
     <tr>    <th>Created</th>            <td>{{project.CreatedTimestamp}}</td> </tr>
+    <tr>    <th>Ended</th>              
+            <td>{% if not project.EndTimestamp is none %}
+                    {{project.EndTimestamp}}
+                {% endif %}
+            </td> 
+    </tr>
 
-    <tr>    <th>Status</th>             <td>{{project.State}}</td> </tr>
+    <tr>    <th>Status</th>             <td><span class="{{project.State}}" style="padding: 3px">{{project.State}}</span></td> </tr>
     <tr>    <th>Attributes</th>         <td class="nopadding">
             {% if project.Attributes|length %}
                 <table class="placement attributes dense">
