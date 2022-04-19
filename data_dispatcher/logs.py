@@ -6,9 +6,9 @@ DebugEnabled = False
 
 class Logged(object):
 
-    def __init__(self, name=None, debug=True):
+    def __init__(self, name=None, debug=None):
         self.LogName = name or self.__class__.__name__
-        self.Debug = debug
+        self.Debug = debug if debug is not None else DebugEnabled
         
     def debug(self, *params, sep=" "):
         if self.Debug:
