@@ -135,7 +135,7 @@ class PinRequest(Logged):
             return "ERROR"
         r.raise_for_status()
         #self.debug("request status response:", r.json())
-        self.log("Pin request status:", r.json()["status"])
+        self.debug("request status:", r.json()["status"])
         return r.json()["status"]
 
     def error(self):
@@ -356,7 +356,7 @@ class ProjectMonitor(Logged):
                 self.create_pin_request(rse, replicas)
                 next_run = self.NewRequestInterval     # this is new pin request. Check it in 20 seconds
             elif pin_request.complete():
-                self.log("pin request COMPLETE. No need to poll")
+                self.debug("pin request COMPLETE")
                 DBReplica.update_availability_bulk(self.DB, True, rse, list(replicas.keys()))
             elif pin_request.error():
                 self.debug("ERROR in pin request. Creating new one\n", pin_request.ErrorText)
