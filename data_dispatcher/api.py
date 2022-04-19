@@ -202,6 +202,17 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
         return self.get(f"delete_project?project_id={project_id}")
         
+    def cancel_project(self, project_id):
+        """Cancels a project by id
+
+        Args:
+            project_id (str): project id
+
+        Returns:
+            (dict) project information
+        """
+        return self.get(f"cancel_project?project_id={project_id}")
+        
     def get_project(self, project_id, with_files=True, with_replicas=False):
         """Gets information about the project
         

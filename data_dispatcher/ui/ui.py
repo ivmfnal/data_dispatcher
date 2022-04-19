@@ -31,7 +31,10 @@ Commands:
     create project ...
     show project ...
     list projects ...
-    
+
+    delete project <project_id>
+    cancel project [-j] <project_id>                       - cancel project, -j - print project info as JSON
+
     show file [-j] <namespace>:<name>
 
     show handle [-j] <project_id> <namespace>:<name>       - show file handle, -j - as JSON
@@ -43,8 +46,6 @@ Commands:
     done <project_id> <namespace>:<name>                   - mark the file as successfully processed
     failed [-f] <project_id> <namespace>:<name>            - mark the file as failed, -f means "final", no retries
 
-    delete project <project_id>
-    
     list rses [-j]                                         - list RSEs, -j: print as JSON
     show rse [-j] <rse>                                    - show information about RSE
     set rse -a (up|down) <rse>                             - set RSE availability (requires admin privileges)
@@ -135,8 +136,27 @@ def main():
     elif command == "delete":
         subcommand, rest = rest[0], rest[1:]
         if subcommand == "project":
-            project_id = rest[0]
+            if not rest:
+                print(Usage)
+                sys.exit(2)
+            project_id = int(rest[0])
             client.delete_project(project_id)
+        else:
+            print(Usage)
+            sys.exit(2)
+        
+    elif command == "cancel":
+        subcommand, rest = rest[0], rest[1:]
+        if subcommand == "project":
+            opts, args = getopt.getopt(rest, "j")
+            opts = dict(opts)
+            if not args:
+                print(Usage)
+                sys.exit(2)
+            project_id = int(args[0])
+            out = client.cancel_project(project_id)
+            if "-j" in opts:
+                print(pretty_json(out))
         else:
             print(Usage)
             sys.exit(2)

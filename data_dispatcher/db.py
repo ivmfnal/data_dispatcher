@@ -258,6 +258,8 @@ class HasLogRecord(object):
 class DBProject(DBObject, HasLogRecord):
     
     InitialState = "active"
+    States = ["active", "failed", "done", "cancelled", "held"]
+    EndStates = ["failed", "done", "cancelled"]
     
     Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes".split(",")
     Table = "projects"
@@ -298,9 +300,10 @@ class DBProject(DBObject, HasLogRecord):
             retry_count = self.RetryCount,
             attributes = self.Attributes or {},
             created_timestamp = self.CreatedTimestamp.timestamp(),
+            ended_timestamp = None if self.EndTimestamp is None else self.EndTimestamp.timestamp(),
             active = self.is_active()
         )
-        if with_handles:
+        if with_handles or with_replicas:
             out["file_handles"] = [h.as_jsonable(with_replicas=with_replicas) for h in self.handles()]
             #print("Project.as_jsonable: handles:", out["file_handles"])
         return out
@@ -413,11 +416,11 @@ class DBProject(DBObject, HasLogRecord):
             c.execute(f"""
                 select {columns}
                     from {table} p
-                    where {wheres}
+                    where {p_wheres}
             """)
             for tup in cursor_iterator(c):
                 yield DBProject.from_tuple(db, tup)
-        
+
     def save(self):
         c = self.DB.cursor()
         try:
@@ -430,15 +433,21 @@ class DBProject(DBObject, HasLogRecord):
         except:
             self.DB.rollback()
             raise
-        
+
+    def cancel(self):
+        self.State = "cancelled"
+        self.EndTimestamp = datetime.now(timezone.utc)
+        self.save()
+        self.add_log("ended", state="cancelled")
+
     def handles(self, with_replicas=True, reload=False):
         if reload or self.Handles is None:
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
         return self.Handles
-        
+
     def handle(self, namespace, name):
         return DBFileHandle.get(self.DB, self.ID, namespace, name)
-            
+
     def add_files(self, files_descs):
         # files_descs is list of disctionaries: [{"namespace":..., "name":...}, ...]
         files_descs = list(files_descs)     # make sure it's not a generator
@@ -507,6 +516,25 @@ class DBProject(DBObject, HasLogRecord):
             log_record.Name = name
             #print("log_record:", log_record)
             yield log_record
+    
+    @staticmethod
+    def purge(db, retain=3600):
+        c = db.cursor()
+        table = DBProject.Table
+        t_retain = datetime.now(timezone.utc) - timedelta(seconds=retain)
+        c.execute("begin")
+        try:
+            c.execute(f"""
+                delete from {table}
+                    where state in ('done', 'failed', 'cancelled')
+                        and end_timestamp is not null
+                        and end_timestamp < %s
+            """, (t_retain,))
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+        return c.rowcount
 
 class DBFile(DBObject, HasLogRecord):
     
@@ -630,6 +658,26 @@ class DBFile(DBObject, HasLogRecord):
         except Exception as e:
             c.execute("rollback")
             raise
+            
+    @staticmethod
+    def purge(db):
+        c = db.cursor()
+        table = DBFile.Table
+        c.execute("begin")
+        try:
+            c.execute(f"""
+                delete from {table} f
+                    where not exists (
+                            select * from file_handles h 
+                                where f.namespace = h.namespace
+                                    and f.name = h.name
+                    )
+            """, (t_retain,))
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+        return c.rowcount
     
 class DBReplica(DBObject):
     Table = "replicas"

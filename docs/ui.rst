@@ -228,6 +228,16 @@ Viewing projects
                                                                failed    - failed files only
                                                                done      - done files only
 
+Cancelling project
+..................
+
+    .. code-block:: shell
+    
+        $ dd cancel project [-j] <project id>
+        
+``-j`` will print the project information in JSON format
+    
+
 Workflow
 ~~~~~~~~
 

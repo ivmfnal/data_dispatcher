@@ -238,6 +238,7 @@ class RSEConfig(Logged):
     def max_burst(self, rse):
         return self.get(rse).get("max_poll_burst", 100)
 
+
 class ProjectMonitor(Logged):
     
     Interval = 30             # regular check interval
@@ -370,9 +371,11 @@ class ProjectMonitor(Logged):
                 
         return next_run
 
+
 class ProjectMaster(PyThread, Logged):
     
     RunInterval = 10        # seconds       - new project discovery latency
+    PurgeInterval = 30*60
     
     def __init__(self, db, scheduler, rse_config, pollers, rucio_client):
         Logged.__init__(self, "ProjectMaster")
@@ -384,19 +387,26 @@ class ProjectMaster(PyThread, Logged):
         self.RSEConfig = rse_config
         self.Pollers = pollers
         self.RucioClient = rucio_client
+        self.Scheduler.add(self.clean, id="cleaner")
+
+    def clean(self):
+        nprojects = DBProject.purge(self.DB)
+        nfiles = DBFile.purge(self.DB)
+        self.log("purged projects:", nprojects, ", files:", nfiles)
+        return self.PurgeInterval
 
     def run(self):
         while not self.Stop:
             active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
-            monitor_projects = set(self.Monitors.keys())
             #self.debug("run: active projects:", len(active_projects),"   known projects:", len(monitor_projects))
             with self:
+                monitor_projects = set(self.Monitors.keys())
                 for project_id in monitor_projects - active_projects:
                     self.remove_project(project_id, "inactive")
                 for project_id in active_projects - monitor_projects:
                     self.add_project(project_id)
-                self.sleep(self.RunInterval)
-    
+            self.sleep(self.RunInterval)
+
     @synchronized
     def add_project(self, project_id):
         if not project_id in self.Monitors:

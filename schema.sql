@@ -10,7 +10,8 @@ create table projects
 	id	                bigserial primary key,
 	owner	            text,
 	created_timestamp   timestamp with time zone     default now(),
-	state	            text,
+    end_timestamp       timestamp with time zone,
+    state	            text,
     retry_count         int,
     attributes          jsonb  default '{}'::jsonb
 );
@@ -22,8 +23,6 @@ create table files
     time_added  timestamp with time zone    default now(),
     primary key(namespace, name)
 );
-
-
 
 create table rses
 (
@@ -78,7 +77,7 @@ create index file_handles_filespec on file_handles(namespace, name);
 
 create table project_log
 (
-    project_id  bigint,
+    project_id  bigint  references projects on delete cascade,
     t           timestamp with time zone     default now(),
     type        text,
     data        jsonb,
@@ -93,7 +92,8 @@ create table file_handle_log
     t           timestamp with time zone     default now(),
     type        text,
     data        jsonb,
-    primary key (project_id, namespace, name, t)
+    primary key (project_id, namespace, name, t),
+    foreign key (project_id, namespace, name) references file_handles on delete cascade
 );
 
 create table file_log

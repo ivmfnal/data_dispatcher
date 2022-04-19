@@ -88,6 +88,23 @@ class Handler(BaseHandler):
         project.delete()
         return "null", "text/json"
         
+    def cancel_project(self, request, relpath, project_id=None, **args):
+        if not project_id:
+            return 400, "Project id must be specified"
+        user = self.authenticated_user()
+        if user is None:
+            return "Unauthenticated user", 403
+        
+        project_id = int(project_id)
+        db = self.App.db()
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        if user.Username != project.Owner and not user.is_admin():
+            return 403, "Forbidden"
+        project.cancel()
+        return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
+        
     def replica_available(self, request, relpath, namespace=None, name=None, rse=None, **args):
         user = self.authenticated_user()
         if user is None:
@@ -220,6 +237,7 @@ class Handler(BaseHandler):
         db = self.App.db()
         projects = DBProject.list(db, state=state, not_state=not_state, owner=owner, attributes=attributes)
         return json.dumps([p.as_jsonable(with_handles=with_handles, with_replicas=with_replicas) for p in projects]), "text/json"
+        
         
     def file_handle(self, request, relpath, handle_id=None, project_id=None, file_id=None, name=None, namespace=None, **args):
         db = self.App.db()
