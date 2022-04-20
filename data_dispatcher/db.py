@@ -15,6 +15,28 @@ def json_literal(v):
     elif v is None:              v = "null"
     else:   v = str(v)
     return v
+    
+class ProximityMap(object):
+    
+    def __init__(self, config):
+        self.Default = config.get("_default", 10)
+        self.Map = {cpu: cpu_map for cpu, cpu_map in config.items() if cpu != "_default"}
+
+    def proximity(self, cpu, rse, default="_default"):
+        if default == "_default":
+            default = self.Default
+        if cpu is None or rse is None:
+            return self.Default
+        return self.Map.get(cpu, {}).get(rse, default)
+        
+    def cpus(self):
+        return sorted(list(self.Map.keys()))
+        
+    def rses(self):
+        rses = set()
+        for cpu, cpu_map in self.Map.items():
+            rses |= set(cpu_map.keys())
+        return sorted(list(rses))
 
 class DBObject(object):
     
@@ -486,13 +508,39 @@ class DBProject(DBObject, HasLogRecord):
 
     def is_active(self, reload=False):
         #print("projet", self.ID, "  handle states:", [h.State for h in self.handles(reload=reload)])
-        return self.State == "active" and not all(h.State in ("done", "failed") for h in self.handles(reload=reload))
+        p = self if not reload else DBProject.get(self.DB, self.ID)
+        if p is None:   return False
+        return p.State == "active" and not all(h.State in ("done", "failed") for h in p.handles())
             
     def reserve_next_file(self, worker_id):
         handle = DBFileHandle.reserve_next_available(self.DB, self.ID, worker_id)
         if handle is not None:
             did = handle.did()
         return handle
+
+    def reserve_handle(self, worker_id, proximity_map, cpu_site=None):
+        if not self.is_active(reload=True):
+            return None, "project inactive"
+
+        handles = self.handles(with_replicas=True, reload=True)
+        ready_handles_scores = []
+    
+        for h in handles:
+            if h.State == h.ReadyState:
+                for r in h.replicas().values():
+                    if r.is_available():
+                        rse = r.RSE
+                        proximity = proximity_map.proximity(cpu_site, rse)
+                        if proximity > 0:
+                            score = proximity + h.Attempts
+                            ready_handles_scores.append((score, h))
+
+        handles = [h for score, h in sorted(ready_handles_scores, key=lambda x: x[0])]
+        for h in handles:
+            if h.reserve(worker_id):
+                return h, "ok"
+
+        return None, "retry"
 
     def file_state_counts(self):
         counts = {}
@@ -1148,7 +1196,31 @@ class DBFileHandle(DBObject, HasLogRecord):
         h = DBFileHandle.from_tuple(db, tup)
         h.reserved_by(worker_id)
         return h
-        
+
+    def reserve(self, worker_id):
+        c = self.DB.cursor()
+        try:
+            c.execute("begin")
+            c.execute("""
+                update file_handles
+                    set state=%s, worker_id=%s, attempts = attempts+1
+                    where namespace=%s and name=%s and project_id=%s and state = %s and worker_id is null
+                    returning attempts;
+            """, (self.ReservedState, worker_id, self.Namespace, self.Name, self.ProjectID, self.ReadyState))
+            if c.rowcount == 1:
+                attempts = c.fetchone()[0]
+                self.WorkerID = worker_id
+                self.State = self.ReservedState
+                self.Attempts = attempts
+                c.execute("commit")
+                return True
+            else:
+                c.execute("rollback")
+                return False
+        except:
+            c.execute("rollback")
+            raise
+
     #
     # workflow
     #
@@ -1205,7 +1277,7 @@ class DBRSE(DBObject):
             poll_url        =   self.PollURL,
             remove_prefix   =   self.RemovePrefix,
             add_prefix      =   self.AddPrefix,
-            preference      =   self.Preference   
+            preference      =   self.Preference
         )
 
     as_jsonable = as_dict
@@ -1240,7 +1312,8 @@ class DBRSE(DBObject):
                 update rses 
                     set description=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, preference=%s
                     where name=%s
-                """, (self.Description, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, self.AddPrefix, self.Preference, self.Name)
+                """, (self.Description, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, self.AddPrefix, self.Preference,
+                    self.Name)
             )
             c.execute("commit")
         except:

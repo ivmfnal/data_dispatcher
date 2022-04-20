@@ -39,7 +39,8 @@ Commands:
 
     show handle [-j] <project_id> <namespace>:<name>       - show file handle, -j - as JSON
 
-    next [-j] [-t <timeout>] <project_id>                  - get next available file, 
+    next [-j] [-t <timeout>] [-c <cpu_site>] <project_id>  - get next available file
+                                                             -c - choose the file according to the CPU/RSE proximity map for the CPU site
                                                              -j - as JSON
                                                              -t - wait for next file until "timeout" seconds, 
                                                                   otherwise, wait until the project finishes
@@ -163,7 +164,7 @@ def main():
         
 
     elif command == "next":
-        opts, args = getopt.getopt(rest, "jt:")
+        opts, args = getopt.getopt(rest, "jt:c:")
         opts = dict(opts)
         if not args:
             print(Usage)
@@ -171,11 +172,12 @@ def main():
         project_id = args[0]
         as_json = "-j" in opts
         timeout = int(opts.get("-t", -1))
+        cpu_site = opts.get("-c")
         done = False
         t0 = time.time()
         t1 = t0 + timeout
         while not done:
-            info = client.next_file(project_id)
+            info = client.next_file(project_id, cpu_site)
             if info:
                 if as_json:
                     info["replicas"] = sorted(info["replicas"].values(), key=lambda r: -r["preference"])

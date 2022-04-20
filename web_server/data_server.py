@@ -1,6 +1,6 @@
 from webpie import WPApp, WPHandler
 from wsdbtools import ConnectionPool
-from data_dispatcher.db import DBProject, DBFileHandle, DBFile, DBRSE
+from data_dispatcher.db import DBProject, DBFileHandle, DBFile, DBRSE, ProximityMap
 from data_dispatcher.logs import Logged, init_logger
 from data_dispatcher import Version
 from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, \
@@ -148,7 +148,7 @@ class Handler(BaseHandler):
             return 404, "File not found"
         return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
 
-    def next_file(self, request, relpath, project_id=None, worker_id=None, **args):
+    def next_file(self, request, relpath, project_id=None, worker_id=None, cpu_site=None, **args):
         #print("next_file...")
         user = self.authenticated_user()
         if user is None:
@@ -162,7 +162,7 @@ class Handler(BaseHandler):
             return 404, "Project not found"
         if not user.is_admin() and user.Username != project.Owner:
             return 403
-        handle = project.reserve_next_file(worker_id)
+        handle, reason = project.reserve_handle(worker_id, self.App.ProximityMap, cpu_site)
         if handle is None:
             return "null", "text/json"
         info = handle.as_jsonable(with_replicas=True)
@@ -301,6 +301,7 @@ class App(BaseApp, Logged):
         Logged.__init__(self, "DataServer")
         BaseApp.__init__(self, config, Handler)
         self.DaemonURL = config.get("daemon_server", {}).get("url")
+        self.ProximityMap = ProximityMap(config.get("proximity_map", {}))
         log_out = config.get("web_server",{}).get("log","-")
         init_logger(log_out, True, log_out, log_out)
         

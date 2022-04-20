@@ -108,6 +108,34 @@
         </td>
     </tr>
     
+    {#
+    <tr>
+        <th>Proximity map</th>
+        <td>
+            <table>
+                <tr>
+                    <td class="nopadding">
+                        {% if mode == "create" or mode == "edit" %}
+                            <textarea name="proximity_map" rows=5 cols=50>{% if mode == "edit" %}{{proximity_map_text}}{% endif %}</textarea>
+                        {% else %}
+                            {{proximity_map_text}}
+                        {% endif %}
+                    </td>
+                    {% if mode == "edit" or mode == "create" %}
+                        <td style="padding:0px 20px"><i>Example:</i>
+<pre>
+    Site1: 0
+    Area_*: 3
+    *: 4
+</pre>
+                        </td>
+                    {% endif %}
+                </tr>
+            </table>
+        </td>
+    </tr>
+    #}
+    
     {% if mode == "create" or mode == "edit" %}
         <tr>
             <td></td>

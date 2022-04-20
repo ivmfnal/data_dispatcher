@@ -1,5 +1,5 @@
 from webpie import WPApp, WPHandler
-from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBUser
+from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBUser, ProximityMap
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
 import urllib, os, yaml
@@ -99,9 +99,7 @@ class UsersHandler(BaseHandler):
                     u.save()
                     
 class ProjectsHandler(BaseHandler):
-
-
-
+    
     def projects(self, request, relpath, message="", **args):
         db = self.App.db()
         projects = list(DBProject.list(db, with_handle_counts=True))
@@ -157,6 +155,9 @@ class ProjectsHandler(BaseHandler):
 
 class RSEHandler(BaseHandler):
     
+    def proximity_map(self, request, relpath, message="", **args):
+        return self.render_to_response("proximity_map.html", proximity_map = self.App.ProximityMap)
+
     def rses(self, request, relpath, **args):
         user = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
@@ -175,14 +176,24 @@ class RSEHandler(BaseHandler):
         is_admin = user is not None and user.is_admin()
         mode = "edit" if is_admin else "view"
         return self.render_to_response("rse.html", rse=rse, mode=mode)
-    
+
     def create(self, request, relpath, **args):
         user = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
         if not is_admin:
             self.redirect("./rses")
         return self.render_to_response("rse.html", is_admin=is_admin, mode="create")
-        
+
+    def parse_proximity_map(self, text):
+        pmap = []
+        for line in text.split("\n"):
+            line = line.strip()
+            if line:
+                site, proximity = line.split(":", 1)
+                site = site.strip()
+                proximity = int(proximity.strip())
+                pmap.append([site, proximity])
+
     def do_create(self, request, relpath, **args):
         user = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
@@ -269,6 +280,7 @@ class App(BaseApp):
     def __init__(self, config):
         BaseApp.__init__(self, config, TopHandler)
         self.Config = config
+        self.ProximityMap = ProximityMap(config.get("proximity_map", {}))
         
     def init(self):
         templdir = self.ScriptHome

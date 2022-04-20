@@ -277,11 +277,12 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         args = "?" + "&".join(args) if args else ""
         return self.get(f"projects{args}")
 
-    def next_file(self, project_id):
+    def next_file(self, project_id, cpu_site=None):
         """Reserves next available file from the project
         
         Args:
             project_id (int): project id to reserve a file from
+            cpu_site (str): optional, if specified, the file will be reserved according to the CPU/RSE proximity map
         
         Returns:
             dictionary with file information, or None if no file was available to be reserved. The method does not block and always returns immediately.
@@ -290,7 +291,10 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         
         if self.WorkerID is None:
             raise ValueError("DataDispatcherClient must be initialized with Worker ID")
-        return self.get(f"next_file?project_id={project_id}&worker_id={self.WorkerID}")
+        url_tail = f"next_file?project_id={project_id}&worker_id={self.WorkerID}"
+        if cpu_site:
+            url_tail += f"&cpu_site={cpu_site}"
+        return self.get(url_tail)
         
     def get_file(self, namespace, name):
         """Gets information about a file

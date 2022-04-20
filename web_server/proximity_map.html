@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block headline %}CPU/RSE Proximity Map{% endblock %}
+
+{% block content %}
+
+<table class="form">
+    <tr>
+        <th>Default proximity</th>
+        <td>{{proximity_map.Default}}</td>
+    </tr>
+</table>
+
+<table class="data">
+    <tr>
+        <th rowspan=2>CPU Site</th><th colspan="{{proximity_map.rses()|length}}">RSE</th>
+    </tr>
+    <tr>
+        {% for rse in proximity_map.rses() %}
+            <th>{{rse}}</th>
+        {% endfor %}
+    </tr>
+    {% for cpu in proximity_map.cpus() %}
+        <tr>
+            <th>{{cpu}}</th>
+            {% for rse in proximity_map.rses() %}
+                <td>{{proximity_map.proximity(cpu, rse, "")}}</td>
+            {% endfor %}
+        </tr>
+    {% endfor %}
+</table>
+
+{% endblock %}

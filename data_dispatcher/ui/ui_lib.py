@@ -30,10 +30,10 @@ def print_handles(handles, print_replicas):
         "failed":       4
     }
     
-    print("%10s %9s %8s %10s %s" % (
+    print("%10s %9s %8s %-30s %s" % (
             "Status", "Replicas", "Attempts", "Worker", "File" + (" / replica pref., RSE, avlbl, URL" if print_replicas else "")
         )) 
-    print("%s" % ("-"*110,)) 
+    print("%s" % ("-"*130,)) 
 
     handles = list(handles)
 
@@ -49,7 +49,7 @@ def print_handles(handles, print_replicas):
         state = f["state"]
         if state == "initial" and available_replicas:
             state = "available"
-        print("%10s %4d/%-4d %8s %10s %s:%s" % (
+        print("%10s %4d/%-4d %8s %-30s %s:%s" % (
             state,
             available_replicas, nreplicas,
             f["attempts"],
@@ -59,7 +59,7 @@ def print_handles(handles, print_replicas):
         ))
         if print_replicas:
             for r in f["replicas"].values():
-                print("%40s %-4d %-10s %-3s %s" % ("", r["preference"], r["rse"], "yes" if r["available"] else "no", r["url"] or ""))
+                print("%60s %-4d %-10s %-3s %s" % ("", r["preference"], r["rse"], "yes" if r["available"] else "no", r["url"] or ""))
     print("%s" % ("-"*110,)) 
 
 
