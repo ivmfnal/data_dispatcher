@@ -38,6 +38,7 @@ def print_handles(handles, print_replicas):
     handles = list(handles)
 
     for h in handles:
+        #print("print_handles: handle:", h)
         h["is_available"] = any(r["available"] and r.get("rse_available") for r in h["replicas"].values())
 
     handles = sorted(handles, key=lambda h: (0 if h["is_available"] else 1, state_order[h["state"]], h["attempts"], h["namespace"], h["name"]))

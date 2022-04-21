@@ -505,7 +505,7 @@ class DBProject(DBObject, HasLogRecord):
             self.EndTimestamp = datetime.now(timezone.utc)
             self.save()
         return handle
-
+        
     def is_active(self, reload=False):
         #print("projet", self.ID, "  handle states:", [h.State for h in self.handles(reload=reload)])
         p = self if not reload else DBProject.get(self.DB, self.ID)
@@ -527,16 +527,22 @@ class DBProject(DBObject, HasLogRecord):
     
         for h in handles:
             if h.State == h.ReadyState:
+                min_cost = None
+                replicas = {}
                 for r in h.replicas().values():
                     if r.is_available():
                         rse = r.RSE
-                        proximity = proximity_map.proximity(cpu_site, rse)
-                        if proximity > 0:
-                            score = proximity + h.Attempts
-                            ready_handles_scores.append((score, h))
+                        r.Preference = proximity = proximity_map.proximity(cpu_site, rse)
+                        if proximity >= 0:
+                            cost = proximity + h.Attempts
+                            if min_cost is None or min_cost > cost:
+                                min_cost = cost
+                            replicas[rse] = r
+                h.Replicas = replicas
+                if min_cost is not None:
+                    ready_handles_scores.append((min_cost, h))
 
-        handles = [h for score, h in sorted(ready_handles_scores, key=lambda x: x[0])]
-        for h in handles:
+        for cost, h in sorted(ready_handles_scores, key=lambda x: x[0]):
             if h.reserve(worker_id):
                 return h, "ok"
 
@@ -743,7 +749,7 @@ class DBReplica(DBObject):
         self.Path = path
         self.Preference = preference
         self.Available = available
-        self.RSEAvailable = rse_available            # optional, set by joining the rses table
+        self.RSEAvailable = rse_available           # optional, set by joining the rses table
 
     def did(self):
         return f"{self.Namespace}:{self.Name}"
@@ -770,11 +776,12 @@ class DBReplica(DBObject):
             yield r
         
     def as_jsonable(self):
-        return dict(name=self.Name, namespace=self.Namespace, path=self.Path, 
+        out = dict(name=self.Name, namespace=self.Namespace, path=self.Path, 
             url=self.URL, rse=self.RSE,
             preference=self.Preference, available=self.Available,
             rse_available=self.RSEAvailable
         )
+        return out
 
     @staticmethod
     def create(db, namespace, name, rse, path, url, preference=0, available=False, error_if_exists=False):
@@ -1230,6 +1237,9 @@ class DBFileHandle(DBObject, HasLogRecord):
 
     def is_active(self):
         return self.State not in ("done", "failed")
+        
+    def is_reserved(self):
+        return self.State == self.ReservedState
 
     def done(self):
         self.State = "done"
@@ -1241,6 +1251,12 @@ class DBFileHandle(DBObject, HasLogRecord):
         self.State = self.ReadyState if retry else "failed"
         self.add_log("failed", worker=self.WorkerID or None, final=not retry)
         self.WorkerID = None
+        self.save()
+        
+    def reset(self):
+        self.State = self.ReadyState
+        self.WorkerID = None
+        self.add_log("reset")
         self.save()
 
     def reserved_by(self, worker_id):

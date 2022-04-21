@@ -205,6 +205,7 @@ def main():
         client.file_done(project_id, did)
     
     elif command == "failed":
+        # pretty much synonyms
         opts, args = getopt.getopt(rest, "f")
         opts = dict(opts)
         if len(args) != 2:
@@ -212,7 +213,7 @@ def main():
             sys.exit(2)
         project_id, did = args
         client.file_failed(project_id, did, retry = not "-f" in opts)
-    
+
     elif command == "login":
         if len(rest) < 2:
             print(Usage)

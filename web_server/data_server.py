@@ -196,6 +196,36 @@ class Handler(BaseHandler):
             return 404, "Handle not found"
         
         return json.dumps(handle.as_jsonable()), "text/json"
+
+    def ______reset_file(self, request, relpath, handle_id=None, force="no", **args):
+        # not fully implemented. need to be careful with the project status update - possible race condition
+        if handle_id is None:
+            return 400, "File Handle ID (<project_id>:<namespace>:<name>) must be specified"
+        user = self.authenticated_user()
+        if user is None:
+            return "Unauthenticated user", 403
+
+        db = self.App.db()
+
+        project_id, namespace, name = DBFileHandle.unpack_id(handle_id)
+
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+
+        if not user.is_admin() and user.Username != project.Owner:
+            return 403
+            
+        force = force == "yes"
+
+        handle = project.handle(namespace, name)
+        if handle is None:
+            return 404, "Handle not found"
+        if not force and handle.is_reserved():
+            return 400, "Handle is reserved"
+
+        handle.reset()
+        return json.dumps(handle.as_jsonable()), "text/json"
         
     def project_files(self, request, relpath, project_id=None, state=None, ready_only="no", **args):
         if project_id is None:

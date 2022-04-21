@@ -51,6 +51,8 @@ create table replicas
 );
 
 create index replicas_specs on replicas ((namespace || ':' || name));
+create index replicas_rse on replicas(rse);
+        
 
 create view replicas_with_rse_availability as
     select replicas.*, rses.is_available as rse_available
