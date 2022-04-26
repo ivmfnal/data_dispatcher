@@ -220,13 +220,13 @@ Viewing projects
                 -r                                          - show replicas information
                 -j                                          - show as JSON
                 -f [active|initial|available|all|reserved|failed|done]   - list files (namespace:name) only
-                                                               all       - all files, including done and failed
-                                                               active    - all except done and failed
-                                                               initial   - in initial state
-                                                               available - available files only
-                                                               reserved  - reserved files only
-                                                               failed    - failed files only
-                                                               done      - done files only
+                   all       - all files, including done and failed
+                   active    - all except done and failed
+                   initial   - in initial state
+                   available - available files only
+                   reserved  - reserved files only
+                   failed    - failed files only
+                   done      - done files only
 
 Cancelling project
 ..................
@@ -276,10 +276,10 @@ Getting next file to process
     .. code-block:: shell
 
        $ dd next [-j] [-t <timeout>] [-c <cpu_site>] <project_id>  - get next available file
-                                                             -c - choose the file according to the CPU/RSE proximity map for the CPU site
-                                                             -j - as JSON
-                                                             -t - wait for next file until "timeout" seconds, 
-                                                                  otherwise, wait until the project finishes
+             -c - choose the file according to the CPU/RSE proximity map for the CPU site
+             -j - as JSON
+             -t - wait for next file until "timeout" seconds, 
+                  otherwise, wait until the project finishes
                                                                   
 In case when no file is available to be processed, but the project has not finished yet (not all files are done or failed permanently),
 the "dd next" command will block until a file becomes available for consumption. If "-t" is specified, the "dd next" command will block
