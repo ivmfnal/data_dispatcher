@@ -19,18 +19,17 @@ def json_literal(v):
 class ProximityMap(object):
     
     def __init__(self, config):
-        self.Default = config.get("_default", 10)
-        self.Map = {cpu: cpu_map for cpu, cpu_map in config.items() if cpu != "_default"}
+        self.Default = config.get("default_proximity", 10)
+        self.Map = {cpu: cpu_map for cpu, cpu_map in config.items() if cpu != "default_proximity"}
 
     def proximity(self, cpu, rse, default="_default"):
         if default == "_default":
             default = self.Default
-        if cpu is None or rse is None:
-            return self.Default
+        if cpu is None: cpu = "default"
         return self.Map.get(cpu, {}).get(rse, default)
         
     def cpus(self):
-        return sorted(list(self.Map.keys()))
+        return sorted(list(self.Map.keys()), key=lambda x: "-" if x == "default" else x)
         
     def rses(self):
         rses = set()
@@ -1166,7 +1165,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         return DBProject.get(self.DB, self.ProjectID)
         
     @staticmethod
-    def reserve_next_available(db, project_id, worker_id):
+    def _____reserve_next_available(db, project_id, worker_id):
         # returns reserved handle or None
         c = db.cursor()
         columns = DBFileHandle.columns("h", as_text=True)
