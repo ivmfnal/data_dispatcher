@@ -16,27 +16,6 @@ def json_literal(v):
     else:   v = str(v)
     return v
     
-class ProximityMap(object):
-    
-    def __init__(self, config):
-        self.Default = config.get("default_proximity", 10)
-        self.Map = {cpu: cpu_map for cpu, cpu_map in config.items() if cpu != "default_proximity"}
-
-    def proximity(self, cpu, rse, default="_default"):
-        if default == "_default":
-            default = self.Default
-        if cpu is None: cpu = "default"
-        return self.Map.get(cpu, {}).get(rse, default)
-        
-    def cpus(self):
-        return sorted(list(self.Map.keys()), key=lambda x: "-" if x == "default" else x)
-        
-    def rses(self):
-        rses = set()
-        for cpu, cpu_map in self.Map.items():
-            rses |= set(cpu_map.keys())
-        return sorted(list(rses))
-
 class DBObject(object):
     
     @classmethod
@@ -1363,6 +1342,7 @@ class DBProximityMap(DBObject):
                 from {self.Table}
         """)
         self._load(cursor_iterator(c))
+        return self
     
     def save(self):
         c = self.DB.cursor()

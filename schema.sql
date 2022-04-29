@@ -109,3 +109,14 @@ create table file_log
     foreign key (namespace, name) references files(namespace, name) on delete cascade
 );
 
+create table proximity_map
+(
+    cpu             text,
+    rse             text,
+    proximity       int,
+    primary key (cpu, rse)
+);
+
+insert into proximity_map(cpu, rse, proximity) values('DEFAULT', 'DEFAULT', 100);
+
+    

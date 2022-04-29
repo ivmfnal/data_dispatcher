@@ -1,6 +1,6 @@
 from webpie import WPApp, WPHandler
 from wsdbtools import ConnectionPool
-from data_dispatcher.db import DBProject, DBFileHandle, DBFile, DBRSE, ProximityMap
+from data_dispatcher.db import DBProject, DBFileHandle, DBFile, DBRSE, DBProximityMap
 from data_dispatcher.logs import Logged, init_logger
 from data_dispatcher import Version
 from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, \
@@ -162,7 +162,7 @@ class Handler(BaseHandler):
             return 404, "Project not found"
         if not user.is_admin() and user.Username != project.Owner:
             return 403
-        handle, reason = project.reserve_handle(worker_id, self.App.ProximityMap, cpu_site)
+        handle, reason = project.reserve_handle(worker_id, self.App.proximity_map(), cpu_site)
         if handle is None:
             return "null", "text/json"
         info = handle.as_jsonable(with_replicas=True)
@@ -331,11 +331,14 @@ class App(BaseApp, Logged):
         Logged.__init__(self, "DataServer")
         BaseApp.__init__(self, config, Handler)
         self.DaemonURL = config.get("daemon_server", {}).get("url")
-        self.ProximityMap = ProximityMap(config.get("proximity_map", {}))
+        self.ProximityMapDefaults = config.get("proximity_map_defaults", {})
         log_out = config.get("web_server",{}).get("log","-")
         init_logger(log_out, True, log_out, log_out)
-        
-        
+    
+    def proximity_map(self):
+        db = self.db()
+        return DBProximityMap(db, defaults=self.ProximityMapDefaults)
+
     def project_created(self, project_id):
         if self.DaemonURL:
             url = f"{self.DaemonURL}/add_project?project_id={project_id}"
