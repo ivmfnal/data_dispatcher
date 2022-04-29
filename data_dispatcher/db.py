@@ -1334,4 +1334,66 @@ class DBRSE(DBObject):
         except:
             c.execute("rollback")
             raise
-        
+
+
+class DBProximityMap(DBObject):
+
+    Columns = ["cpu", "rse", "proximity"]
+    PK = ["cpu", "rse"]
+    Table = "proximity_map"
+    
+    def __init__(self, db, tuples=None, defaults = {}):
+        self.DB = db
+        self.Defaults = defaults
+        self.Map = {}
+        if tuples is not None:
+            self._load(tuples)
+        else:
+            self.load()
+
+    def _load(self, tuples):
+        for cpu, rse, proximity in tuples:
+            self.Map.setdefault(cpu, {})[rse] = proximity
+    
+    def load(self):
+        self.Map = {}
+        c = self.DB.cursor()
+        c.execute(f"""
+            select cpu, rse, proximity
+                from {self.Table}
+        """)
+        self._load(cursor_iterator(c))
+    
+    def save(self):
+        c = self.DB.cursor()
+        tuples = []
+        for cpu, cpu_dict in self.Map.items():
+            for rse, proximity in cpu_dict.items():
+                tuples.append((cpu, rse, proximity))
+        try:
+            c.execute("begin")
+            for cpu, rse, proximity in tuples:
+                c.execute(f"""
+                    insert into {self.Table}(cpu, rse, proximity)
+                        values(%s, %s, %s)
+                        on conflict(cpu, rse)
+                            do update set proximity=%s
+                    """, (cpu, rse, proximity, proximity))
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
+    def proximity(self, cpu, rse, default=None):
+        if cpu is None: cpu = "DEFAULT"
+        cpu_map = self.Map.get(cpu,  self.Map.get("DEFAULT", self.Defaults.get(cpu, {})))
+        return cpu_map.get(rse, cpu_map.get("DEFAULT", default))
+
+    def cpus(self):
+        return sorted(list(self.Map.keys()), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
+
+    def rses(self):
+        rses = set()
+        for cpu, cpu_map in self.Map.items():
+            rses |= set(rse for rse in cpu_map.keys() if rse.uppper() != "DEFAULT")
+        return sorted(list(rses))

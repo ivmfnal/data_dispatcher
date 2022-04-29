@@ -15,6 +15,45 @@ def from_did(did):
 
 TaskScheduler = Scheduler()
 
+
+class ProximityMapDownloader(PyThread, Logged):
+
+    def __init__(self, db, url, interval=30):
+        PyThread.__init__(self, name="ProximityMapDownloader", daemon=True)
+        Logged.__init__(self, "ProximityMapDownloader")
+        self.DB = db
+        self.URL = url
+        self.Interval = interval
+        self.Stop = False
+        self.LastMap = None
+
+    def run(self):
+        while not self.Stop:
+            response = requests.get(self.URL)
+            if response.status_code // 100 == 2:
+                data = response.text
+                proximity_map = []
+                for line in data.split("\n"):
+                    line = line.strip()
+                    if line:
+                        words = line.split(",")
+                        if len(words) == 3:
+                            cpu, rse, proximity = words
+                            proximity = int(proximity)
+                            proximity_map.append((cpu, rse, proximity))
+                proximity_map = sorted(proximity_map)
+                if self.LastMap is None or self.LastMap != proximity_map:
+                    dbmap = DBProximityMap(self.DB, proximity_map)
+                    dbmap.save()
+                    self.log("Proximity map updated")
+                else:
+                    self.log("Proximity map unchanged")
+            else:
+                self.log(f"Error retrieving proximity map from {self.URL}:", response)
+            if not self.Stop:
+                time.sleep(self.Interval)
+
+
 class DCachePoller(PyThread, Logged):
     
     STAGGER = 0.1
@@ -562,6 +601,16 @@ def main():
     else:
         connection.close()
         del connection
+
+    proximity_map_loader = None
+    proximity_map_url = config.get("proximity_map_url")
+    if proximity_map_url:
+        proximity_map_loader_interval = int(config.get("proximity_map_loader_interval", 60))
+        proximity_map_loader = ProximityMapDownloader(
+                connection_pool, proximity_map_url,
+                proximity_map_loader_interval
+        )
+        proximity_map_loader.start()
 
     #max_threads = config.get("max_threads", 100)
     scheduler = Scheduler()
