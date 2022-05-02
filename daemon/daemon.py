@@ -64,9 +64,17 @@ class RSEListLoader(PyThread, Logged):
         self.Interval = interval
 
     def run(self):
+        last_set = None
         while not self.Stop:
             rses = [info["name"] for info in self.RucioClient.list_rses()]
+            new_set = set(rses)
+            if last_set is not None:
+                new_rses = new_set - last_set
+                removed_rses = last_set - new_set
+                self.log("RSE list changed. New RSEs:", list(new_rses), "   removed RSEs:", list(removed_rses))
+            last_set = new_set
             DBRSE.create_many(self.DB, rses)
+            self.log("RSE list updated")
             if not self.Stop:
                 time.sleep(self.Interval)
 
