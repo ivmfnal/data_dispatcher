@@ -54,6 +54,23 @@ class ProximityMapDownloader(PyThread, Logged):
                 time.sleep(self.Interval)
 
 
+class RSEListLoader(PyThread, Logged):
+
+    def __init__(self, db, rucio_client, interval=30):
+        PyThread.__init__(self, daemon=True, name="RSEListLoader")
+        Logged.__init__(self, name="RSEListLoader")
+        self.DB = db
+        self.RucioClient = rucio_client
+        self.Interval = interval
+
+    def run(self):
+        while not self.Stop:
+            rses = [info["name"] for info in self.RucioClient.list_rses()]
+            DBRSE.create_many(self.DB, rses)
+            if not self.Stop:
+                time.sleep(self.Interval)
+
+
 class DCachePoller(PyThread, Logged):
     
     STAGGER = 0.1
@@ -552,7 +569,7 @@ class RucioListener(PyThread, Logged):
 def main():
     import sys, yaml, getopt, os
     from wsdbtools import ConnectionPool
-    from rucio.client.replicaclient import ReplicaClient
+    from rucio.client.replicaclient import ReplicaClient, RSEClient
     from data_dispatcher.logs import init_logger
 
     opts, args = getopt.getopt(sys.argv[1:], "c:d")
@@ -582,6 +599,7 @@ def main():
     init_logger(log_out, debug_enabled, debug_out, error_out)
     
     replica_client = ReplicaClient()        # read standard Rucio config file for now
+    rse_client = RSEClient()
     
     pollers = {}
 
@@ -612,6 +630,10 @@ def main():
         )
         proximity_map_loader.start()
 
+
+    rse_list_loader = RSEListLoader(connection_pool, rse_client)
+    rse_list_loader.start()
+    
     #max_threads = config.get("max_threads", 100)
     scheduler = Scheduler()
     scheduler.start()

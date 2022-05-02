@@ -1315,15 +1315,30 @@ class DBRSE(DBObject):
             raise
 
 
+    @statismethod
+    def create_many(db, names):
+        c = db.cursor()
+        table = DBRSE.Table
+        try:
+            c.execute("begin")
+            c.executemany("""insert into {table}(name) values(%s) on conflict(name) do nothing""",
+                [(name,) for name in names]
+            )
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
 class DBProximityMap(DBObject):
 
     Columns = ["cpu", "rse", "proximity"]
     PK = ["cpu", "rse"]
     Table = "proximity_map"
     
-    def __init__(self, db, tuples=None, defaults = {}):
+    def __init__(self, db, tuples=None, defaults = {}, default=None):
         self.DB = db
         self.Defaults = defaults
+        self.Default = default
         self.Map = {}
         if tuples is not None:
             self._load(tuples)
@@ -1364,7 +1379,9 @@ class DBProximityMap(DBObject):
             c.execute("rollback")
             raise
 
-    def proximity(self, cpu, rse, default=None):
+    def proximity(self, cpu, rse, default="_default_"):
+        if default == "_default_":
+            default = self.Default
         if cpu is None: cpu = "DEFAULT"
         cpu_map = self.Map.get(cpu,  self.Map.get("DEFAULT", self.Defaults.get(cpu, {})))
         return cpu_map.get(rse, cpu_map.get("DEFAULT", default))
@@ -1375,5 +1392,5 @@ class DBProximityMap(DBObject):
     def rses(self):
         rses = set()
         for cpu, cpu_map in self.Map.items():
-            rses |= set(rse for rse in cpu_map.keys() if rse.uppper() != "DEFAULT")
+            rses |= set(rse for rse in cpu_map.keys() if rse.upper() != "DEFAULT")
         return sorted(list(rses))
