@@ -1330,7 +1330,7 @@ class DBRSE(DBObject):
             raise
 
 
-    @statismethod
+    @staticmethod
     def create_many(db, names):
         c = db.cursor()
         table = DBRSE.Table
@@ -1400,6 +1400,9 @@ class DBProximityMap(DBObject):
         if cpu is None: cpu = "DEFAULT"
         cpu_map = self.Map.get(cpu,  self.Map.get("DEFAULT", self.Defaults.get(cpu, {})))
         return cpu_map.get(rse, cpu_map.get("DEFAULT", default))
+        
+    def raw(self, cpu, rse, default=None):
+        return self.Map.get(cpu, {}).get(rse, default)
 
     def cpus(self):
         return sorted(list(self.Map.keys()), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
