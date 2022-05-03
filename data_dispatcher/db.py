@@ -1330,6 +1330,20 @@ class DBRSE(DBObject):
             raise
 
 
+    @statismethod
+    def create_many(db, names):
+        c = db.cursor()
+        table = DBRSE.Table
+        try:
+            c.execute("begin")
+            c.executemany("""insert into {table}(name) values(%s) on conflict(name) do nothing""",
+                [(name,) for name in names]
+            )
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
 class DBProximityMap(DBObject):
 
     Columns = ["cpu", "rse", "proximity"]
@@ -1380,7 +1394,9 @@ class DBProximityMap(DBObject):
             c.execute("rollback")
             raise
 
-    def proximity(self, cpu, rse, default=None):
+    def proximity(self, cpu, rse, default="_default_"):
+        if default == "_default_":
+            default = self.Default
         if cpu is None: cpu = "DEFAULT"
         cpu_map = self.Map.get(cpu,  self.Map.get("DEFAULT", self.Defaults.get(cpu, {})))
         return cpu_map.get(rse, cpu_map.get("DEFAULT", default))

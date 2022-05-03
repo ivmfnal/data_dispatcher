@@ -1,5 +1,5 @@
 import stompy, pprint, urllib, requests, json, time, traceback
-from data_dispatcher.db import DBFile, DBProject, DBReplica, DBRSE
+from data_dispatcher.db import DBFile, DBProject, DBReplica, DBRSE, DBProximityMap
 from pythreader import PyThread, Primitive, Scheduler, synchronized, LogFile, LogStream
 from data_dispatcher.logs import Logged
 from daemon_web_server import DaemonWebServer
@@ -50,6 +50,31 @@ class ProximityMapDownloader(PyThread, Logged):
                     self.log("Proximity map unchanged")
             else:
                 self.log(f"Error retrieving proximity map from {self.URL}:", response)
+            if not self.Stop:
+                time.sleep(self.Interval)
+
+
+class RSEListLoader(PyThread, Logged):
+
+    def __init__(self, db, rucio_client, interval=30):
+        PyThread.__init__(self, daemon=True, name="RSEListLoader")
+        Logged.__init__(self, name="RSEListLoader")
+        self.DB = db
+        self.RucioClient = rucio_client
+        self.Interval = interval
+
+    def run(self):
+        last_set = None
+        while not self.Stop:
+            rses = [info["name"] for info in self.RucioClient.list_rses()]
+            new_set = set(rses)
+            if last_set is not None:
+                new_rses = new_set - last_set
+                removed_rses = last_set - new_set
+                self.log("RSE list changed. New RSEs:", list(new_rses), "   removed RSEs:", list(removed_rses))
+            last_set = new_set
+            DBRSE.create_many(self.DB, rses)
+            self.log("RSE list updated")
             if not self.Stop:
                 time.sleep(self.Interval)
 
@@ -552,7 +577,7 @@ class RucioListener(PyThread, Logged):
 def main():
     import sys, yaml, getopt, os
     from wsdbtools import ConnectionPool
-    from rucio.client.replicaclient import ReplicaClient
+    from rucio.client.replicaclient import ReplicaClient, RSEClient
     from data_dispatcher.logs import init_logger
 
     opts, args = getopt.getopt(sys.argv[1:], "c:d")
@@ -582,6 +607,7 @@ def main():
     init_logger(log_out, debug_enabled, debug_out, error_out)
     
     replica_client = ReplicaClient()        # read standard Rucio config file for now
+    rse_client = RSEClient()
     
     pollers = {}
 
@@ -612,6 +638,10 @@ def main():
         )
         proximity_map_loader.start()
 
+
+    rse_list_loader = RSEListLoader(connection_pool, rse_client)
+    rse_list_loader.start()
+    
     #max_threads = config.get("max_threads", 100)
     scheduler = Scheduler()
     scheduler.start()

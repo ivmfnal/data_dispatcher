@@ -1,5 +1,5 @@
 from webpie import WPApp, WPHandler
-from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBUser, ProximityMap
+from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBUser, DBProximityMap
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
 import urllib, os, yaml
@@ -156,7 +156,8 @@ class ProjectsHandler(BaseHandler):
 class RSEHandler(BaseHandler):
     
     def proximity_map(self, request, relpath, message="", **args):
-        return self.render_to_response("proximity_map.html", proximity_map = self.App.ProximityMap)
+        pmap = self.App.proximity_map()
+        return self.render_to_response("proximity_map.html", proximity_map = pmap, default_proximity=pmap.Default)
 
     def rses(self, request, relpath, **args):
         user = self.authenticated_user()
@@ -280,8 +281,11 @@ class App(BaseApp):
     def __init__(self, config):
         BaseApp.__init__(self, config, TopHandler)
         self.Config = config
-        self.ProximityMap = ProximityMap(config.get("proximity_map", {}))
-        
+        self.DefaultProximity = int(config.get("default_proximity", -1))
+
+    def proximity_map(self):
+        return DBProximityMap(self.db(), default=self.DefaultProximity)
+
     def init(self):
         templdir = self.ScriptHome
         self.initJinjaEnvironment(
