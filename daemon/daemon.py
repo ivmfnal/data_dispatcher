@@ -577,7 +577,8 @@ class RucioListener(PyThread, Logged):
 def main():
     import sys, yaml, getopt, os
     from wsdbtools import ConnectionPool
-    from rucio.client.replicaclient import ReplicaClient, RSEClient
+    from rucio.client.replicaclient import ReplicaClient
+    from rucio.client.rseclient import RSEClient
     from data_dispatcher.logs import init_logger
 
     opts, args = getopt.getopt(sys.argv[1:], "c:d")
