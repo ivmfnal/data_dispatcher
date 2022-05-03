@@ -1336,7 +1336,7 @@ class DBRSE(DBObject):
         table = DBRSE.Table
         try:
             c.execute("begin")
-            c.executemany("""insert into {table}(name) values(%s) on conflict(name) do nothing""",
+            c.executemany(f"""insert into {table}(name) values(%s) on conflict(name) do nothing""",
                 [(name,) for name in names]
             )
             c.execute("commit")
