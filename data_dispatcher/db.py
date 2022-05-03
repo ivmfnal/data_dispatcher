@@ -440,10 +440,10 @@ class DBProject(DBObject, HasLogRecord):
         self.save()
         self.add_log("ended", state="cancelled")
 
-    def handles(self, with_replicas=True, reload=False):
+    def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
-        return self.Handles
+        return (h for h in self.Handles if (state is None or h.State == state))
 
     def handle(self, namespace, name):
         return DBFileHandle.get(self.DB, self.ID, namespace, name)
@@ -500,27 +500,42 @@ class DBProject(DBObject, HasLogRecord):
         if not self.is_active(reload=True):
             return None, "project inactive"
 
-        handles = self.handles(with_replicas=True, reload=True)
-        ready_handles_scores = []
+        handles = sorted(
+            self.handles(with_replicas=True, reload=True, state=DBHandle.ReadyState),
+            key = lambda h: h.Attempts
+        )
     
-        for h in handles:
-            if h.State == h.ReadyState:
-                min_cost = None
-                replicas = {}
-                for r in h.replicas().values():
-                    if r.is_available():
-                        rse = r.RSE
-                        r.Preference = proximity = proximity_map.proximity(cpu_site, rse)
-                        if proximity >= 0:
-                            cost = proximity + h.Attempts
-                            if min_cost is None or min_cost > cost:
-                                min_cost = cost
-                            replicas[rse] = r
-                h.Replicas = replicas
-                if min_cost is not None:
-                    ready_handles_scores.append((min_cost, h))
+        #
+        # find the lowest attempt count among all available file handles
+        #
+        
+        handles_with_lowest_attempts = []
+        lowest_attempts = None
 
-        for cost, h in sorted(ready_handles_scores, key=lambda x: x[0]):
+        for h in handles:
+            if lowest_attempts is not None and h.Attempts > lowest_attempts:
+                break
+            replicas = {}
+            for r in h.replicas().values():
+                if r.is_available():
+                    rse = r.RSE
+                    proximity = proximity_map.proximity(cpu_site, rse)
+                    if proximity >= 0:
+                        r.Preference = proximity
+                        replicas[rse] = r
+
+            if replicas:
+                h.Replicas = replicas
+                lowest_attempts = h.Attempts
+                handles_with_lowest_attempts.append(h)
+
+        #
+        # reserve the most preferred handle
+        #
+
+        for h in sorted(handles_with_lowest_attempts, 
+                    key=lambda h: min(r.Preference for r in h.Replicas.values())
+                    ):
             if h.reserve(worker_id):
                 return h, "ok"
 
@@ -1321,9 +1336,10 @@ class DBProximityMap(DBObject):
     PK = ["cpu", "rse"]
     Table = "proximity_map"
     
-    def __init__(self, db, tuples=None, defaults = {}):
+    def __init__(self, db, tuples=None, defaults = {}, default=None):
         self.DB = db
         self.Defaults = defaults
+        self.Default = default
         self.Map = {}
         if tuples is not None:
             self._load(tuples)
@@ -1375,5 +1391,5 @@ class DBProximityMap(DBObject):
     def rses(self):
         rses = set()
         for cpu, cpu_map in self.Map.items():
-            rses |= set(rse for rse in cpu_map.keys() if rse.uppper() != "DEFAULT")
-        return sorted(list(rses))
+            rses |= set(rse for rse in cpu_map.keys())
+        return sorted(list(rses), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
