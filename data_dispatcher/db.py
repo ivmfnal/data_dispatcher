@@ -1315,13 +1315,13 @@ class DBRSE(DBObject):
             raise
 
 
-    @statismethod
+    @staticmethod
     def create_many(db, names):
         c = db.cursor()
         table = DBRSE.Table
         try:
             c.execute("begin")
-            c.executemany("""insert into {table}(name) values(%s) on conflict(name) do nothing""",
+            c.executemany(f"""insert into {table}(name) values(%s) on conflict(name) do nothing""",
                 [(name,) for name in names]
             )
             c.execute("commit")

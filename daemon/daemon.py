@@ -62,11 +62,13 @@ class RSEListLoader(PyThread, Logged):
         self.DB = db
         self.RucioClient = rucio_client
         self.Interval = interval
+        self.Stop = False
 
     def run(self):
         last_set = None
         while not self.Stop:
-            rses = [info["name"] for info in self.RucioClient.list_rses()]
+            rses = self.RucioClient.list_rses()
+            rses = [info["rse"] for info in rses]
             new_set = set(rses)
             if last_set is not None:
                 new_rses = new_set - last_set
@@ -577,7 +579,8 @@ class RucioListener(PyThread, Logged):
 def main():
     import sys, yaml, getopt, os
     from wsdbtools import ConnectionPool
-    from rucio.client.replicaclient import ReplicaClient, RSEClient
+    from rucio.client.replicaclient import ReplicaClient
+    from rucio.client.rseclient import RSEClient
     from data_dispatcher.logs import init_logger
 
     opts, args = getopt.getopt(sys.argv[1:], "c:d")
