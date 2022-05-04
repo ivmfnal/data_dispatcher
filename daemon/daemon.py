@@ -67,8 +67,7 @@ class RSEListLoader(PyThread, Logged):
     def run(self):
         last_set = None
         while not self.Stop:
-            rses = self.RucioClient.list_rses()
-            rses = [info["rse"] for info in rses]
+            rses = [info["rse"] for info in self.RucioClient.list_rses()]
             new_set = set(rses)
             if last_set is not None:
                 new_rses = new_set - last_set
@@ -250,15 +249,17 @@ class RSEConfig(Logged):
         
     __getitem__ = get_actual_config
     
+    def keys(self):
+        return (r.Name for r in DBRSE.list(self.DB))
+
+    rses = keys
+
     def __contains__(self, rse):
-        return rse in self.Config
+        return rse in set(self.keys())
         
     def get(self, rse, default={}):
         if not rse in self: return default
         return self[rse]
-        
-    def rses(self):
-        return list(self.Config.keys())
         
     def is_tape(self, rse):
         return self.get(rse).get("is_tape", False)
@@ -552,7 +553,7 @@ class RucioListener(PyThread, Logged):
         preference = self.RSEConfig.preference(rse)
         available = not self.RSEConfig.is_tape(rse)         # do not trust dst-type from Rucio
         f.create_replica(rse, path, url, preference, available)
-        self.log("added replica:", scope, name, rse, url, path)
+        #self.log("added replica:", scope, name, rse, url, path)
 
     def run(self):
         broker_addr = (self.MessageBrokerConfig["host"], self.MessageBrokerConfig["port"])

@@ -28,6 +28,7 @@ create table rses
 (
     name            text    primary key,
     description     text    default '',
+    is_enabled      boolean default false,
     is_available    boolean default false,
     is_tape         boolean default false,
     pin_url         text,
@@ -57,7 +58,7 @@ create index replicas_rse on replicas(rse);
 create view replicas_with_rse_availability as
     select replicas.*, rses.is_available as rse_available
         from replicas, rses
-        where rses.name = replicas.rse
+        where rses.name = replicas.rse and rses.is_enabled
 ;
 
 create table file_handles

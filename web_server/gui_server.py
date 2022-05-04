@@ -156,14 +156,15 @@ class ProjectsHandler(BaseHandler):
 class RSEHandler(BaseHandler):
     
     def proximity_map(self, request, relpath, message="", **args):
-        pmap = self.App.proximity_map()
-        return self.render_to_response("proximity_map.html", proximity_map = pmap)
+        enabled_rses = set(r.Name for r in DBRSE.list(self.App.db(), include_disabled=False))
+        pmap = self.App.proximity_map(rses=enabled_rses)
+        return self.render_to_response("proximity_map.html", proximity_map = pmap, default_proximity=pmap.Default)
 
     def rses(self, request, relpath, **args):
         user = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
-        rses = list(DBRSE.list(self.App.db()))
-        rses = sorted(rses, key=lambda r: r.Name)
+        rses = list(DBRSE.list(self.App.db(), include_disabled=True))
+        rses = sorted(rses, key=lambda r: (0 if r.Enabled else 1, r.Name))
         return self.render_to_response("rses.html", rses=rses, is_admin=is_admin)
     
     index = rses
@@ -228,6 +229,7 @@ class RSEHandler(BaseHandler):
         rse.PinURL = request.POST.get("pin_url") or None
         rse.Description = request.POST.get("description", "")
         rse.Preference = int(request.POST.get("preference", 0))
+        rse.Enabled = request.POST.get("is_enabled", "no") != "no"
         rse.save()
 
 
@@ -283,8 +285,8 @@ class App(BaseApp):
         self.Config = config
         self.DefaultProximity = int(config.get("default_proximity", -1))
 
-    def proximity_map(self):
-        return DBProximityMap(self.db(), default=self.DefaultProximity)
+    def proximity_map(self, rses=None):
+        return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses)
 
     def init(self):
         templdir = self.ScriptHome

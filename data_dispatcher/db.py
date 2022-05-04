@@ -440,10 +440,10 @@ class DBProject(DBObject, HasLogRecord):
         self.save()
         self.add_log("ended", state="cancelled")
 
-    def handles(self, with_replicas=True, reload=False):
+    def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
-        return self.Handles
+        return (h for h in self.Handles if (state is None or h.State == state))
 
     def handle(self, namespace, name):
         return DBFileHandle.get(self.DB, self.ID, namespace, name)
@@ -490,7 +490,7 @@ class DBProject(DBObject, HasLogRecord):
         if p is None:   return False
         return p.State == "active" and not all(h.State in ("done", "failed") for h in p.handles())
             
-    def reserve_next_file(self, worker_id):
+    def ______reserve_next_file(self, worker_id):
         handle = DBFileHandle.reserve_next_available(self.DB, self.ID, worker_id)
         if handle is not None:
             did = handle.did()
@@ -500,27 +500,42 @@ class DBProject(DBObject, HasLogRecord):
         if not self.is_active(reload=True):
             return None, "project inactive"
 
-        handles = self.handles(with_replicas=True, reload=True)
-        ready_handles_scores = []
+        handles = sorted(
+            self.handles(with_replicas=True, reload=True, state=DBHandle.ReadyState),
+            key = lambda h: h.Attempts
+        )
     
-        for h in handles:
-            if h.State == h.ReadyState:
-                min_cost = None
-                replicas = {}
-                for r in h.replicas().values():
-                    if r.is_available():
-                        rse = r.RSE
-                        r.Preference = proximity = proximity_map.proximity(cpu_site, rse)
-                        if proximity >= 0:
-                            cost = proximity + h.Attempts
-                            if min_cost is None or min_cost > cost:
-                                min_cost = cost
-                            replicas[rse] = r
-                h.Replicas = replicas
-                if min_cost is not None:
-                    ready_handles_scores.append((min_cost, h))
+        #
+        # find the lowest attempt count among all available file handles
+        #
+        
+        handles_with_lowest_attempts = []
+        lowest_attempts = None
 
-        for cost, h in sorted(ready_handles_scores, key=lambda x: x[0]):
+        for h in handles:
+            if lowest_attempts is not None and h.Attempts > lowest_attempts:
+                break
+            replicas = {}
+            for r in h.replicas().values():
+                if r.is_available():
+                    rse = r.RSE
+                    proximity = proximity_map.proximity(cpu_site, rse)
+                    if proximity >= 0:
+                        r.Preference = proximity
+                        replicas[rse] = r
+
+            if replicas:
+                h.Replicas = replicas
+                lowest_attempts = h.Attempts
+                handles_with_lowest_attempts.append(h)
+
+        #
+        # reserve the most preferred handle
+        #
+
+        for h in sorted(handles_with_lowest_attempts, 
+                    key=lambda h: min(r.Preference for r in h.Replicas.values())
+                    ):
             if h.reserve(worker_id):
                 return h, "ok"
 
@@ -833,6 +848,11 @@ class DBReplica(DBObject):
 
     @staticmethod
     def create_bulk(db, rse, preference, replicas):
+        
+        r = DBRSE.get(db, rse)
+        if r is None or not r.Enabled:
+            return
+        
         # replicas: {(namespace, name) -> {"path":.., "url":..}}
         # do not touch availability, update if exists
 
@@ -886,6 +906,11 @@ class DBReplica(DBObject):
     @staticmethod
     def update_availability_bulk(db, available, rse, dids):
         # dids is list of dids: ["namespace:name", ...]
+
+        r = DBRSE.get(db, rse)
+        if r is None or not r.Enabled:
+            return
+        
         if not dids:    return
         table = DBReplica.Table
         val = "true" if available else "false"
@@ -1066,7 +1091,7 @@ class DBFileHandle(DBObject, HasLogRecord):
     
     @staticmethod
     def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False):
-        wheres = ["true"]
+        wheres = []
         if project_id: wheres.append(f"h.project_id={project_id}")
         if state:  
             if isinstance(state, (list, tuple)):
@@ -1081,13 +1106,13 @@ class DBFileHandle(DBObject, HasLogRecord):
         r_columns = DBReplica.columns("r", as_text=True)
         h_n_columns = len(DBFileHandle.Columns)
         r_n_columns = len(DBReplica.Columns)
-        replicas_view = DBReplica.ViewWithRSEStatus
+        available_replicas_view = DBReplica.ViewWithRSEStatus
         if with_replicas:
             sql = f"""
                 select {h_columns}, {r_columns}, rse_available
                     from file_handles h
-                        left outer join {replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
-                        where {wheres}
+                        left outer join {available_replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
+                        where true and {wheres}
                         order by h.namespace, h.name
             """
             #print("DBFileHandle.list: sql:", sql)
@@ -1244,16 +1269,17 @@ class DBFileHandle(DBObject, HasLogRecord):
 
 class DBRSE(DBObject):
     
-    Columns = ["name", "description", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "preference"]
+    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "preference"]
     PK = ["name"]
     Table = "rses"
 
-    def __init__(self, db, name, description="", is_available=True, is_tape=False, pin_url=None, poll_url=None, 
+    def __init__(self, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
                 remove_prefix=None, add_prefix=None, preference=0):
         self.DB = db
         self.Name = name
         self.Description = description
         self.Available = is_available
+        self.Enabled = is_enabled
         self.Tape = is_tape
         self.PinURL = pin_url
         self.PollURL = poll_url
@@ -1271,23 +1297,26 @@ class DBRSE(DBObject):
             poll_url        =   self.PollURL,
             remove_prefix   =   self.RemovePrefix,
             add_prefix      =   self.AddPrefix,
-            preference      =   self.Preference
+            preference      =   self.Preference,
+            is_enabled      =   self.Enabled
         )
 
     as_jsonable = as_dict
 
-    @staticmethod
-    def create(db, name, description="", is_available=True, is_tape=False, pin_url=None, poll_url=None, 
+    @classmethod
+    def create(cls, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
                 remove_prefix=None, add_prefix=None, preference=0):
         c = db.cursor()
+        table = cls.Table
+        columns = cls.columns(as_text=True)
         try:
             c.execute("begin")
-            c.execute("""
+            c.execute(f"""
                 begin;
-                insert into rses(name, description, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, preference)
-                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                insert into {table}({columns})
+                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     on conflict(name) do nothing;
-                """, (name, description, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, preference)
+                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, preference)
             )
             c.execute("commit")
         except:
@@ -1296,17 +1325,28 @@ class DBRSE(DBObject):
         
         return DBRSE.get(db, name)
 
+    @classmethod
+    def list(cls, db, include_disabled=False):
+        c = db.cursor()
+        table = cls.Table
+        columns = cls.columns(as_text=True)
+        wheres = "" if include_disabled else "where is_enabled"
+        c.execute(f"""
+            select {columns} from {table} {wheres}
+        """)
+        return (cls.from_tuple(db, tup) for tup in cursor_iterator(c))
+
     def save(self):
         c = self.DB.cursor()
         try:
-            print("saving urls:", self.PinURL, self.PollURL)
+            #print("saving urls:", self.PinURL, self.PollURL)
             c.execute("begin")
             c.execute("""
                 begin;
                 update rses 
-                    set description=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, preference=%s
+                    set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, preference=%s
                     where name=%s
-                """, (self.Description, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, self.AddPrefix, self.Preference,
+                """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, self.AddPrefix, self.Preference,
                     self.Name)
             )
             c.execute("commit")
@@ -1335,7 +1375,7 @@ class DBProximityMap(DBObject):
     PK = ["cpu", "rse"]
     Table = "proximity_map"
     
-    def __init__(self, db, tuples=None, defaults = {}, default=None):
+    def __init__(self, db, tuples=None, defaults = {}, default=None, rses=None):
         self.DB = db
         self.Defaults = defaults
         self.Default = default
@@ -1344,6 +1384,13 @@ class DBProximityMap(DBObject):
             self._load(tuples)
         else:
             self.load()
+            
+        if rses is not None:
+            rses = set(rses)
+            for cpu, cpu_map in self.Map.items():
+                for rse in list(cpu_map.keys()):
+                    if rse.upper() != "DEFAULT" and rse not in rses:
+                        del cpu_map[rse]
 
     def _load(self, tuples):
         for cpu, rse, proximity in tuples:
@@ -1385,6 +1432,9 @@ class DBProximityMap(DBObject):
         if cpu is None: cpu = "DEFAULT"
         cpu_map = self.Map.get(cpu,  self.Map.get("DEFAULT", self.Defaults.get(cpu, {})))
         return cpu_map.get(rse, cpu_map.get("DEFAULT", default))
+        
+    def raw(self, cpu, rse, default=None):
+        return self.Map.get(cpu, {}).get(rse, default)
 
     def cpus(self):
         return sorted(list(self.Map.keys()), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
@@ -1392,5 +1442,5 @@ class DBProximityMap(DBObject):
     def rses(self):
         rses = set()
         for cpu, cpu_map in self.Map.items():
-            rses |= set(rse for rse in cpu_map.keys() if rse.upper() != "DEFAULT")
-        return sorted(list(rses))
+            rses |= set(rse for rse in cpu_map.keys())
+        return sorted(list(rses), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
