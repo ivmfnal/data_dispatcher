@@ -69,15 +69,17 @@ class RSEListLoader(PyThread, Logged):
         while not self.Stop:
             rses = [info["rse"] for info in self.RucioClient.list_rses()]
             new_set = set(rses)
-            if last_set is not None:
+            if last_set is None or last_set != new_set:
                 new_rses = new_set - last_set
                 removed_rses = last_set - new_set
-                self.log("RSE list changed. New RSEs:", list(new_rses), "   removed RSEs:", list(removed_rses))
-            last_set = new_set
-            DBRSE.create_many(self.DB, rses)
-            self.log("RSE list updated")
+                DBRSE.create_many(self.DB, rses)
+                last_set = new_set
+                self.log("RSE list updated. New RSEs:", list(new_rses), "   removed RSEs:", list(removed_rses))
+            else:
+                # self.log("RSE list unchanged")
+                pass
             if not self.Stop:
-                time.sleep(self.Interval)
+                self.sleep(self.Interval)
 
 
 class DCachePoller(PyThread, Logged):
