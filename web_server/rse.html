@@ -29,6 +29,15 @@
         </td>
     </tr>
     <tr>
+        <th>Enabled</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="is_enabled" type="checkbox" {% if mode=="edit" and rse.Enabled %}checked="checked"{% endif %}/>
+            {% else %}
+                {{"yes" if rse.Enabled else "no"}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
         <th>Description</th>
         <td>{% if mode == "create" or mode == "edit" %}
                 <input name="description" type="text" size="120" {% if mode=="edit" %}value="{{rse.Description}}"{% endif %}/>
