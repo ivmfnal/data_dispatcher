@@ -227,26 +227,16 @@ class RSEConfig(Logged):
         return self.Config[rse].get("view") is not None
         
     def get_actual_config(self, rse):
-        cfg = self.Config[rse]
-        add_prefix = cfg.get("add_prefix")
-        remove_prefix = cfg.get("remove_prefix")
-        ssl_config = cfg.get("ssl")
-        actual_rse = self.unview(rse)
-        #print("get_actual_config(", rse, "): ", cfg)
-
-        dbrse = DBRSE.get(self.DB, actual_rse)
+        dbrse = DBRSE.get(self.DB, rse)
         if dbrse is None:
-            raise KeyError(f"RSE {dbrse} aliased as {rse} not found")
-            
-        cfg = dbrse.as_dict()
-        #self.debug("get_actual_config: rse:", rse, "  cfg:", cfg)
-        cfg["ssl"] = ssl_config
-        if add_prefix is not None:
-            cfg["add_prefix"] = add_prefix
-        if remove_prefix is not None:
-            cfg["remove_prefix"] = remove_prefix
-        return cfg
-        
+            raise KeyError(f"RSE {rse} not in the database")
+        dbcfg = dbrse.as_dict()
+
+        cfg = self.Config.get(rse)
+        if cfg is not None:
+            dbcfg["ssl"] = cfg.get("ssl")
+        return dbcfg
+
     __getitem__ = get_actual_config
     
     def keys(self):
