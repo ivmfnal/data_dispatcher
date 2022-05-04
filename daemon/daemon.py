@@ -67,7 +67,7 @@ class RSEListLoader(PyThread, Logged):
     def run(self):
         last_set = None
         while not self.Stop:
-            rses = [info["rse"] for info in self.RucioClient.list_rses()]
+            rses = set(info["rse"] for info in self.RucioClient.list_rses())
             new_set = set(rses)
             if last_set is None or last_set != new_set:
                 last_set = last_set or set()
