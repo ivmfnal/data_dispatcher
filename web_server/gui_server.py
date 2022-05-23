@@ -1,12 +1,12 @@
 from webpie import WPApp, WPHandler
-from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBUser, DBProximityMap
+from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap       # , DBUser
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
 import urllib, os, yaml
 from urllib.parse import quote, unquote, unquote_plus
 from wsdbtools import ConnectionPool
 
-class UsersHandler(BaseHandler):
+class ___UsersHandler(BaseHandler):
 
     def users(self, request, relpath, error="", **args):
         me = self.authenticated_user()
@@ -237,7 +237,7 @@ class TopHandler(BaseHandler):
     
     def __init__(self, request, app):
         BaseHandler.__init__(self, request, app)
-        self.U = UsersHandler(request, app)
+        #self.U = UsersHandler(request, app)
         self.P = ProjectsHandler(request, app)
         self.A = AuthHandler(request, app)
         self.R = RSEHandler(request, app)
