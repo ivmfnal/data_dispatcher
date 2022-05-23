@@ -501,7 +501,7 @@ class DBProject(DBObject, HasLogRecord):
             return None, "project inactive"
 
         handles = sorted(
-            self.handles(with_replicas=True, reload=True, state=DBHandle.ReadyState),
+            self.handles(with_replicas=True, reload=True, state=DBFileHandle.ReadyState),
             key = lambda h: h.Attempts
         )
     
