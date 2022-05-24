@@ -81,7 +81,18 @@ Third way is to yse JSON-formatted file list. The list is composed of items of o
                 "attributes": {"debug":true} 
             }
         ]
-        $ dd project create /tmp/file_list.json
+        $ dd project create -j /tmp/file_list.json
+        
+Hyphen can be used as the value for `-j` and `-l` options to read the list from stdin:
+
+    .. code-block:: shell
+
+        $ dd project create -l - << _EOF_ 
+        protodune-sp:np04_raw_run006833_0001_dl10.root
+        protodune-sp:np04_raw_run006833_0001_dl1.root
+        protodune-sp:np04_raw_run006833_0001_dl6.root
+        _EOF_
+
 
 The "dd project create" command prints information about the created project in 3 different formats, depending on "-p" option:
 
