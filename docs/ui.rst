@@ -98,8 +98,8 @@ The "dd project create" command prints information about the created project in 
 
     .. code-block:: shell
 
-        $ dd project create ...
-        123         # default: print the project ID
+        $ dd project create -p id ...                   # -p id is default
+        123                                             # the project id only
         
         $ dd project create -p json ... # print project information as JSON
         {
