@@ -100,7 +100,7 @@ the value of ``-p`` option:
     .. code-block:: shell
 
         $ dd project create -p id ...                   # -p id is default
-        123                                             # the project id only
+        123                                             # print the project id only
         
         $ dd project create -p json ... # print project information as JSON
         {
