@@ -1,67 +1,79 @@
 import getopt, sys
 from .ui_lib import pretty_json
+from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
 Usage = """
 show rse [-j] <name>                        - show RSE information
 set rse -a (yes|no) <name>                  - set RSE availability (requires admin privileges)
 """
 
-def show_rse(client, args):
-    opts, args = getopt.getopt(args, "j")
-    if not args:
-        print(Usage)
-        sys.exit(2)
-    opts = dict(opts)
-    name = args[0]
-    rse_info = client.get_rse(name)
-    if rse_info is None:
-        print(f"RSE {name} not found")
-        sys.exit(1)
-    if "-j" in opts:
-        print(pretty_json(rse_info))
-    else:
-        print("RSE:           ", name)
-        print("Preference:    ", rse_info["preference"])
-        print("Tape:          ", "yes" if rse_info["is_tape"] else "no")
-        print("Available:     ", "yes" if rse_info["is_available"] else "no")
-        print("Pin URL:       ", rse_info.get("pin_url") or "")
-        print("Poll URL:      ", rse_info.get("poll_url") or "")
-        print("Remove prefix: ", rse_info["remove_prefix"])
-        print("Add prefix:    ", rse_info["add_prefix"])
-
-def set_rse(client, args):
-    opts, args = getopt.getopt(args, "a:")
-    opts = dict(opts)
-    up_down = opts.get("-a")
-    if not args or "-a" not in opts or up_down not in ("up", "down"):
-        print(Usage)
-        sys.exit(2)
-    name = args[0]
-    client.set_rse_availability(name, up_down == "up")
+class ShowCommand(CLICommand):
     
-def list_rses(client, args):
-    opts, args = getopt.getopt(args, "j")
-    opts = dict(opts)
+    Opts = "j"
+    Usage = """[-j] <rse>
+        -j          -- JSON output
+    """
+    MinArgs = 1
+    
+    def __call__(self, command, client, opts, args):
+        name = args[0]
+        rse_info = client.get_rse(name)
+        if rse_info is None:
+            print(f"RSE {name} not found")
+            sys.exit(1)
+        if "-j" in opts:
+            print(pretty_json(rse_info))
+        else:
+            print("RSE:           ", name)
+            print("Preference:    ", rse_info["preference"])
+            print("Tape:          ", "yes" if rse_info["is_tape"] else "no")
+            print("Available:     ", "yes" if rse_info["is_available"] else "no")
+            print("Pin URL:       ", rse_info.get("pin_url") or "")
+            print("Poll URL:      ", rse_info.get("poll_url") or "")
+            print("Remove prefix: ", rse_info["remove_prefix"])
+            print("Add prefix:    ", rse_info["add_prefix"])
 
-    rses = sorted(client.list_rses(), key=lambda r: r["name"])
+class SetAvailability(CLICommand):
 
-    if "-j" in opts:
-        print(pretty_json(rses))
-    else:
-        print("%-20s %4s %3s %6s %s" % (
-                "Name", "Pref", "Tape", "Status", "Description"
-            )) 
-        print("%s" % ("-"*110,)) 
+    Usage = "(up|down) <rse>"
+    MinArgs = 2
+    
+    def __call__(self, command, client, opts, args):
+        up_down, name = args
+        if up_down not in ("up", "down"):
+            print(Usage)
+            sys.exit(2)
+        return client.set_rse_availability(name, up_down == "up")
+    
+class ListCommand(CLICommand):
+    Opts = "j"
+    Usage = """[-j]             -- JSON output"""
+    MinArgs = 1
 
-        for rse in rses:
+
+    def __call__(self, command, client, opts, args):
+        rses = sorted(client.list_rses(), key=lambda r: r["name"])
+        if "-j" in opts:
+            print(pretty_json(rses))
+        else:
             print("%-20s %4s %3s %6s %s" % (
-                rse["name"],
-                rse["preference"],
-                "tape" if rse["is_tape"] else "    ",
-                "up" if rse["is_available"] else "down",
-                rse["description"]
-            ))
+                    "Name", "Pref", "Tape", "Status", "Description"
+                )) 
+            print("%s" % ("-"*110,)) 
+
+            for rse in rses:
+                print("%-20s %4s %3s %6s %s" % (
+                    rse["name"],
+                    rse["preference"],
+                    "tape" if rse["is_tape"] else "    ",
+                    "up" if rse["is_available"] else "down",
+                    rse["description"]
+                ))
     
-        
+RSECLI = CLI(
+    "list",         ListCommand(),
+    "set",          SetAvailability(),
+    "show",         ShowCommand()
+)        
     
     

@@ -1,18 +1,76 @@
+import time
+
 from data_dispatcher.api import DataDispatcherClient
 from data_dispatcher import Version
 from metacat.webapi import MetaCatClient 
 import sys, getopt, os, json
-from .ui_project import create_project, show_project, list_projects
-from .ui_handle import show_handle, list_handles
-from .ui_lib import pretty_json
-from .ui_file import show_file, replica_available, replica_unavailable
-from .ui_rse import set_rse, show_rse, list_rses
-import time
 
-server_url = os.environ.get("DATA_DISPATCHER_URL")
-if not server_url:
-    print("Data Dispatcher Server URL undefined. Use DATA_DISPATCHER_URL environment variable")
-    sys.exit(2)
+from .cli import CLI, CLICommand, InvalidArguments
+from .ui_project import ProjectCLI
+from .ui_file import FileCLI
+from .ui_worker import WorkerCLI
+from .ui_rse import RSECLI
+from .ui_lib import pretty_json
+
+class LoginCommand(CLICommand):
+    
+    Usage = """<mechanism> <args>...             -- log in
+        login x509 <user> <cert> <key>                  - use X.509 authentication
+        login password <user>                           - password authentication
+    """
+    MinArgs = 2
+    
+    def __call__(self, command, client, opts, args):
+        mech, rest = args[0], args[1:]
+        if mech == "x509":
+            username, cert, key = rest
+            user, expiration = client.login_x509(username, cert, key)
+        elif mech == "password":
+            import getpass
+            username = rest[0]
+            password = getpass.getpass("Password:")
+            user, expiration = client.login_password(username, password)
+        else:
+            raise InvalidArguments(f"Unknown authentication mechanism {mech}\n")
+
+        print ("User:   ", user)
+        print ("Expires:", time.ctime(expiration))
+
+
+class DDCLI(CLI):
+    
+    def __init__(self):
+        
+        CLI.__init__(self,
+            "login",    LoginCommand(),
+            "project",  ProjectCLI,
+            "file",     FileCLI,
+            "worker",   WorkerCLI,
+            "rse",      RSECLI,
+            usage = """[-s <server URL>] [-a <auth server URL>]
+                Both server and auth server URLs must be specified either using -s and -a or 
+                via environment variables DATA_DISPATCHER_URL and DATA_DISPATCHER_AUTH_URL
+            """,
+            opts = "s:a:"
+        )
+            
+    def update_context(self, context, opts, args):
+        if context is None:
+            server_url = opts.get("-s") or os.environ.get("DATA_DISPATCHER_URL")
+            auth_server_url = opts.get("-a") or os.environ.get("DATA_DISPATCHER_AUTH_URL")
+
+            if not server_url:
+                print("Server address must be specified either using -s option or using environment variable DATA_DISPATCHER_URL", file=sys.stderr)
+                sys.exit(2)
+
+            if not auth_server_url:
+                print("Authentication server address must be specified either using -a option or using environment variable DATA_DISPATCHER_AUTH_URL", file=sys.stderr)
+                sys.exit(2)
+    
+            context = DataDispatcherClient(server_url, auth_server_url)       # return the client as context
+        return context
+
+
 
 my_name = sys.argv[0]
 
@@ -55,166 +113,10 @@ Commands:
     login password <user>
 """
 
-def main():
-    client = DataDispatcherClient(server_url)
 
-    if len(sys.argv[1:]) < 1 or "-\?" in sys.argv[1:] or "--help" in sys.argv[1:]:
-        print(Usage)
-        sys.exit(2)
-    
-    command = sys.argv[1]
-    rest = sys.argv[2:]
+def junk():
 
-    if command == "worker":
-        opts, args = getopt.getopt(rest, "n")
-        opts = dict(opts)
-        if "-n" in opts:
-            worker_id = client.new_worker_id()
-        elif args:
-            worker_id = args[0]
-            client.new_worker_id(worker_id)
-        else:
-            worker_id = client.WorkerID
-        if not worker_id:
-            print("worker id unknown")
-            sys.exit(1)
-        print(worker_id)
-        
-    elif command == "create":
-        subcommand, rest = rest[0], rest[1:]
-        if subcommand != "project":
-            print(Usage)
-            sys.exit(2)
-        create_project(client, rest)
-
-    elif command == "show":
-        subcommand, rest = rest[0], rest[1:]
-        if subcommand == "project":
-            show_project(client, rest)
-        elif subcommand == "handle":
-            show_handle(client, rest)
-        elif subcommand == "file":
-            show_file(client, rest)
-        elif subcommand == "rse":
-            show_rse(client, rest)
-        else:
-            print(Usage)
-            sys.exit(2)
-
-    elif command == "set":
-        subcommand, rest = rest[0], rest[1:]
-        if subcommand == "rse":
-            set_rse(client, rest)
-        else:
-            print(Usage)
-            sys.exit(2)
-
-    elif command == "replica":
-        subcommand, rest = rest[0], rest[1:]
-        if subcommand == "available":
-            replica_available(client, rest)
-        elif subcommand == "unavailable":
-            replica_unavailable(client, rest)
-        else:
-            print(Usage)
-            sys.exit(2)
-
-    elif command == "list":
-        if not rest:
-            print(Usage)
-            sys.exit(2)
-        subcommand, rest = rest[0], rest[1:]
-        if subcommand == "projects":
-            list_projects(client, rest)
-        elif subcommand == "handles":
-            list_handles(client, rest)
-        elif subcommand == "rses":
-            list_rses(client, rest)
-        else:
-            print(Usage)
-            sys.exit(2)
-        
-    elif command == "delete":
-        subcommand, rest = rest[0], rest[1:]
-        if subcommand == "project":
-            if not rest:
-                print(Usage)
-                sys.exit(2)
-            project_id = int(rest[0])
-            client.delete_project(project_id)
-        else:
-            print(Usage)
-            sys.exit(2)
-        
-    elif command == "cancel":
-        subcommand, rest = rest[0], rest[1:]
-        if subcommand == "project":
-            opts, args = getopt.getopt(rest, "j")
-            opts = dict(opts)
-            if not args:
-                print(Usage)
-                sys.exit(2)
-            project_id = int(args[0])
-            out = client.cancel_project(project_id)
-            if "-j" in opts:
-                print(pretty_json(out))
-        else:
-            print(Usage)
-            sys.exit(2)
-        
-
-    elif command == "next":
-        opts, args = getopt.getopt(rest, "jt:c:")
-        opts = dict(opts)
-        if not args:
-            print(Usage)
-            sys.exit(2)
-        project_id = args[0]
-        as_json = "-j" in opts
-        timeout = int(opts.get("-t", -1))
-        cpu_site = opts.get("-c")
-        done = False
-        t0 = time.time()
-        t1 = t0 + timeout
-        while not done:
-            info = client.next_file(project_id, cpu_site)
-            if info:
-                if as_json:
-                    info["replicas"] = sorted(info["replicas"].values(), key=lambda r: -r["preference"])
-                    print(pretty_json(info))
-                else:
-                    print("%s:%s" % (info["namespace"], info["name"]))
-                sys.exit(0)
-            if timeout < 0 or (timeout > 0 and time.time() < t1):
-                project_info = client.get_project(project_id)
-                if not project_info["active"]:
-                    print("done")
-                    sys.exit(1)    # project finished
-                dt = min(5, t1-time.time())
-                if dt > 0:
-                    time.sleep(dt)
-            else:
-                print("timeout")
-                sys.exit(1)        # timeout
-
-    elif command == "done":
-        if len(rest) != 2:
-            print(Usage)
-            sys.exit(2)
-        project_id, did = rest
-        client.file_done(project_id, did)
-    
-    elif command == "failed":
-        # pretty much synonyms
-        opts, args = getopt.getopt(rest, "f")
-        opts = dict(opts)
-        if len(args) != 2:
-            print(Usage)
-            sys.exit(2)
-        project_id, did = args
-        client.file_failed(project_id, did, retry = not "-f" in opts)
-
-    elif command == "login":
+    if command == "login":
         if len(rest) < 2:
             print(Usage)
             sys.exit(2)
@@ -239,9 +141,12 @@ def main():
         print(Usage)
         sys.exit(2)
 
+def main():
+    cli = DDCLI()
+    cli.run(sys.argv, argv0="dd")
+        
 if __name__ == "__main__":
     main()
-        
         
     
             

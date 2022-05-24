@@ -61,7 +61,7 @@ def print_handles(handles, print_replicas):
         if print_replicas:
             for r in f["replicas"].values():
                 print("%60s %-4d %-10s %-3s %s" % ("", r["preference"], r["rse"], "yes" if r["available"] else "no", r["url"] or ""))
-    print("%s" % ("-"*110,)) 
+    print("%s" % ("-"*130,)) 
 
 
 

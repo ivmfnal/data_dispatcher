@@ -1,48 +1,17 @@
-import getopt, sys
-from .ui_lib import to_did, from_did, pretty_json
+import sys
+from .ui_lib import to_did, from_did, pretty_json, print_handles
+from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
-Usage = """
-replica available [options] <rse> <file_namespace:file_name>        - add/modify available file replica
-    -u <url>
-    -p <path>
-    -n <preference>     - default: 0
-    -j                  - print final file info as JSON
+class ShowCommand(CLICommand):
+    
+    Opts = "jp:"
+    Usage = """[-j] [-p <project id>] <file DID>
+        -j                  -- JSON output
+        -p <project>        -- show file handle for the project
+    """
+    MinArgs = 1
 
-replica unavailable <rse> <file_namespace:file_name>                - mark file replica unavailable
-
-show file [-j] <file_namespace:file_name>                   - show file info (-j = as JSON)
-"""
-
-def replica_available(client, rest):
-        opts, args = getopt.getopt(rest, "p:n:u:j")
-        opts = dict(opts)
-        if len(args) != 2:
-            print(Usage)
-            sys.exit(2)
-        rse, did = args
-        namespace, name = from_did(did)
-        path = opts.get("-p")
-        url = opts.get("-u")
-        preference = int(opts.get("-n", 0))
-        data = client.replica_available(namespace, name, rse, path=path, url=url, preference=preference)
-        if "-j" in opts:
-            print(pretty_json(data))
-
-def replica_unavailable(client, rest):
-        opts, args = getopt.getopt(rest, "j")
-        opts = dict(opts)
-        if len(args) != 2:
-            print(Usage)
-            sys.exit(2)
-        rse, did = args
-        namespace, name = from_did(did)
-        data = client.replica_unavailable(namespace, name, rse)
-        if "-j" in opts:
-            print(pretty_json(data))
-            
-def show_file(client, rest):
-        opts, args = getopt.getopt(rest, "j")
-        did = args[0]
+    def show_file(self, client, did, opts):
         namespace, name = from_did(did)
         data = client.get_file(namespace, name)
         if "-j" in opts:
@@ -57,3 +26,59 @@ def show_file(client, rest):
                 print("%1s %-25s %s" % ("A" if info["available"] else "U", rse, info.get("url") or ""))
                 if info.get("path"):
                     print("%27s %s" % ("", info["path"]))
+
+    def show_handle(self, client, project_id, did, opts):
+        namespace, name = from_did(did)
+        handle = client.get_handle(project_id, namespace, name)
+        if not handle:
+            print(f"Handle {handle_id} not found")
+            sys.exit(1)
+        if "-j" in opts:
+            print(pretty_json(handle))
+        else:
+            for name, val in handle.items():
+                if name != "replicas":
+                    print(f"{name:10s}: {val}")
+            if "replicas" in handle:
+                print("replicas:")
+                replicas = handle["replicas"]
+                for rse, r in replicas.items():
+                    r["rse"] = rse
+                replicas = sorted(replicas.values(), key=lambda r: (-r["preference"], r["rse"]))
+                for r in replicas:
+                    print("  Preference: ", r["preference"])
+                    print("  RSE:        ", r["rse"])
+                    print("  Path:       ", r["path"] or "")
+                    print("  URL:        ", r["url"] or "")
+                    print("  Available:  ", "yes" if r["available"] else "no")
+
+    def __call__(command, client, opts, args):
+        did = args[0]
+        if "-p" in opts:
+            project_id = int(opts["-p"])
+            return self.show_project(client, project, did, opts)
+        else:
+            return self.show_file(client, did, opts)
+
+class ListHandlesCommand(CLICommand):
+    Opts = "r:s:"
+    Usage = """[options] <project id>
+        -j                  -- JSON output
+        -s <handle state>   -- list handles in state
+        -r <rse>            -- list handles with replicas in RSE
+    """
+    MinArgs = 1
+
+    def __call__(command, client, opts, args):
+        project_id = int(args[0])
+        lst = client.list_handles(project_id=project_id, rse=opts.get("-r"), state=opts.get("-s"), with_replicas=True)
+        if "-j" in opts:
+            print(pretty_json(lst))
+        else:
+            print_handles(lst)
+
+
+FileCLI = CLI(
+    "show",    ShowCommand(),
+    "list", ListHandlesCommand()
+)
