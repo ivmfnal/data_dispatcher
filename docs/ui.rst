@@ -87,10 +87,10 @@ The "dd project create" command prints information about the created project in 
 
     .. code-block:: shell
 
-        $ dd create project ...
+        $ dd project create ...
         123         # default: print the project ID
         
-        $ dd create project -p json ... # print project information as JSON
+        $ dd project create -p json ... # print project information as JSON
         {
             "project_id": 123,
             "file_handles": [
@@ -99,7 +99,7 @@ The "dd project create" command prints information about the created project in 
             ...
         }
         
-        $ dd create project -p pprint ... # print project information using Python pprint
+        $ dd project create -p pprint ... # print project information using Python pprint
         {
          'project_id': 123,
          'file_handles': [
