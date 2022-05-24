@@ -35,21 +35,21 @@ Projects
 Creating project
 ................
 
-A Data Dispatcher project is a collection of files to process. There are two ways to provide the list of files to process.
+A Data Dispatcher project is a collection of files to process. There are three ways to provide the list of files to process.
 One is to specify a MetaCat query and create the project from the resulting file set:
 
     .. code-block:: shell
     
-        $ dd create project <inline MetaCat query>
+        $ dd project create <inline MetaCat query>
 
         # Examples:
-        $ dd create project files from dune:all limit 100
-        $ dd create project files from dune:all where 'namespace="protodune-sp"' skip 3000 limit 10
+        $ dd project create files from dune:all limit 100
+        $ dd project create files from dune:all where 'namespace="protodune-sp"' skip 3000 limit 10
 
-        $ dd create project -q <file with MetaCat MQL query>
+        $ dd project create -q <file with MetaCat MQL query>
 
-A project can be created with explicit list of files, specified either as a list of their DIDs (namespace:name):
-
+A project can be created with explicit list of files, specified as a text file with list of DIDs (namespace:name), one
+DID per line:
 
     .. code-block:: shell
 
@@ -58,10 +58,10 @@ A project can be created with explicit list of files, specified either as a list
         protodune-sp:np04_raw_run006833_0001_dl1.root
         protodune-sp:np04_raw_run006833_0001_dl6.root
         _EOF_
-        $ dd create project -l file_list
+        $ dd project create -l file_list
 
 
-or JSON-formatted list. The list is composed of items of two types:
+Third way is to yse JSON-formatted file list. The list is composed of items of one of two types:
 
     - file DID as string
     - a dictionary with keys "namespace", "name" and optional "attributes":
@@ -81,14 +81,14 @@ or JSON-formatted list. The list is composed of items of two types:
                 "attributes": {"debug":true} 
             }
         ]
-        $ dd create project /tmp/file_list.json
+        $ dd project create /tmp/file_list.json
 
-The "dd create project" command prints information about the created project in 3 different formats, depending on "-p" option:
+The "dd project create" command prints information about the created project in 3 different formats, depending on "-p" option:
 
     .. code-block:: shell
 
         $ dd create project ...
-        123         # default: just the project ID
+        123         # default: print the project ID
         
         $ dd create project -p json ... # print project information as JSON
         {
@@ -128,7 +128,7 @@ There are several ways to specify project level metadata attributes:
     .. code-block:: shell
 
         # inline:
-        $ dd create project -A "email_errors=user@fnal.gov step=postprocess" ...
+        $ dd project create -A "email_errors=user@fnal.gov step=postprocess" ...
         
         # as a JSON file:
         $ cat project_attrs.json
@@ -136,21 +136,21 @@ There are several ways to specify project level metadata attributes:
             "email_errors": "user@fnal.gov",
             "step": "postprocess"
         }
-        $ dd create project -A @project_attrs.json
+        $ dd project create -A @project_attrs.json
         
 To copy some metadata attributes from MetaCat:
 
     .. code-block:: shell
 
-        $ dd create project -c core.runs files from ...
-        $ dd create project -c detector.hv_value,core.data_tier files from ...
+        $ dd project create -c core.runs files from ...
+        $ dd project create -c detector.hv_value,core.data_tier files from ...
 
 To associate common attributes with each file in the project, use ``-a`` option:
 
     .. code-block:: shell
 
-        $ dd create project -a "name1=value1 name2=value2" ...
-        $ dd create project -a @<JSON file>
+        $ dd project create -a "name1=value1 name2=value2" ...
+        $ dd project create -a @<JSON file>
 
 If the file list is specified explicitly using JSON file, then each file dictionary may optionally include file attributes:
 
@@ -166,13 +166,13 @@ If the file list is specified explicitly using JSON file, then each file diction
             },
             { "namespace":"protodune-sp", "name":"np04_raw_run006834_0010_dl10.root" }
         ]
-        $ dd create project -j /tmp/file_list.json
+        $ dd project create -j /tmp/file_list.json
         
 When the worker gets next file to process, the JSON representation of file inofrmation includes project and project file attributes:
 
     .. code-block:: shell
 
-        $ dd next -j 70
+        $ dd worker next -j 70
         {
           "attempts": 1,
           "attributes": {                   # file attributes
@@ -210,12 +210,12 @@ Viewing projects
 
     .. code-block:: shell
 
-        $ dd list projects
+        $ dd project list
             -j                                              - JSON output
             -u <owner>                                      - filter by project owner
             -a "name1=value1 name2=value2 ..."              - filter by project attributes
 
-        $ dd show project [options] <project_id>            - show project info (-j show as JSON)
+        $ dd project show [options] <project_id>            - show project info (-j show as JSON)
                 -a                                          - show project attributes only
                 -r                                          - show replicas information
                 -j                                          - show as JSON
@@ -233,7 +233,7 @@ Cancelling project
 
     .. code-block:: shell
     
-        $ dd cancel project [-j] <project id>
+        $ dd project cancel [-j] <project id>
         
 ``-j`` will print the project information in JSON format
     
@@ -258,16 +258,16 @@ Data Dispatcher.
 
     .. code-block:: shell
         
-        $ dd worker -n          # - generate random worker id
+        $ dd worker id -n          # - generate random worker id
         9e0124f8
         
-        $ dd worker <assigned worker id>
+        $ dd worker id <assigned worker id>
         # example
         $ my_id=`hostname`_`date +%s`
-        $ dd worker $my_id
+        $ dd worker id $my_id
         fnpc123_1645849756
         
-        $ dd worker             # - prints current worker id
+        $ dd worker id            # - prints current worker id
         fnpc123_1645849756
 
 Getting next file to process
@@ -275,7 +275,7 @@ Getting next file to process
 
     .. code-block:: shell
 
-       $ dd next [-j] [-t <timeout>] [-c <cpu_site>] <project_id>  - get next available file
+       $ dd worker next [-j] [-t <timeout>] [-c <cpu_site>] <project_id>  - get next available file
              -c - choose the file according to the CPU/RSE proximity map for the CPU site
              -j - as JSON
              -t - wait for next file until "timeout" seconds, 
@@ -308,7 +308,7 @@ Here is an example of using this command:
         
         ...
         
-        out=$(dd next -j $my_project)
+        out=$(dd worker next -j $my_project)
         if [ $? -eq 0 ]
         then
              # process the file using $out as the JSON data
@@ -329,7 +329,7 @@ Replicas located in unavailable RSEs will _not_ be included, even if they are kn
 
     .. code-block:: shell
 
-        $ dd next -j 70
+        $ dd worker next -j 70
         {
           "attempts": 1,
           "attributes": {
@@ -368,14 +368,14 @@ If the file was processed successfully, the worker issues "done" command:
 
     .. code-block:: shell
 
-        $ dd done <project_id> <file namespace>:<file name>
+        $ dd worker done <project_id> <file namespace>:<file name>
         
 If the file processing failes, the worker issues "failed" command. "-f" option is used to signal that the file has failed permanently and should
 not be retried. Otherwise, the failed file will be moved to the back of the project's file list and given to a worker for consumption in the future.
 
     .. code-block:: shell
 
-        $ dd failed [-f] <project_id> <file namespace>:<file name>
+        $ dd worker failed [-f] <project_id> <file namespace>:<file name>
             
 
 RSEs
@@ -388,7 +388,7 @@ Listing known RSEs
 
     .. code-block:: shell
     
-        $ dd list rses -j
+        $ dd rse list -j
         [
           {
             "add_prefix": "",
@@ -414,18 +414,24 @@ Listing known RSEs
           }
         ]
         
-        $ dd list rses
-        Name                 Pref Tape Status Description
+        $ dd rse list
+        Name                                     Pref Tape Status Description
         --------------------------------------------------------------------------------------------------------------
-        FNAL_DCACHE             0 tape     up FNAL dCache
-        FNAL_DCACHE_TEST        0 tape     up 
+        FNAL_DCACHE                                 0 tape     up FNAL dCache
+        FNAL_DCACHE_PERSISTENT                      0 tape     up 
+        FNAL_DCACHE_STAGING                         0 tape     up 
+        FNAL_DCACHE_TEST                            0 tape     up 
+        LANCASTER                                   0          up 
+        TEST_RSE                                    0          up Test RSE
+        --------------------------------------------------------------------------------------------------------------
+        
         
 Showing information about particular RSE
 ........................................
 
     .. code-block:: shell
     
-        $ dd show rse FNAL_DCACHE
+        $ dd rse show FNAL_DCACHE
         RSE:            FNAL_DCACHE
         Preference:     0
         Tape:           yes
@@ -435,7 +441,7 @@ Showing information about particular RSE
         Remove prefix:  
         Add prefix:     
         
-        $ dd show rse -j FNAL_DCACHE
+        $ dd rse show -j FNAL_DCACHE
         {
           "add_prefix": "",
           "description": "FNAL dCache",
@@ -455,8 +461,8 @@ This command requires admin privileges.
 
     .. code-block:: shell
 
-        $ dd set rse -a down FNAL_DCACHE
-        $ dd show rse FNAL_DCACHE
+        $ dd rse set -a down FNAL_DCACHE
+        $ dd rse show FNAL_DCACHE
         RSE:            FNAL_DCACHE
         Preference:     0
         Tape:           yes

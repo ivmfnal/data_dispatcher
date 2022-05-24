@@ -6,7 +6,7 @@ from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
 class CreateCommand(CLICommand):
     
-    Opts = "q:c:l:j:A:a:p:"
+    Opts = "q:c:l:j:A:a:j"
     Usage = """[options] [inline MQL query]         -- create project
 
         Use an inline query or one of the following to provide file list:

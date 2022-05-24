@@ -46,29 +46,29 @@ class SetAvailability(CLICommand):
         return client.set_rse_availability(name, up_down == "up")
     
 class ListCommand(CLICommand):
+
     Opts = "j"
     Usage = """[-j]             -- JSON output"""
-    MinArgs = 1
-
 
     def __call__(self, command, client, opts, args):
         rses = sorted(client.list_rses(), key=lambda r: r["name"])
         if "-j" in opts:
             print(pretty_json(rses))
         else:
-            print("%-20s %4s %3s %6s %s" % (
+            print("%-40s %4s %3s %6s %s" % (
                     "Name", "Pref", "Tape", "Status", "Description"
                 )) 
             print("%s" % ("-"*110,)) 
 
             for rse in rses:
-                print("%-20s %4s %3s %6s %s" % (
+                print("%-40s %4s %3s %6s %s" % (
                     rse["name"],
                     rse["preference"],
                     "tape" if rse["is_tape"] else "    ",
                     "up" if rse["is_available"] else "down",
                     rse["description"]
                 ))
+            print("%s" % ("-"*110,)) 
     
 RSECLI = CLI(
     "list",         ListCommand(),
