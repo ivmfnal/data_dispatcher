@@ -95,7 +95,7 @@ Hyphen can be used as the value for ``-j`` and ``-l`` options to read the list f
 
 
 The "dd project create" command prints information about the created project in 3 different formats, depending on 
-the value of ``-p`` option:
+the value of the ``-p`` option:
 
     .. code-block:: shell
 
