@@ -83,7 +83,7 @@ Third way is to yse JSON-formatted file list. The list is composed of items of o
         ]
         $ dd project create -j /tmp/file_list.json
         
-Hyphen can be used as the value for `-j` and `-l` options to read the list from stdin:
+Hyphen can be used as the value for ``-j`` and ``-l`` options to read the list from stdin:
 
     .. code-block:: shell
 
@@ -94,7 +94,8 @@ Hyphen can be used as the value for `-j` and `-l` options to read the list from 
         _EOF_
 
 
-The "dd project create" command prints information about the created project in 3 different formats, depending on "-p" option:
+The "dd project create" command prints information about the created project in 3 different formats, depending on 
+the value of ``-p`` option:
 
     .. code-block:: shell
 
