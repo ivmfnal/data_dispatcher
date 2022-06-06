@@ -32,7 +32,7 @@ setup(
     ],
     entry_points = {
             "console_scripts": [
-                "dd = data_dispatcher.ui:main",
+                "dd = data_dispatcher.ui.ui_main:main",
             ]
         }
 )

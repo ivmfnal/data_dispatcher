@@ -281,6 +281,7 @@ def pretty_time_delta(t):
 class App(BaseApp):
     
     def __init__(self, config):
+        print("App.__init__...")
         BaseApp.__init__(self, config, TopHandler)
         self.Config = config
         self.DefaultProximity = int(config.get("default_proximity", -1))
@@ -289,6 +290,7 @@ class App(BaseApp):
         return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses)
 
     def init(self):
+        print("App.init...")
         templdir = self.ScriptHome
         self.initJinjaEnvironment(
             tempdirs=[templdir, "."],
