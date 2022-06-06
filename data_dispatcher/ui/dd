@@ -1,1 +1,1 @@
-python -m data_dispatcher.ui "$@"
+python -m data_dispatcher.ui.ui_main "$@"

@@ -39,6 +39,12 @@ class LoginCommand(CLICommand):
 
 class DDCLI(CLI):
     
+    Opts = "s:a:"
+    Usage = """[-s <server URL>] [-a <auth server URL>]
+                Both server and auth server URLs must be specified either using -s and -a or 
+                via environment variables DATA_DISPATCHER_URL and DATA_DISPATCHER_AUTH_URL
+            """
+    
     def __init__(self):
         
         CLI.__init__(self,
@@ -46,15 +52,10 @@ class DDCLI(CLI):
             "project",  ProjectCLI,
             "file",     FileCLI,
             "worker",   WorkerCLI,
-            "rse",      RSECLI,
-            usage = """[-s <server URL>] [-a <auth server URL>]
-                Both server and auth server URLs must be specified either using -s and -a or 
-                via environment variables DATA_DISPATCHER_URL and DATA_DISPATCHER_AUTH_URL
-            """,
-            opts = "s:a:"
+            "rse",      RSECLI
         )
             
-    def update_context(self, context, opts, args):
+    def update_context(self, context, command, opts, args):
         if context is None:
             server_url = opts.get("-s") or os.environ.get("DATA_DISPATCHER_URL")
             auth_server_url = opts.get("-a") or os.environ.get("DATA_DISPATCHER_AUTH_URL")
