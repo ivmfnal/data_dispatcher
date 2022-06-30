@@ -88,7 +88,7 @@
                             <td><canvas id="timeline:{{did}}"></canvas></td>
                             <script type="text/javascript">
                                 var timeline_events = [];
-                                {% for record in combined_log %}
+                                {% for record in combined_log[did] %}
                                     timeline_events.push({
                                         t: {{project.time_since_created(record.T)}},
                                         event: "{{record.Type}}"
