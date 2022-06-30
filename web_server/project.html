@@ -66,10 +66,8 @@
                 if( color != null )
                 {
                     ctx.fillStyle = color;
-                    var x0 = t0/now * CanvasW;
-                    var x1 = t/now * CanvasW;
-                    ctx.fillRect(x0,0,x1-x0,CanvasH);
-                    t0 = t;
+                    var x = t/now * CanvasW;
+                    ctx.fillRect(x,0,CanvasW-x,CanvasH);
                 }
             }
         }
