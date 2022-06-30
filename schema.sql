@@ -64,13 +64,13 @@ create view replicas_with_rse_availability as
 create table file_handles
 (
     project_id  bigint references projects(id) on delete cascade,
-    id          bigserial primary key,
     namespace   text,
     name        text,
     state       text,
     worker_id   text,
     attempts    int default 0,
     attributes  jsonb  default '{}'::jsonb,
+    primary key (project_id, namespace, name),
     foreign key (namespace, name) references files (namespace, name)
 );
 

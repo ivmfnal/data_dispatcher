@@ -37,15 +37,18 @@
                 </table>
             <td>
     </tr>
-    <tr>    <th>Handles</th>
+    <tr>    
+            <th>Handles</th>
             <td>
                 <table class="data replicas">
-                    <tr><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
+                    <tr><th></th><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
                     </tr>
                     {% for handle in handles %}
+                        {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
+                            <td><a href="javascript:toggle_handle_log('{{did}}')">log</a></td>
                             <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">
-                                    {{handle.Namespace}}:{{handle.Name}}
+                                    {{did}}
                                 </a>
                             </td>
                             {% set state = handle.state() %}
@@ -56,7 +59,42 @@
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
                         </tr>
+                        <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
+                            <table>
+                                <tr>
+                                    <th>Time</th><th>Event</th><th>Data</th>
+                                </tr>
+                                {% for record in combined_log[did] %}
+                                    <td>{{record.T|as_dt_utc}}</td>
+                                    <td>{{record.Type}}</td>
+                                    <td>{% for name, value in record.Data.items()|sort -%}
+                                            {{name}}={{value}}&nbsp;
+                                        {%- endfor %}
+                                    </td>
+                                {% endfor %}
+                            </table>
+                        </tr>
                     {% endfor %}
+                    <script>
+                        function toggle_handle_log(did)
+                        {
+                            var element = document.getElementById("handle_log:"+did);
+                            if( element != null )
+                            {
+                                var v = element.style.visibility;
+                                if( v == "hidden" )
+                                {
+                                    element.style.visibility = "visible";
+                                    element.styoe.display = "table-row";
+                                }
+                                else
+                                {
+                                    element.style.visibility = "hidden";
+                                    element.styoe.display = "none";
+                                }
+                            }
+                        }
+                    </script>
                 </table>
             </td>
     </tr>

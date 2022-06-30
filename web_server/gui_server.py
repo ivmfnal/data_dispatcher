@@ -131,18 +131,34 @@ class ProjectsHandler(BaseHandler):
             h.n_replicas = len(replicas)
             h.n_available_replicas = len([r for r in replicas.values() if r.is_available()]) 
             state = h.state()
-            print("handle State:", h.State, "  state():", state)
+            #print("handle State:", h.State, "  state():", state)
             handle_counts_by_state[state] = handle_counts_by_state.get(state, 0) + 1
             
+        handles_log = {}            # {did -> [log record, ...]}
+        files_log = {}              # {did -> [log record, ...]}
+        combined_log = {}           # {did -> [log record, ...]}
+        
+        for log_record in project.handles_log():
+            did = log_record.Namespace + ":" + log_record.Name
+            handles_log.setdefault(did, []).append(log_record)
+            combined_log.setdefault(did, []).append(log_record)
 
-        handle_log = list(project.handles_log())
-        print("length of handle_log:", len(handle_log))
+        for log_record in project.files_log():
+            did = log_record.Namespace + ":" + log_record.Name
+            files_log.setdefault(did, []).append(log_record)
+            combined_log.setdefault(did, []).append(log_record)
+            
+        for did, lst in list(combined_log.items()):
+            combined_log[did] = sorted(lst, key=lambda r: r.T)
 
         return self.render_to_response("project.html", project=project, 
                     handles=handles,
                     available_handles=available_handles,
                     handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.DerivedStates,
-                    handle_log = handle_log
+                    project_log = project_log,
+                    files_log = files_log,
+                    handles_log = handles_log,
+                    combined_log = combined_log
         )
 
     def handle(self, request, relpath, project_id=None, namespace=None, name=None, **args):
@@ -277,6 +293,11 @@ def pretty_time_delta(t):
         
     return sign + out
 
+def as_dt_utc(t):
+    from datetime import datetime
+    if t is None:   return ""
+    t = datetime.utcfromtimestamp(t)
+    return t.strftime("%D&nbsp;%H:%M:%S")
 
 class App(BaseApp):
     
@@ -299,7 +320,8 @@ class App(BaseApp):
                 "GLOBAL_SiteTitle": self.Config.get("site_title", "DEMO Data Dispatcher")
             },
             filters = {
-                "pretty_time_delta": pretty_time_delta
+                "pretty_time_delta": pretty_time_delta,
+                "as_dt_utc": as_dt_utc
             }
         )
 

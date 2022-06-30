@@ -167,20 +167,25 @@ class DBOneToMany(object):
 
 class DBLogRecord(object):
 
-    def __init__(self, type, t, data):
+    def __init__(self, type, t, data, id_columns = None):
         self.Type = type
         self.T = t
         self.Data = data
+        self.IDColumns = id_columns             # {name->value}
 
     def __getattr__(self, key):
         return getattr(self.Data)
         
     def as_jsonable(self):
-        return dict(
+        out = dict(
             type = self.Type,
             t = self.T.timestamp(),
             data = self.Data
         )
+        if self.IDColumns:
+            out.update(self.IDColumns)
+        return out
+
 
 class HasLogRecord(object):
     
@@ -204,6 +209,24 @@ class HasLogRecord(object):
                 values({parent_pk_values}, %s, %s);
             commit
         """, (type, json.dumps(data)))
+        
+    @classmethod
+    def log_records(cls, db, **selection):
+        c = db.cursor()
+        columns = ",".join(["type", "t", "data"] + cls.LogIDColumns)
+        sort_columns = ",".join(cls.LogIDColumns + ["t"])
+        wheres = ["true"] + [f"{name}='{value}'" for name, value in selection.items()]
+        wheres = " and ".join(wheres)
+        c.execute(f"""
+            select {columns}
+                from {cls.LogTable}
+                where {wheres}
+                order by {sort_columns}
+        """)
+        for tup in cursor_iterator(c):
+            type, t, data = tup[:3]
+            id_columns = { name:value for name, value in zip(cls.LogIDColumns, tup[3:]) }
+            yield DBLogRecord(type, t, data, id_columns)
 
     @classmethod
     def add_log_bulk(cls, db, records):
@@ -254,6 +277,7 @@ class HasLogRecord(object):
         c = self.DB.cursor()
         c.execute(sql)
         return (DBLogRecord(type, t, message) for type, t, message in cursor_iterator(c))
+
 
 class DBProject(DBObject, HasLogRecord):
     
@@ -548,22 +572,18 @@ class DBProject(DBObject, HasLogRecord):
             counts[s] = counts.get(s, 0) + 1
         return out
         
+    def project_log(self):
+        return self.get_log()
+
     def handles_log(self):
-        c = self.DB.cursor()
-        c.execute("""
-            select namespace, name, t, type, data
-                from file_handle_log
-                where project_id=%s
-                order by t, namespace, name
-        """, (self.ID,))
-        for tup in cursor_iterator(c):
-            namespace, name, t, type, data = tup
-            log_record = DBLogRecord(type, t, data)
-            log_record.Namespace = namespace
-            log_record.Name = name
-            #print("log_record:", log_record)
+        for log_record in DBFileHandle.log_records(self.DB, project_id=self.ID):
+            log_record.Namespace = log_record.IDColumns["namespace"]
+            log_record.Name = log_record.IDColumns["name"]
             yield log_record
-    
+
+    def files_log(self):
+        return DBFile.log_records_for_project(self.DB, self.ID)
+
     @staticmethod
     def purge(db, retain=3600):
         c = db.cursor()
@@ -582,6 +602,7 @@ class DBProject(DBObject, HasLogRecord):
             c.execute("rollback")
             raise
         return c.rowcount
+
 
 class DBFile(DBObject, HasLogRecord):
     
@@ -621,10 +642,9 @@ class DBFile(DBObject, HasLogRecord):
     def create_replica(self, rse, path, url, preference=0, available=False):
         DBReplica.create(self.DB, self.Namespace, self.Name, rse, path, url, preference=preference, available=available)
         self.Replicas = None	# force re-load from the DB
-        if False:
-            self.add_log("found", rse=rse, path=path, url=url)
-            if available:
-                self.add_log("available", rse=rse)
+        self.add_log("found", rse=rse, path=path, url=url)
+        if available:
+            DBReplica.add_log("available", rse=rse)
 
     def get_replica(self, rse):
         return self.replicas().get(rse)
@@ -725,13 +745,76 @@ class DBFile(DBObject, HasLogRecord):
             c.execute("rollback")
             raise
         return c.rowcount
-    
+
+    @staticmethod
+    def update_availability_bulk(db, available, rse, dids):
+        # dids is list of dids: ["namespace:name", ...]
+
+        r = DBRSE.get(db, rse)
+        if r is None or not r.Enabled:
+            return
+        
+        if not dids:    return
+        table = DBReplica.Table
+        val = "true" if available else "false"
+        undids = [did.split(":", 1) for did in dids]
+        c = db.cursor()
+        c.execute("begin")
+        try:
+            sql = f"""
+                update {table}
+                    set available=%s
+                    where namespace || ':' || name = any(%s)
+                        and rse = %s;
+            """
+            c.execute(sql, (val, dids, rse))
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
+        event = "available" if available else "unavailable"
+        log_records = [
+            (
+                (namespace, name, rse),
+                event,
+                { "rse": rse }
+            )
+            for (namespace, name) in undids
+        ]
+        DBFile.add_log_bulk(db, log_records)
+        
+    @staticmethod
+    def log_records_for_project(db, project_id):
+        c = db.cursor()
+        h_table = DBFileHandle.Table
+        fl_table = self.LogTable
+        c.execute(f"""
+            select l.namespace, l.name, l.type, l.t, l.data
+                from {h_table} h, {fl_table} l
+                where h.project_id=%s and h.namespace=l.namespace and h.name=l.name
+                order by l.namespace, l.name, l.t
+        """, (project_id,))
+        for namespace, name, type, t, data in cursor_iterator(c):
+            log_record = DBLogRecord(type, t, data, {
+                "project_id":   project_id,
+                "namespace":    namespace,
+                "name":         name
+            })
+            log_record.Namespace = namespace
+            log_record.Name = name
+            log_record.RSE = data.get("rse")
+            yield log_record
+
+
 class DBReplica(DBObject):
     Table = "replicas"
     ViewWithRSEStatus = "replicas_with_rse_availability"
     
     Columns = ["namespace", "name", "rse", "path", "url", "preference", "available"]
     PK = ["namespace", "name", "rse"]
+    LogIDColumns = ["namespace", "name"]
+    LogTable = "file_log"
     
     def __init__(self, db, namespace, name, rse, path, url, preference=0, available=None, rse_available=None):
         self.DB = db
@@ -903,48 +986,6 @@ class DBReplica(DBObject):
 
             DBFile.add_log_bulk(db, log_records)
 
-    @staticmethod
-    def update_availability_bulk(db, available, rse, dids):
-        # dids is list of dids: ["namespace:name", ...]
-
-        r = DBRSE.get(db, rse)
-        if r is None or not r.Enabled:
-            return
-        
-        if not dids:    return
-        table = DBReplica.Table
-        val = "true" if available else "false"
-        undids = [did.split(":", 1) for did in dids]
-        c = db.cursor()
-        c.execute("begin")
-        try:
-            sql = f"""
-                update {table}
-                    set available=%s
-                    where namespace || ':' || name = any(%s)
-                        and rse = %s;
-            """
-            c.execute(sql, (val, dids, rse))
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
-
-        if False:
-            event = "available" if available else "unavailable"
-            log_records = (
-                (
-                    (namespace, name),
-                    event,
-                    {
-                        "rse":  rse
-                    }
-                )
-                for (namespace, name) in undids
-            )
-
-            DBFile.add_log_bulk(db, log_records)
-
 
 class DBFileHandle(DBObject, HasLogRecord):
 
@@ -963,7 +1004,6 @@ class DBFileHandle(DBObject, HasLogRecord):
             "done",
             "failed"
         ]
-
 
     LogIDColumns = ["project_id", "namespace", "name"]
     LogTable = "file_handle_log"
