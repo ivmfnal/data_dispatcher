@@ -51,6 +51,9 @@
         
         function show_timeline(canvas, timeline)
         {
+            canvas.setAttribute("height", CanvasH);
+            canvas.setAttribute("width", CanvasW);
+            
             var t0 = 0.0;       // relative to project creation
             var ctx = canvas.getContext("2d");
             ctx.clearRect(0,0,CanvasW,CanvasH);      
