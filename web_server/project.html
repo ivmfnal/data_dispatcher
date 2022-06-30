@@ -56,21 +56,23 @@
                             <td>{{handle.Attempts}}</td>
                         </tr>
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
-                            <table class="data">
-                                <tr>
-                                    <th>Time</th><th>Event</th><th>Data</th>
-                                </tr>
-                                {% for record in combined_log[did] %}
+                            <td colspan=6>
+                                <table class="data">
                                     <tr>
-                                        <td>{{record.T|as_dt_utc}}</td>
-                                        <td>{{record.Type}}</td>
-                                        <td>{% for name, value in record.Data.items()|sort -%}
-                                                {{name}}={{value}}&nbsp;
-                                            {%- endfor %}
-                                        </td>
+                                        <th>Time</th><th>Event</th><th>Data</th>
                                     </tr>
-                                {% endfor %}
-                            </table>
+                                    {% for record in combined_log[did] %}
+                                        <tr>
+                                            <td>{{record.T|as_dt_utc}}</td>
+                                            <td>{{record.Type}}</td>
+                                            <td>{% for name, value in record.Data.items()|sort -%}
+                                                    {{name}}={{value}}&nbsp;
+                                                {%- endfor %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </table>
+                            </td>
                         </tr>
                     {% endfor %}
                     <script>
