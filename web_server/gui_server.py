@@ -304,10 +304,10 @@ def as_dt_utc(t):
 class App(BaseApp):
     
     def __init__(self, config, prefix):
-        print("App.__init__...")
         BaseApp.__init__(self, config, TopHandler, prefix=prefix)
         self.Config = config
         self.DefaultProximity = int(config.get("default_proximity", -1))
+        self.Prefix = prefix
 
     def proximity_map(self, rses=None):
         return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses)
@@ -319,7 +319,8 @@ class App(BaseApp):
             tempdirs=[templdir, "."],
             globals={
                 "GLOBAL_Version": Version, 
-                "GLOBAL_SiteTitle": self.Config.get("site_title", "DEMO Data Dispatcher")
+                "GLOBAL_SiteTitle": self.Config.get("site_title", "DEMO Data Dispatcher"),
+                "GLOBAL_AppTopPath": self.Prefix
             },
             filters = {
                 "pretty_time_delta": pretty_time_delta,
@@ -331,7 +332,7 @@ def create_application(config):
     if isinstance(config, str):
         config = yaml.load(open(config, "r"), Loader=yaml.SafeLoader)
     server_config = config.get("web_server", {})
-    prefix = server_config.get("gui_prefix")
+    prefix = server_config.get("gui_prefix", "")
     return App(config, prefix)
     
         
