@@ -328,9 +328,9 @@ class Handler(BaseHandler):
 
 class App(BaseApp, Logged):
 
-    def __init__(self, config):
+    def __init__(self, config, prefix):
         Logged.__init__(self, "DataServer")
-        BaseApp.__init__(self, config, Handler)
+        BaseApp.__init__(self, config, Handler, prefix=prefix)
         self.DaemonURL = config.get("daemon_server", {}).get("url")
         self.ProximityMapDefaults = config.get("proximity_map_defaults", {})
         log_out = config.get("web_server",{}).get("log","-")
@@ -352,7 +352,8 @@ class App(BaseApp, Logged):
 def create_application(config):
     if isinstance(config, str):
         config = yaml.load(open(config, "r"), Loader=yaml.SafeLoader)
-    return App(config)
+    prefix = config.get("web_server", {}).get("data_prefix", "")
+    return App(config, prefix)
     
         
 if __name__ == "__main__":
