@@ -768,7 +768,7 @@ class DBFile(DBObject, HasLogRecord):
                     set available = %s
                     where namespace || ':' || name = any(%s)
                         and rse = %s
-                        and available != %s;
+                        and available != %s
                     returning namespace, name
             """
             c.execute(sql, (val, dids, rse, val))
