@@ -41,7 +41,8 @@
             <th>Handles</th>
             <td>
                 <table class="data replicas">
-                    <tr><th></th><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
+                    <tr>
+                        <th></th><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
@@ -50,9 +51,7 @@
                             <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set state = handle.state() %}
                             <td class="{{state}}">{{state}}</td>
-                            <td>
-                                {{handle.n_replicas}} ({{handle.n_available_replicas}})
-                            </td>
+                            <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
                         </tr>
@@ -63,12 +62,12 @@
                                 </tr>
                                 {% for record in combined_log[did] %}
                                     <tr>
-                                    <td>{{record.T|as_dt_utc}}</td>
-                                    <td>{{record.Type}}</td>
-                                    <td>{% for name, value in record.Data.items()|sort -%}
-                                            {{name}}={{value}}&nbsp;
-                                        {%- endfor %}
-                                    </td>
+                                        <td>{{record.T|as_dt_utc}}</td>
+                                        <td>{{record.Type}}</td>
+                                        <td>{% for name, value in record.Data.items()|sort -%}
+                                                {{name}}={{value}}&nbsp;
+                                            {%- endfor %}
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             </table>
