@@ -307,20 +307,18 @@ class App(BaseApp):
         BaseApp.__init__(self, config, TopHandler, prefix=prefix)
         self.Config = config
         self.DefaultProximity = int(config.get("default_proximity", -1))
-        self.Prefix = prefix
 
     def proximity_map(self, rses=None):
         return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses)
 
     def init(self):
-        print("App.init...")
+        print("App.init... prefix:", self.Prefix)
         templdir = self.ScriptHome
         self.initJinjaEnvironment(
             tempdirs=[templdir, "."],
             globals={
                 "GLOBAL_Version": Version, 
-                "GLOBAL_SiteTitle": self.Config.get("site_title", "DEMO Data Dispatcher"),
-                "GLOBAL_AppTopPath": self.Prefix
+                "GLOBAL_SiteTitle": self.Config.get("site_title", "DEMO Data Dispatcher")
             },
             filters = {
                 "pretty_time_delta": pretty_time_delta,
