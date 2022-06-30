@@ -37,12 +37,43 @@
                 </table>
             <td>
     </tr>
+    <script type="text/javascript">
+        var CanvasH = 12;
+        var CanvasW = 200;
+        var EventColors = {
+                "initial":    "#EEE",
+                "found":      "#88F", 
+                "available":  "#8FF",
+                "reserved":   "#FF8", 
+                "done":       "#8F8", 
+                "failed":     "#F88"
+        };
+        
+        function show_timeline(canvas, timeline)
+        {
+            var t0 = 0.0;       // relative to project creation
+            var ctx = canvas.getContext("2d");
+            ctx.clearRect(0,0,CanvasW,CanvasH);      
+            for( event of timeline )
+            {
+                var t = event.t;
+                var e = event.event;
+                var color = EventColors[e];
+                if( color != null )
+                {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(t0,0,t-t0,CanvasH);
+                    t0 = t;
+                }
+            }
+        }
+    </script>
     <tr>    
             <th>Handles</th>
             <td>
                 <table class="data replicas">
                     <tr>
-                        <th></th><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th>
+                        <th></th><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th><th>Timeline</th>
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
@@ -54,6 +85,17 @@
                             <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
+                            <td><canvas id="timeline:{{did}}"></canvas></td>
+                            <script type="text/javascript">
+                                var timeline_events = [];
+                                {% for record in combined_log %}
+                                    timeline_events.push({
+                                        t: {{project.time_since_created(record.T)}},
+                                        event: "{{record.Type}}"
+                                    });
+                                {% endfor %}
+                                show_timeline(document.getElementById("timeline:{{did}}"), timeline_events);
+                            </script>
                         </tr>
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
                             <td colspan=6>
