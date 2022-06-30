@@ -159,7 +159,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     #
     # projects
     #
-    def create_project(self, files, common_attributes={}, project_attributes={}):
+    def create_project(self, files, common_attributes={}, project_attributes={}, query=None):
         """Creates new project
         
         Args:
@@ -189,7 +189,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         return self.post("create_project", json.dumps(
                 {   
                     "files":        file_list,
-                    "project_attributes":   project_attributes
+                    "project_attributes":   project_attributes,
+                    "query":        query
                 }
             )
         )

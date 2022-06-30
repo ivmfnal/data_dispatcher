@@ -42,10 +42,11 @@ class Handler(BaseHandler):
             return "Unauthenticated user", 403
         specs = json.loads(to_str(request.body))
         files = specs["files"]
+        query = specs.get("query")
         attributes = specs.get("project_attributes", {})
         #print(specs.get("files"))
         db = self.App.db()
-        project = DBProject.create(db, user.Username, attributes=attributes)
+        project = DBProject.create(db, user.Username, attributes=attributes, query=query)
         files_converted = []
         for f in files:
             if isinstance(f, str):

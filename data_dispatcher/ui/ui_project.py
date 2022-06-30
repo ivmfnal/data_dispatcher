@@ -28,7 +28,8 @@ class CreateCommand(CLICommand):
     def __call__(self, command, client, opts, args):
         if sum([len(args) > 0, "-l" in opts, "-j" in opts, "-q" in opts]) != 1:
             raise InvalidOptions("Use either -q or -l or -j to provide the file list")
-        
+
+        query = None
         if args:
             query = " ".join(args)
         elif "-q" in args:
@@ -88,7 +89,7 @@ class CreateCommand(CLICommand):
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
 
         #print("files:", files)
-        info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs)
+        info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query)
         printout = opts.get("-p", "id")
         if printout == "json":
             print(pretty_json(info))
@@ -142,6 +143,7 @@ class ShowCommand(CLICommand):
                         print(did)
             else:
                 print("Project ID:         ", project_id)
+                print("Query:              ", textwrap.indent(info["query"], 10).lstrip())
                 print("Status:             ", info["state"])
                 print("Project Attributes: ")
                 for k, v in info.get("attributes", {}).items():

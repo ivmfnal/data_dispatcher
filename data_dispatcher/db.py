@@ -285,14 +285,14 @@ class DBProject(DBObject, HasLogRecord):
     States = ["active", "failed", "done", "cancelled", "held"]
     EndStates = ["failed", "done", "cancelled"]
     
-    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes".split(",")
+    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query".split(",")
     Table = "projects"
     PK = ["id"]
     
     LogIDColumns = ["project_id"]
     LogTable = "project_log"
     
-    def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, retry_count=0, attributes={}):
+    def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, retry_count=0, attributes={}, query=None):
         self.DB = db
         self.ID = id
         self.Owner = owner
@@ -303,6 +303,7 @@ class DBProject(DBObject, HasLogRecord):
         self.Handles = None
         self.HandleCounts = None
         self.EndTimestamp = end_timestamp
+        self.Query = query
         
     def pk(self):
         return (self.ID,)
@@ -325,7 +326,8 @@ class DBProject(DBObject, HasLogRecord):
             attributes = self.Attributes or {},
             created_timestamp = self.CreatedTimestamp.timestamp(),
             ended_timestamp = None if self.EndTimestamp is None else self.EndTimestamp.timestamp(),
-            active = self.is_active()
+            active = self.is_active(),
+            query = self.Query
         )
         if with_handles or with_replicas:
             out["file_handles"] = [h.as_jsonable(with_replicas=with_replicas) for h in self.handles()]
@@ -336,17 +338,17 @@ class DBProject(DBObject, HasLogRecord):
         return json.dumps(self.Attributes, indent=4)
         
     @staticmethod
-    def create(db, owner, retry_count=None, attributes={}):
+    def create(db, owner, retry_count=None, attributes={}, query=None):
         if isinstance(owner, DBUser):
             owner = owner.Username
         c = db.cursor()
         try:
             c.execute("begin")
             c.execute("""
-                insert into projects(owner, state, retry_count, attributes)
-                    values(%s, %s, %s, %s)
+                insert into projects(owner, state, retry_count, attributes, query)
+                    values(%s, %s, %s, %s, %s)
                     returning id
-            """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {})))
+            """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query))
             id = c.fetchone()[0]
             db.commit()
         except:

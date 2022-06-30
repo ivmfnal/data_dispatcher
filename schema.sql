@@ -13,7 +13,8 @@ create table projects
     end_timestamp       timestamp with time zone,
     state	            text,
     retry_count         int,
-    attributes          jsonb  default '{}'::jsonb
+    attributes          jsonb  default '{}'::jsonb,
+    query               text
 );
 
 create table files
