@@ -37,8 +37,10 @@ class Handler(BaseHandler):
             return "OK"
     
     def create_project(self, request, relpath, **args):
+        print("create project...")
         user = self.authenticated_user()
         if user is None:
+            print("unauthenticated")
             return "Unauthenticated user", 403
         specs = json.loads(to_str(request.body))
         files = specs["files"]
@@ -47,6 +49,7 @@ class Handler(BaseHandler):
         #print(specs.get("files"))
         db = self.App.db()
         project = DBProject.create(db, user.Username, attributes=attributes, query=query)
+        print("project created")
         files_converted = []
         for f in files:
             if isinstance(f, str):
@@ -69,6 +72,7 @@ class Handler(BaseHandler):
             else:
                 return 400, f"Invalid file specification: {f} - unsupported type"
         project.add_files(files_converted)
+        print("files added")
         self.App.project_created(project.ID)
         return json.dumps(project.as_jsonable(with_handles=True)), "text/json"
         

@@ -1,4 +1,4 @@
-import getopt, json, time, pprint
+import getopt, json, time, pprint, textwrap
 from metacat.webapi import MetaCatClient
 from .ui_lib import pretty_json, parse_attrs, print_handles
 
@@ -143,7 +143,7 @@ class ShowCommand(CLICommand):
                         print(did)
             else:
                 print("Project ID:         ", project_id)
-                print("Query:              ", textwrap.indent(info["query"], 10).lstrip())
+                print("Query:              ", textwrap.indent(info.get("query") or "", 10).lstrip())
                 print("Status:             ", info["state"])
                 print("Project Attributes: ")
                 for k, v in info.get("attributes", {}).items():
