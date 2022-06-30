@@ -759,17 +759,20 @@ class DBFile(DBObject, HasLogRecord):
         if not dids:    return
         table = DBReplica.Table
         val = "true" if available else "false"
-        undids = [did.split(":", 1) for did in dids]
+        updated = []
         c = db.cursor()
         c.execute("begin")
         try:
             sql = f"""
                 update {table}
-                    set available=%s
+                    set available = %s
                     where namespace || ':' || name = any(%s)
-                        and rse = %s;
+                        and rse = %s
+                        and available != %s;
+                    returning namespace, name
             """
-            c.execute(sql, (val, dids, rse))
+            c.execute(sql, (val, dids, rse, val))
+            updated = c.fetchall()
             c.execute("commit")
         except:
             c.execute("rollback")
@@ -782,9 +785,10 @@ class DBFile(DBObject, HasLogRecord):
                 event,
                 { "rse": rse }
             )
-            for (namespace, name) in undids
+            for (namespace, name) in updated
         ]
-        DBFile.add_log_bulk(db, log_records)
+        if log_records:
+            DBFile.add_log_bulk(db, log_records)
         
     @staticmethod
     def log_records_for_project(db, project_id):
