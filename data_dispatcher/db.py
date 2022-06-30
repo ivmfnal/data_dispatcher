@@ -976,21 +976,20 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
 
-        if False:
-            log_records = (
-                (
-                    (namespace, name),
-                    "found",
-                    {
-                        "url":  info["url"],
-                        "rse":  rse,
-                        "path": info["path"]
-                    }
-                )
-                for (namespace, name), info in replicas.items()
+        log_records = (
+            (
+                (namespace, name),
+                "found",
+                {
+                    "url":  info["url"],
+                    "rse":  rse,
+                    "path": info["path"]
+                }
             )
+            for (namespace, name), info in replicas.items()
+        )
 
-            DBFile.add_log_bulk(db, log_records)
+        DBFile.add_log_bulk(db, log_records)
 
 
 class DBFileHandle(DBObject, HasLogRecord):
