@@ -173,8 +173,8 @@ class PinRequest(Logged):
         data =  {
             "target" : json.dumps(list(self.Replicas.values())),
             "activity" : "PIN",
-            "clearOnSuccess" : False, 
-            "clearOnFailure" : False, 
+            "clearOnSuccess" : "false",             # 6/30/22: dCache will accept strings instead of booleans for a while. In the future it will start accepting both 
+            "clearOnFailure" : "false", 
             "expandDirectories" : None,
             "arguments": {
                 "lifetime": self.PinLifetime,
