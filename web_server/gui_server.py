@@ -155,7 +155,7 @@ class ProjectsHandler(BaseHandler):
                     handles=handles,
                     available_handles=available_handles,
                     handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.DerivedStates,
-                    project_log = project_log,
+                    project_log = project.get_log(),
                     files_log = files_log,
                     handles_log = handles_log,
                     combined_log = combined_log
@@ -296,14 +296,15 @@ def pretty_time_delta(t):
 def as_dt_utc(t):
     from datetime import datetime
     if t is None:   return ""
-    t = datetime.utcfromtimestamp(t)
+    if isinstance(t, (int, float)):
+        t = datetime.utcfromtimestamp(t)
     return t.strftime("%D&nbsp;%H:%M:%S")
 
 class App(BaseApp):
     
-    def __init__(self, config):
+    def __init__(self, config, prefix):
         print("App.__init__...")
-        BaseApp.__init__(self, config, TopHandler)
+        BaseApp.__init__(self, config, TopHandler, prefix=prefix)
         self.Config = config
         self.DefaultProximity = int(config.get("default_proximity", -1))
 
@@ -328,7 +329,9 @@ class App(BaseApp):
 def create_application(config):
     if isinstance(config, str):
         config = yaml.load(open(config, "r"), Loader=yaml.SafeLoader)
-    return App(config)
+    server_config = config.get("web_server", {})
+    prefix = server_config.get("gui_prefix")
+    return App(config, prefix)
     
         
 if __name__ == "__main__":
@@ -337,8 +340,9 @@ if __name__ == "__main__":
     opts, args = getopt.getopt(sys.argv[1:], "c:")
     opts = dict(opts)
     config = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)
-    server_config = config.get("server", {})
+    server_config = config.get("web_server", {})
     port = server_config.get("gui_port", 8080)
+    print("port:", port)
     app = create_application(config)
     app.run_server(port, logging=True)
     

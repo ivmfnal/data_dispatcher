@@ -47,10 +47,7 @@
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
                             <td><a href="javascript:toggle_handle_log('{{did}}')">log</a></td>
-                            <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">
-                                    {{did}}
-                                </a>
-                            </td>
+                            <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set state = handle.state() %}
                             <td class="{{state}}">{{state}}</td>
                             <td>
@@ -60,17 +57,19 @@
                             <td>{{handle.Attempts}}</td>
                         </tr>
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
-                            <table>
+                            <table class="data">
                                 <tr>
                                     <th>Time</th><th>Event</th><th>Data</th>
                                 </tr>
                                 {% for record in combined_log[did] %}
+                                    <tr>
                                     <td>{{record.T|as_dt_utc}}</td>
                                     <td>{{record.Type}}</td>
                                     <td>{% for name, value in record.Data.items()|sort -%}
                                             {{name}}={{value}}&nbsp;
                                         {%- endfor %}
                                     </td>
+                                    </tr>
                                 {% endfor %}
                             </table>
                         </tr>
@@ -85,12 +84,12 @@
                                 if( v == "hidden" )
                                 {
                                     element.style.visibility = "visible";
-                                    element.styoe.display = "table-row";
+                                    element.style.display = "table-row";
                                 }
                                 else
                                 {
                                     element.style.visibility = "hidden";
-                                    element.styoe.display = "none";
+                                    element.style.display = "none";
                                 }
                             }
                         }

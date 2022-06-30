@@ -788,7 +788,7 @@ class DBFile(DBObject, HasLogRecord):
     def log_records_for_project(db, project_id):
         c = db.cursor()
         h_table = DBFileHandle.Table
-        fl_table = self.LogTable
+        fl_table = DBFile.LogTable
         c.execute(f"""
             select l.namespace, l.name, l.type, l.t, l.data
                 from {h_table} h, {fl_table} l

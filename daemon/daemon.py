@@ -181,11 +181,12 @@ class PinRequest(Logged):
                 "lifetime-unit": "SECONDS"
             }
         }
-        #self.debug("request data:", json.dumps(data))
+        print("request data:", json.dumps(data, indent="  "))
         r = requests.post(self.BaseURL, data = json.dumps(data), headers=headers, 
                 verify=False, cert = self.CertTuple)
 
-        #self.debug("send(): response:", r)
+        print("send(): response:", r)
+        print("send(): response text:", r.text)
         r.raise_for_status()
         self.URL = r.headers['request-url']
         self.Expiration = time.time() + self.PinLifetime
