@@ -1265,6 +1265,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                 self.State = self.ReservedState
                 self.Attempts = attempts
                 c.execute("commit")
+                self.add_log("reserved", worker=worker_id)
                 return True
             else:
                 c.execute("rollback")
