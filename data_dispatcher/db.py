@@ -778,7 +778,7 @@ class DBFile(DBObject, HasLogRecord):
         event = "available" if available else "unavailable"
         log_records = [
             (
-                (namespace, name, rse),
+                (namespace, name),
                 event,
                 { "rse": rse }
             )
