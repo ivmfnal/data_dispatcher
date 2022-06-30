@@ -50,14 +50,14 @@
                 "failed":     "#F88"
         };
         
-        function show_timeline(canvas, timeline)
+        function show_timeline(canvas, now, timeline)
         {
             canvas.setAttribute("height", CanvasH);
             canvas.setAttribute("width", CanvasW);
             
             var t0 = 0.0;       // relative to project creation
             var ctx = canvas.getContext("2d");
-            ctx.clearRect(0,0,CanvasW,CanvasH);      
+            ctx.clearRect(0,0,CanvasW,CanvasH);
             for( event of timeline )
             {
                 var t = event.t;
@@ -66,7 +66,9 @@
                 if( color != null )
                 {
                     ctx.fillStyle = color;
-                    ctx.fillRect(t0,0,t-t0,CanvasH);
+                    var x0 = t0/now * CanvasW;
+                    var x1 = t/now * CanvasW;
+                    ctx.fillRect(x0,0,x1-x0,CanvasH);
                     t0 = t;
                 }
             }
@@ -92,13 +94,14 @@
                             <td><canvas id="timeline:{{did}}"></canvas></td>
                             <script type="text/javascript">
                                 var timeline_events = [];
+                                var now = {{project.time_since_created()}};
                                 {% for record in combined_log[did] %}
                                     timeline_events.push({
                                         t: {{project.time_since_created(record.T)}},
                                         event: "{{record.Type}}"
                                     });
                                 {% endfor %}
-                                show_timeline(document.getElementById("timeline:{{did}}"), timeline_events);
+                                show_timeline(document.getElementById("timeline:{{did}}"), now, timeline_events);
                             </script>
                         </tr>
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">

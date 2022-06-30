@@ -308,9 +308,10 @@ class DBProject(DBObject, HasLogRecord):
     def pk(self):
         return (self.ID,)
         
-    def time_since_created(self, t):
-        if self.CreatedTimestamp is None or t is None:
+    def time_since_created(self, t=None):
+        if self.CreatedTimestamp is None:
             return None
+        if t is None: t = time.time()
         t_created = self.CreatedTimestamp.timestamp()
         if isinstance(t, datetime):
             t = t.timestamp()
