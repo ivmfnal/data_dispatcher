@@ -76,7 +76,8 @@
                     <script>
                         function toggle_handle_log(did)
                         {
-                            var element = document.getElementById("handle_log:"+did);
+                            var element_id = "handle_log:"+did;
+                            var element = document.getElementById(element_id);
                             if( element != null )
                             {
                                 var v = element.style.visibility;
