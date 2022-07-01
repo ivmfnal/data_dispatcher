@@ -136,15 +136,21 @@ class ProjectsHandler(BaseHandler):
             
         handles_log = {}            # {did -> [log record, ...]}
         files_log = {}              # {did -> [log record, ...]}
+        combined_log = {}
         project_log = project.get_log()
         
         for log_record in project.handles_log():
             did = log_record.Namespace + ":" + log_record.Name
             handles_log.setdefault(did, []).append(log_record)
+            combined_log.setdefault(did, []).append(log_record)
 
         for log_record in project.files_log():
             did = log_record.Namespace + ":" + log_record.Name
             files_log.setdefault(did, []).append(log_record)
+            combined_log.setdefault(did, []).append(log_record)
+
+        for did in list(combined_log.keys()):
+            combined_log[did] = sorted(combined_log[did], key=r.T)
             
         return self.render_to_response("project.html", project=project,
                     handles=handles,
@@ -152,7 +158,8 @@ class ProjectsHandler(BaseHandler):
                     handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.DerivedStates,
                     project_log = project.get_log(),
                     files_log = files_log,
-                    handles_log = handles_log
+                    handles_log = handles_log,
+                    combined_log = combined_log
         )
 
     def handle(self, request, relpath, project_id=None, namespace=None, name=None, **args):
