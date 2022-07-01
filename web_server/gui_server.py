@@ -150,7 +150,7 @@ class ProjectsHandler(BaseHandler):
             combined_log.setdefault(did, []).append(log_record)
 
         for did in list(combined_log.keys()):
-            combined_log[did] = sorted(combined_log[did], key=r.T)
+            combined_log[did] = sorted(combined_log[did], key=lambda r: r.T)
             
         return self.render_to_response("project.html", project=project,
                     handles=handles,
