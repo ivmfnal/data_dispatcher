@@ -39,8 +39,8 @@
             <td>
     </tr>
     <script type="text/javascript">
-        var CanvasH = 12;
-        var CanvasW = 200;
+        var CanvasH = 10;
+        var CanvasW = 400;
         var EventColors = {
                 "initial":    "#EEE",
                 "found":      "#88F", 
@@ -89,7 +89,7 @@
                             <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
-                            <td><canvas id="timeline:{{did}}"></canvas></td>
+                            <td><canvas id="timeline:{{did}}" style="vertical-align: middle"></canvas></td>
                             <script type="text/javascript">
                                 var timeline_events = [];
                                 var now = {{project.time_since_created()}};

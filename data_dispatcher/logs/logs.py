@@ -92,7 +92,7 @@ class Logger(AbstractLogger):
 
 class Logged(AbstractLogger):
 
-    def __init__(self, name=None, debug=False, logger=None):
+    def __init__(self, name=None, debug=True, logger=None):
         assert logger is None or isinstance(logger, AbstractLogger), "logger must be either None or a Logger or a Logged"
         self.Logger = logger
         self.LogName = name or self.__class__.__name__
