@@ -947,10 +947,11 @@ class DBReplica(DBObject):
         table = DBReplica.Table
         columns = DBReplica.columns(as_text=True)
         
+        t = int(time.time()*1000)
+        temp_table = f"file_replicas_temp_{t}"
+        new_replicas = []
         c = db.cursor()
         try:
-            t = int(time.time()*1000)
-            temp_table = f"file_replicas_temp_{t}"
             c.execute("begin")
             c.execute(f"create temp table {temp_table} (ns text, n text, r text, p text, u text, pr int)")
             c.copy_from(csv, temp_table)
@@ -960,28 +961,31 @@ class DBReplica(DBObject):
                     select t.ns, t.n, t.r, t.p, t.u, t.pr, false from {temp_table} t
                     on conflict (namespace, name, rse)
                         do nothing;
+                    returning {table}.namespace, {table}.name
                 """)
-
-            c.execute(f"""
-                drop table {temp_table};
-                commit
-            """)
+            new_replicas = c.fetchall()                     # new replicas only, for logging
+            c.execute("commit")
 
         except Exception as e:
             c.execute("rollback")
             raise
-
+        finally:
+            try:
+                c.execute("drop table {temp_table}")
+            except:
+                pass
+            
         log_records = (
             (
-                (namespace, name),
+                namespace_name,
                 "found",
                 {
-                    "url":  info["url"],
                     "rse":  rse,
-                    "path": info["path"]
+                    "url":  replicas[namespace_name]["url"],
+                    "path": replicas[namespace_name]["path"]
                 }
             )
-            for (namespace, name), info in replicas.items()
+            for namespace_name in new_replicas              # do not re-add "found" log records for existing replicas
         )
 
         DBFile.add_log_bulk(db, log_records)
