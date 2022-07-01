@@ -204,7 +204,7 @@ class PinRequest(Logged):
             return "ERROR"
         r.raise_for_status()
         #self.debug("request status response:", r.json())
-        self.debug("request status:", r.json()["status"])
+        self.log("request status:", r.json()["status"])
         return r.json()["status"]
 
     def error(self):
