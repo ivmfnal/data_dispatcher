@@ -48,7 +48,7 @@ class DoneCommand(CLICommand):
     Usage = """<project id> <DID>                               -- mark the file as done"""
     
     def __call__(self, command, client, opts, args):
-        project_id, did = rest
+        project_id, did = args
         client.file_done(int(project_id), did)
     
 class FailedCommand(CLICommand):
