@@ -596,13 +596,13 @@ def main():
 
     debug_out = logging_config.get("debug", False)
     debug_enabled = "-d" in opts or not not debug_out 
-    if debug_enabled: debug_out = debug_out or "-"
+    if debug_enabled: debug_out = debug_out or None
 
     print("debug_enabled:", debug_enabled, "   debug_out:", debug_out)
     
-    error_out = logging_config.get("errors", "-")
+    error_out = logging_config.get("errors")
     
-    init_logger(log_out, debug_enabled, debug_out, error_out)
+    init_logger(log_out, debug_out, error_out, debug_enabled)
     
     replica_client = ReplicaClient()        # read standard Rucio config file for now
     rse_client = RSEClient()
