@@ -465,7 +465,7 @@ class DBProject(DBObject, HasLogRecord):
         self.State = "cancelled"
         self.EndTimestamp = datetime.now(timezone.utc)
         self.save()
-        self.add_log("ended", state="cancelled")
+        self.add_log("cancelled")
 
     def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:
@@ -504,7 +504,7 @@ class DBProject(DBObject, HasLogRecord):
                 state = "done"
                 data = {}
 
-            self.add_log("ended", state=state)
+            self.add_log(state)
 
             self.State = state
             self.EndTimestamp = datetime.now(timezone.utc)
@@ -517,12 +517,6 @@ class DBProject(DBObject, HasLogRecord):
         if p is None:   return False
         return p.State == "active" and not all(h.State in ("done", "failed") for h in p.handles())
             
-    def ______reserve_next_file(self, worker_id):
-        handle = DBFileHandle.reserve_next_available(self.DB, self.ID, worker_id)
-        if handle is not None:
-            did = handle.did()
-        return handle
-
     def reserve_handle(self, worker_id, proximity_map, cpu_site=None):
         if not self.is_active(reload=True):
             return None, "project inactive"
@@ -1214,45 +1208,6 @@ class DBFileHandle(DBObject, HasLogRecord):
     def project(self):
         return DBProject.get(self.DB, self.ProjectID)
         
-    @staticmethod
-    def _____reserve_next_available(db, project_id, worker_id):
-        # returns reserved handle or None
-        c = db.cursor()
-        columns = DBFileHandle.columns("h", as_text=True)
-        sql = f"""
-            update file_handles h
-                    set state=%s, worker_id=%s, attempts = h.attempts + 1
-                    where h.project_id=%s
-                        and row(h.namespace, h.name) in
-                        (       select hh.namespace, hh.name
-                                        from file_handles hh, replicas r, rses rse
-                                        where hh.project_id=%s
-                                                    and hh.state=%s
-                                                    and hh.namespace = r.namespace 
-                                                    and hh.name = r.name 
-                                                    and r.available
-                                                    and r.rse = rse.name
-                                                    and rse.is_available
-                                        order by hh.attempts
-                                        limit 1
-                        )
-                    returning {columns};
-        """
-        #print(sql)
-        try:
-            c.execute("begin")
-            c.execute(sql, (DBFileHandle.ReservedState, worker_id, project_id, project_id, DBFileHandle.ReadyState))
-        except:
-            c.execute("rollback")
-            raise
-        tup = c.fetchone()
-        if not tup:
-            return None
-        c.execute("commit")
-        h = DBFileHandle.from_tuple(db, tup)
-        h.reserved_by(worker_id)
-        return h
-
     def reserve(self, worker_id):
         c = self.DB.cursor()
         try:
@@ -1261,10 +1216,11 @@ class DBFileHandle(DBObject, HasLogRecord):
                 update file_handles
                     set state=%s, worker_id=%s, attempts = attempts+1
                     where namespace=%s and name=%s and project_id=%s and state = %s and worker_id is null
-                    returning attempts;
+                    returning attempts, worker_id;
             """, (self.ReservedState, worker_id, self.Namespace, self.Name, self.ProjectID, self.ReadyState))
-            if c.rowcount == 1:
-                attempts = c.fetchone()[0]
+            tup = c.fetchone()
+            if tup and tup[1] == worker_id:
+                attempts = tup[0]
                 self.WorkerID = worker_id
                 self.State = self.ReservedState
                 self.Attempts = attempts
@@ -1291,6 +1247,13 @@ class DBFileHandle(DBObject, HasLogRecord):
     def is_reserved(self):
         return self.State == self.ReservedState
 
+    def set_state(self, new_state):
+        assert new_state in self.States, "Unknown file handle state: "+new_state
+        if self.State != new_state:
+            self.State = state
+            self.add_log(state)
+            self.save()
+            
     def done(self):
         self.State = "done"
         self.add_log("done", worker=self.WorkerID)
@@ -1308,10 +1271,6 @@ class DBFileHandle(DBObject, HasLogRecord):
         self.WorkerID = None
         self.add_log("reset")
         self.save()
-
-    def reserved_by(self, worker_id):
-        # just add a record to the log. Assume the actual reservation was done by reserve_next_available()
-        self.add_log("reserved", worker=worker_id)
 
 
 class DBRSE(DBObject):
