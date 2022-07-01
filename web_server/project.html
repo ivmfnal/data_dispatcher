@@ -50,7 +50,7 @@
                 "failed":     "#F88"
         };
         
-        function show_timeline(canvas, now, timeline)
+        function show_timeline(canvas, now, handle_timeline, file_timeline)
         {
             canvas.setAttribute("height", CanvasH);
             canvas.setAttribute("width", CanvasW);
@@ -58,7 +58,7 @@
             var t0 = 0.0;       // relative to project creation
             var ctx = canvas.getContext("2d");
             ctx.clearRect(0,0,CanvasW,CanvasH);
-            for( event of timeline )
+            for( event of file_timeline )
             {
                 var t = event.t;
                 var e = event.event;
@@ -67,7 +67,19 @@
                 {
                     ctx.fillStyle = color;
                     var x = t/now * CanvasW;
-                    ctx.fillRect(x,0,CanvasW-x,CanvasH);
+                    ctx.fillRect(x,0,CanvasW-x,CanvasH/2);
+                }
+            }
+            for( event of handle_timeline )
+            {
+                var t = event.t;
+                var e = event.event;
+                var color = EventColors[e];
+                if( color != null )
+                {
+                    ctx.fillStyle = color;
+                    var x = t/now * CanvasW;
+                    ctx.fillRect(x,CanvasH/2,CanvasW-x,CanvasH/2);
                 }
             }
         }
@@ -91,15 +103,22 @@
                             <td>{{handle.Attempts}}</td>
                             <td><canvas id="timeline:{{did}}" style="vertical-align: middle"></canvas></td>
                             <script type="text/javascript">
-                                var timeline_events = [];
+                                var handle_timeline = [
+                                    {% for record in handles_log[did] %}
+                                        {   t: {{project.time_since_created(record.T)}},
+                                            event: "{{record.Type}}"
+                                        }{{"," if not loop.last}}
+                                    {% endfor %}
+                                ];
+                                var file_timeline = [
+                                    {% for record in files_log[did] %}
+                                        {   t: {{project.time_since_created(record.T)}},
+                                            event: "{{record.Type}}"
+                                        }{{"," if not loop.last}}
+                                    {% endfor %}
+                                ];
                                 var now = {{project.time_since_created()}};
-                                {% for record in combined_log[did] %}
-                                    timeline_events.push({
-                                        t: {{project.time_since_created(record.T)}},
-                                        event: "{{record.Type}}"
-                                    });
-                                {% endfor %}
-                                show_timeline(document.getElementById("timeline:{{did}}"), now, timeline_events);
+                                show_timeline(document.getElementById("timeline:{{did}}"), now, handle_timeline, file_timeline);
                             </script>
                         </tr>
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">

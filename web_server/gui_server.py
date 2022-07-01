@@ -142,16 +142,11 @@ class ProjectsHandler(BaseHandler):
         for log_record in project.handles_log():
             did = log_record.Namespace + ":" + log_record.Name
             handles_log.setdefault(did, []).append(log_record)
-            combined_log.setdefault(did, []).append(log_record)
 
         for log_record in project.files_log():
             did = log_record.Namespace + ":" + log_record.Name
             files_log.setdefault(did, []).append(log_record)
-            combined_log.setdefault(did, []).append(log_record)
             
-        for did, lst in list(combined_log.items()):
-            combined_log[did] = sorted(lst, key=lambda r: r.T)
-
         return self.render_to_response("project.html", project=project,
                     handles=handles,
                     available_handles=available_handles,
