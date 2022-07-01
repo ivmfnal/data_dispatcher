@@ -338,7 +338,7 @@ class App(BaseApp, Logged):
         self.DaemonURL = config.get("daemon_server", {}).get("url")
         self.ProximityMapDefaults = config.get("proximity_map_defaults", {})
         log_out = config.get("web_server",{}).get("log","-")
-        init_logger(log_out, True, log_out, log_out)
+        init_logger(log_out, debug_enabled=True)
     
     def proximity_map(self):
         db = self.db()
