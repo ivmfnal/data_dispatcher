@@ -177,7 +177,7 @@ class PinRequest(Logged):
             "clearOnFailure" : "false", 
             "expandDirectories" : None,
             "arguments": {
-                "lifetime": self.PinLifetime,
+                "lifetime": str(self.PinLifetime),  # 6/30/22: dCache will accept strings instead of ints
                 "lifetime-unit": "SECONDS"
             }
         }
@@ -602,7 +602,7 @@ def main():
     
     error_out = logging_config.get("errors")
     
-    init_logger(log_out, debug_out, error_out, debug_enabled)
+    init_logger(log_out, debug_out=debug_out, error_out=error_out, debug_enabled)
     
     replica_client = ReplicaClient()        # read standard Rucio config file for now
     rse_client = RSEClient()
