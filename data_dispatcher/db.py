@@ -960,7 +960,7 @@ class DBReplica(DBObject):
                 insert into {table}({columns}) 
                     select t.ns, t.n, t.r, t.p, t.u, t.pr, false from {temp_table} t
                     on conflict (namespace, name, rse)
-                        do nothing;
+                        do nothing
                     returning {table}.namespace, {table}.name
                 """)
             new_replicas = c.fetchall()                     # new replicas only, for logging
