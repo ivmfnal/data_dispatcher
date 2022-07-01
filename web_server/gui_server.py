@@ -136,7 +136,6 @@ class ProjectsHandler(BaseHandler):
             
         handles_log = {}            # {did -> [log record, ...]}
         files_log = {}              # {did -> [log record, ...]}
-        combined_log = {}           # {did -> [log record, ...]}
         project_log = project.get_log()
         
         for log_record in project.handles_log():
@@ -153,8 +152,7 @@ class ProjectsHandler(BaseHandler):
                     handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.DerivedStates,
                     project_log = project.get_log(),
                     files_log = files_log,
-                    handles_log = handles_log,
-                    combined_log = combined_log
+                    handles_log = handles_log
         )
 
     def handle(self, request, relpath, project_id=None, namespace=None, name=None, **args):
