@@ -1260,20 +1260,20 @@ class DBFileHandle(DBObject, HasLogRecord):
             
     def done(self):
         self.State = "done"
-        self.add_log("done", worker=self.WorkerID)
+        self.add_log(self.State, worker=self.WorkerID)
         self.WorkerID = None
         self.save()
 
     def failed(self, retry=True):
         self.State = self.ReadyState if retry else "failed"
-        self.add_log("failed", worker=self.WorkerID or None, final=not retry)
+        self.add_log(self.State, worker=self.WorkerID or None, final=not retry)
         self.WorkerID = None
         self.save()
         
     def reset(self):
         self.State = self.ReadyState
+        self.add_log(self.ReadyState)
         self.WorkerID = None
-        self.add_log("reset")
         self.save()
 
 
