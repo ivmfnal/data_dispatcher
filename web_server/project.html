@@ -80,7 +80,7 @@
                 {
                     ctx.fillStyle = color;
                     var x = t/now * CanvasW;
-                    ctx.fillRect(x,0,CanvasW-x,CanvasH/2);
+                    ctx.fillRect(x,0,CanvasW-x,CanvasH);
                 }
             }
         }
@@ -107,12 +107,12 @@
                                 var handle_timeline = [];
                                 {% for record in handles_log[did] %}
                                         {% if record.Type == "state" %}
-                                            handle_timeline.push({
-						{   t: {{project.time_since_created(record.T)}},
+                                            handle_timeline.push(
+                                                {   t: {{project.time_since_created(record.T)}},
                                                     state: "{{record['state']}}"
-						}
-					    );
-					{% endif %}
+                                                }
+                                            );
+                                        {% endif %}
                                 {% endfor %}
                                 {#
                                         var file_timeline = [
