@@ -140,6 +140,7 @@ class ProjectsHandler(BaseHandler):
         project_log = project.get_log()
         
         for log_record in project.handles_log():
+            #print("gui.project(): handle log_record:", log_record)
             if log_record.Type == "state":
                 did = log_record.Namespace + ":" + log_record.Name
                 handles_log.setdefault(did, []).append(log_record)
@@ -153,7 +154,8 @@ class ProjectsHandler(BaseHandler):
 
             for did in list(combined_log.keys()):
                 combined_log[did] = sorted(combined_log[did], key=lambda r: r.T)
-            
+        #print("gui.project(): handles_log:", handles_log)
+    
         return self.render_to_response("project.html", project=project,
                     handles=handles,
                     available_handles=available_handles,

@@ -110,6 +110,7 @@ class Logged(AbstractLogger):
         self.log(*message, sep=sep, who=who or self.LogName, t=t, channel="error")
 
     def debug(self, *message, sep=" ", who=None, t=None):
+        print(f"Logged({self}).debug:", message)
         self.log(*message, sep=sep, who=who or self.LogName, t=t, channel="debug")
 
 

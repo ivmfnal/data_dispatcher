@@ -104,13 +104,16 @@
                             <td>{{handle.Attempts}}</td>
                             <td><canvas id="timeline:{{did}}" style="vertical-align: middle"></canvas></td>
                             <script type="text/javascript">
-                                var handle_timeline = [
-                                    {% for record in handles_log[did] %}
-                                        {   t: {{project.time_since_created(record.T)}},
-                                            event: "{{record.Type}}"
-                                        }{{"," if not loop.last}}
-                                    {% endfor %}
-                                ];
+                                var handle_timeline = [];
+                                {% for record in handles_log[did] %}
+                                        {% if record.Type == "state" %}
+                                            handle_timeline.push({
+						{   t: {{project.time_since_created(record.T)}},
+                                                    state: "{{record['state']}}"
+						}
+					    );
+					{% endif %}
+                                {% endfor %}
                                 {#
                                         var file_timeline = [
                                         {% for record in files_log[did] %}

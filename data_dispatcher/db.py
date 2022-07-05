@@ -167,14 +167,23 @@ class DBOneToMany(object):
 
 class DBLogRecord(object):
 
-    def __init__(self, type, t, data, id_columns = None):
+    def __init__(self, type, t, data, id_columns = {}):
         self.Type = type
         self.T = t
         self.Data = data
         self.IDColumns = id_columns             # {name->value}
 
+    def __str__(self):
+        return "DBLogRecord(%s, %s, <%s>, {%s})" % (self.Type, self.T, 
+            ", ".join(["%s=%s" % kv for kv in sorted(self.IDColumns.items())]),
+            ", ".join(["%s=%s" % kv for kv in sorted(self.Data.items())])
+       )
+
     def __getattr__(self, key):
         return getattr(self.Data)
+
+    def __getitem__(self, key):
+        return self.Data[key]
         
     def as_jsonable(self):
         out = dict(
