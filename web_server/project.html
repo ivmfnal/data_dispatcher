@@ -85,6 +85,9 @@
                 }
             }
         }
+        
+        const closed_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-right.gif";
+        const open_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-down.gif";
     </script>
     <tr>    
             <th>Handles</th>
@@ -96,9 +99,9 @@
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
-                            <td><a href="javascript:toggle_handle_log('{{did}}')" id="log_toggle:{{did}}"></a></td>
+                            <td><a href="javascript:toggle_handle_log('{{did}}')"><img id="log_toggle_:{{did}}" width=12 height=12/></a></td>
                                 <script type="text/javascript">
-                                    document.getElementById("log_toggle:{{did}}").appendChild(img_arrow_right);
+                                    document.getElementById("log_toggle:{{did}}").src=closed_log_arrow;
                                 </script>
                             <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set state = handle.state() %}
@@ -167,13 +170,13 @@
                                 {
                                     element.style.visibility = "visible";
                                     element.style.display = "table-row";
-                                    toggle_a_element.appendChild(img_arrow_down);
+                                    toggle_a_element.src=open_log_arrow;
                                 }
                                 else
                                 {
                                     element.style.visibility = "hidden";
                                     element.style.display = "none";
-                                    toggle_a_element.appendChild(img_arrow_right);
+                                    toggle_a_element.src=closed_log_arrow;
                                 }
                             }
                         }
