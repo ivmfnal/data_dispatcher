@@ -1141,7 +1141,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             
         log_records = [
             (
-                (project_id, f["namespase"], f["name"]),
+                (project_id, f["namespace"], f["name"]),
                 "state",
                 {
                     "state": "initial"
