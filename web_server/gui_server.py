@@ -140,17 +140,19 @@ class ProjectsHandler(BaseHandler):
         project_log = project.get_log()
         
         for log_record in project.handles_log():
-            did = log_record.Namespace + ":" + log_record.Name
-            handles_log.setdefault(did, []).append(log_record)
-            combined_log.setdefault(did, []).append(log_record)
+            if log_record.Type == "state":
+                did = log_record.Namespace + ":" + log_record.Name
+                handles_log.setdefault(did, []).append(log_record)
+                combined_log.setdefault(did, []).append(log_record)
 
-        for log_record in project.files_log():
-            did = log_record.Namespace + ":" + log_record.Name
-            files_log.setdefault(did, []).append(log_record)
-            combined_log.setdefault(did, []).append(log_record)
+        if False:
+            for log_record in project.files_log():
+                did = log_record.Namespace + ":" + log_record.Name
+                files_log.setdefault(did, []).append(log_record)
+                combined_log.setdefault(did, []).append(log_record)
 
-        for did in list(combined_log.keys()):
-            combined_log[did] = sorted(combined_log[did], key=lambda r: r.T)
+            for did in list(combined_log.keys()):
+                combined_log[did] = sorted(combined_log[did], key=lambda r: r.T)
             
         return self.render_to_response("project.html", project=project,
                     handles=handles,

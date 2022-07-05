@@ -368,8 +368,9 @@ class ProjectMonitor(Logged):
             preference = self.RSEConfig.preference(rse)
             #self.debug(f"replicas for {rse}")
             #for k, v in replicas.items():
-            #    self.debug(k, v) 
-            DBReplica.create_bulk(self.DB, rse, preference, replicas)
+            #    self.debug(k, v)
+            available = not self.RSEConfig.is_tape(rse)
+            DBReplica.create_bulk(self.DB, rse, available, preference, replicas)
             #self.debug("replicas found in", rse, " : ", len(replicas))
         self.log(f"project loading done")
         self.Scheduler.add(self.run)

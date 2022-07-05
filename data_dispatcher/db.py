@@ -245,18 +245,19 @@ class HasLogRecord(object):
         for id_values, type, data in records:
             row = '\t'.join([str(v) for v in id_values] + [type, json.dumps(data)])
             csv.append(row)
-        csv = io.StringIO("\n".join(csv))
+        if csv:
+            csv = io.StringIO("\n".join(csv))
 
-        table = cls.LogTable
-        columns = cls.LogIDColumns + ["type", "data"]
-        c = db.cursor()
-        try:
-            c.execute("begin")
-            c.copy_from(csv, table, columns=columns)
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
+            table = cls.LogTable
+            columns = cls.LogIDColumns + ["type", "data"]
+            c = db.cursor()
+            try:
+                c.execute("begin")
+                c.copy_from(csv, table, columns=columns)
+                c.execute("commit")
+            except:
+                c.execute("rollback")
+                raise
 
     def get_log(self, type=None, since=None, reversed=False):
         parent_pk_columns = self.LogIDColumns
@@ -357,7 +358,6 @@ class DBProject(DBObject, HasLogRecord):
             raise
             
         project = DBProject.get(db, id)
-        project.add_log("created")
         return project
 
     @staticmethod
@@ -465,7 +465,7 @@ class DBProject(DBObject, HasLogRecord):
         self.State = "cancelled"
         self.EndTimestamp = datetime.now(timezone.utc)
         self.save()
-        self.add_log("cancelled")
+        self.add_log("state", state="cancelled")
 
     def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:
@@ -504,7 +504,7 @@ class DBProject(DBObject, HasLogRecord):
                 state = "done"
                 data = {}
 
-            self.add_log(state)
+            self.add_log("state", state=state)
 
             self.State = state
             self.EndTimestamp = datetime.now(timezone.utc)
@@ -600,15 +600,26 @@ class DBProject(DBObject, HasLogRecord):
             raise
         return c.rowcount
 
+    def replicas_logs(self):
+        log_records = DBReplica.log_records_for_dids([(h.Namespace, h.Name) for h in self.handles()])
+        out = {}
+        for record in log_records:
+            namespace = record.IDColumns["namespace"]
+            name = record.IDColumns["name"]
+            out.setdefault((namespace, name), []).append(record)
+        for (namespace, name), lst in list(out.items()):
+            out[(namespace, name)] = sorted(lst, key=lambda r: r.T)
+        return out
 
-class DBFile(DBObject, HasLogRecord):
+
+class DBFile(DBObject):
     
     Columns = ["namespace", "name"]
     PK = ["namespace", "name"]
     Table = "files"
     
-    LogIDColumns = ["namespace", "name"]
-    LogTable = "file_log"
+    #LogIDColumns = ["namespace", "name"]
+    #LogTable = "file_log"
     
     def __init__(self, db, namespace, name):
         self.DB = db
@@ -637,11 +648,9 @@ class DBFile(DBObject, HasLogRecord):
         return self.Replicas
 
     def create_replica(self, rse, path, url, preference=0, available=False):
-        DBReplica.create(self.DB, self.Namespace, self.Name, rse, path, url, preference=preference, available=available)
+        replica = DBReplica.create(self.DB, self.Namespace, self.Name, rse, path, url, preference=preference, available=available)
         self.Replicas = None	# force re-load from the DB
-        self.add_log("found", rse=rse, path=path, url=url)
-        if available:
-            DBReplica.add_log("available", rse=rse)
+        return replica
 
     def get_replica(self, rse):
         return self.replicas().get(rse)
@@ -743,79 +752,16 @@ class DBFile(DBObject, HasLogRecord):
             raise
         return c.rowcount
 
-    @staticmethod
-    def update_availability_bulk(db, available, rse, dids):
-        # dids is list of dids: ["namespace:name", ...]
 
-        r = DBRSE.get(db, rse)
-        if r is None or not r.Enabled:
-            return
-        
-        if not dids:    return
-        table = DBReplica.Table
-        val = "true" if available else "false"
-        updated = []
-        c = db.cursor()
-        c.execute("begin")
-        try:
-            sql = f"""
-                update {table}
-                    set available = %s
-                    where namespace || ':' || name = any(%s)
-                        and rse = %s
-                        and available != %s
-                    returning namespace, name
-            """
-            c.execute(sql, (val, dids, rse, val))
-            updated = c.fetchall()
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
-
-        event = "available" if available else "unavailable"
-        log_records = [
-            (
-                (namespace, name),
-                event,
-                { "rse": rse }
-            )
-            for (namespace, name) in updated
-        ]
-        if log_records:
-            DBFile.add_log_bulk(db, log_records)
-        
-    @staticmethod
-    def log_records_for_project(db, project_id):
-        c = db.cursor()
-        h_table = DBFileHandle.Table
-        fl_table = DBFile.LogTable
-        c.execute(f"""
-            select l.namespace, l.name, l.type, l.t, l.data
-                from {h_table} h, {fl_table} l
-                where h.project_id=%s and h.namespace=l.namespace and h.name=l.name
-                order by l.namespace, l.name, l.t
-        """, (project_id,))
-        for namespace, name, type, t, data in cursor_iterator(c):
-            log_record = DBLogRecord(type, t, data, {
-                "project_id":   project_id,
-                "namespace":    namespace,
-                "name":         name
-            })
-            log_record.Namespace = namespace
-            log_record.Name = name
-            log_record.RSE = data.get("rse")
-            yield log_record
-
-
-class DBReplica(DBObject):
+class DBReplica(DBObject, HasLogRecord):
     Table = "replicas"
     ViewWithRSEStatus = "replicas_with_rse_availability"
     
     Columns = ["namespace", "name", "rse", "path", "url", "preference", "available"]
     PK = ["namespace", "name", "rse"]
-    LogIDColumns = ["namespace", "name"]
-    LogTable = "file_log"
+    
+    LogIDColumns = ["namespace", "name", "rse"]
+    LogTable = "replica_log"
     
     def __init__(self, db, namespace, name, rse, path, url, preference=0, available=None, rse_available=None):
         self.DB = db
@@ -879,7 +825,15 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
         
-        return DBReplica.get(db, namespace, name, rse)
+        replica = DBReplica.get(db, namespace, name, rse)
+        replica.add_log("event", {
+            "event":    "created",
+            "url": url,
+            "path": path,
+            "available": available
+        })
+        replica.add_log("state", state="available" if available else "unavailable")
+        return replica
 
     def save(self):
         table = self.Table
@@ -916,22 +870,9 @@ class DBReplica(DBObject):
             c.execute("rollback")
             raise
 
-        if False:
-            log_records = (
-                (
-                    did.split(":", 1),
-                    "removed",
-                    {
-                        "rse":  rse,
-                    }
-                )
-                for did in dids
-            )
-
-            DBFile.add_log_bulk(db, log_records)
 
     @staticmethod
-    def create_bulk(db, rse, preference, replicas):
+    def create_bulk(db, rse, available, preference, replicas):
         
         r = DBRSE.get(db, rse)
         if r is None or not r.Enabled:
@@ -958,11 +899,11 @@ class DBReplica(DBObject):
             csv = None         # to release memory
             c.execute(f"""
                 insert into {table}({columns}) 
-                    select t.ns, t.n, t.r, t.p, t.u, t.pr, false from {temp_table} t
+                    select t.ns, t.n, t.r, t.p, t.u, t.pr, %s from {temp_table} t
                     on conflict (namespace, name, rse)
                         do nothing
                     returning {table}.namespace, {table}.name
-                """)
+                """, (available,))
             new_replicas = c.fetchall()                     # new replicas only, for logging
             c.execute("commit")
 
@@ -974,22 +915,76 @@ class DBReplica(DBObject):
                 c.execute("drop table {temp_table}")
             except:
                 pass
-            
-        log_records = (
+        
+        available_text = "available" if available else "unavailable"
+        log_records = [
             (
-                namespace_name,
-                "found",
+                namespace_name + (rse,),
+                "event",
                 {
-                    "rse":  rse,
+                    "event": "created",
                     "url":  replicas[namespace_name]["url"],
-                    "path": replicas[namespace_name]["path"]
+                    "path": replicas[namespace_name]["path"],
+                    "available":    available
                 }
             )
             for namespace_name in new_replicas              # do not re-add "found" log records for existing replicas
-        )
+        ] + [
+            (
+                namespace_name + (rse,),
+                "state",
+                {
+                    "available": available_text
+                }
+            )
+            for namespace_name in new_replicas 
+        ]
 
-        DBFile.add_log_bulk(db, log_records)
+        if log_records:
+            DBReplica.add_log_bulk(db, log_records)
+        return len(new_replicas)
 
+    @staticmethod
+    def update_availability_bulk(db, available, rse, dids):
+        # dids is list of dids: ["namespace:name", ...]
+
+        r = DBRSE.get(db, rse)
+        if r is None or not r.Enabled:
+            return
+        
+        if not dids:    return
+        table = DBReplica.Table
+        val = "true" if available else "false"
+        updated = []
+        c = db.cursor()
+        c.execute("begin")
+        try:
+            sql = f"""
+                update {table}
+                    set available = %s
+                    where namespace || ':' || name = any(%s)
+                        and rse = %s
+                        and available != %s
+                    returning namespace, name
+            """
+            c.execute(sql, (val, dids, rse, val))
+            updated = c.fetchall()
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
+        available_text = "available" if available else "unavailable"
+        log_records = [
+            (
+                (namespace, name, rse),
+                "state",
+                { "available": available }
+            )
+            for (namespace, name) in updated
+        ]
+        if log_records:
+            DBReplica.add_log_bulk(db, log_records)
 
 class DBFileHandle(DBObject, HasLogRecord):
 
@@ -1107,8 +1102,10 @@ class DBFileHandle(DBObject, HasLogRecord):
         except:
             c.execute("rollback")
             raise
-        return DBFileHandle.get(db, project_id, namespace, name)
-    
+        handle = DBFileHandle.get(db, project_id, namespace, name)
+        handle.add_log("state", state="initial")
+        return handle
+
     @staticmethod
     def create_many(db, project_id, files):
         #
@@ -1132,7 +1129,19 @@ class DBFileHandle(DBObject, HasLogRecord):
         except Exception as e:
             c.execute("rollback")
             raise
-    
+            
+        log_records = [
+            (
+                (project_id, f["namespase"], f["name"]),
+                "state",
+                {
+                    "state": "initial"
+                }
+            )
+            for f in files 
+        ]            
+        DBFileHandle.add_log_bulk(db, log_records)
+
     @staticmethod
     def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False):
         wheres = []
@@ -1229,7 +1238,8 @@ class DBFileHandle(DBObject, HasLogRecord):
                 self.State = self.ReservedState
                 self.Attempts = attempts
                 c.execute("commit")
-                self.add_log("reserved", worker=worker_id)
+                self.add_log("event", state="reserved", worker=worker_id)
+                self.add_log("state", state="reserved")
                 return True
             else:
                 c.execute("rollback")
@@ -1255,23 +1265,27 @@ class DBFileHandle(DBObject, HasLogRecord):
         assert new_state in self.States, "Unknown file handle state: "+new_state
         if self.State != new_state:
             self.State = state
-            self.add_log(state)
+            self.add_log("state", state=state)
             self.save()
             
     def done(self):
         self.State = "done"
-        self.add_log(self.State, worker=self.WorkerID)
+        self.add_log("event", event=self.State, worker=self.WorkerID)
+        self.add_log("state", state=self.State)
         self.WorkerID = None
         self.save()
 
     def failed(self, retry=True):
         self.State = self.ReadyState if retry else "failed"
-        self.add_log(self.State, worker=self.WorkerID or None, final=not retry)
+        self.add_log("event", event="failed", worker=self.WorkerID, final=not retry)
+        self.add_log("state", state=self.State)
         self.WorkerID = None
         self.save()
         
     def reset(self):
         self.State = self.ReadyState
+        self.add_log("event", event="reset")
+        self.add_log("state", state=self.State)
         self.add_log(self.ReadyState)
         self.WorkerID = None
         self.save()

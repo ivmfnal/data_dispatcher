@@ -100,15 +100,17 @@ create table file_handle_log
     foreign key (project_id, namespace, name) references file_handles on delete cascade
 );
 
-create table file_log
+create table replica_log
 (
     namespace   text,
     name        text,
+    rse         text,
     t           timestamp with time zone     default now(),
     type        text,
     data        jsonb,
-    primary key (namespace, name, t),
-    foreign key (namespace, name) references files(namespace, name) on delete cascade
+    primary key (namespace, name, rse, t),
+    foreign key (namespace, name) references files(namespace, name) on delete cascade,
+    foreign key (rse) references rses(name) on delete cascade
 );
 
 create table proximity_map
