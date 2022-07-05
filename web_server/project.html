@@ -99,9 +99,9 @@
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
-                            <td><a href="javascript:toggle_handle_log('{{did}}')"><img id="log_toggle_:{{did}}" width=12 height=12/></a></td>
+                            <td><a href="javascript:toggle_handle_log('{{did}}')"><img id="log_toggle_img:{{did}}" width=12 height=12/></a></td>
                                 <script type="text/javascript">
-                                    document.getElementById("log_toggle:{{did}}").src=closed_log_arrow;
+                                    document.getElementById("log_toggle_img:{{did}}").src=closed_log_arrow;
                                 </script>
                             <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set state = handle.state() %}
@@ -159,10 +159,7 @@
                         {
                             var element_id = "handle_log:"+did;
                             var element = document.getElementById(element_id);
-                            var toggle_a_element = document.getElementById("log_toggle:" + did);
-                            while (toggle_a_element != null && toggle_a_element.firstChild) {
-                                    toggle_a_element.removeChild(toggle_a_element.firstChild);
-                                }
+                            var toggle_img = document.getElementById("log_toggle_img:" + did);
                             if( element != null )
                             {
                                 var v = element.style.visibility;
@@ -170,13 +167,13 @@
                                 {
                                     element.style.visibility = "visible";
                                     element.style.display = "table-row";
-                                    toggle_a_element.src=open_log_arrow;
+                                    toggle_img.src=open_log_arrow;
                                 }
                                 else
                                 {
                                     element.style.visibility = "hidden";
                                     element.style.display = "none";
-                                    toggle_a_element.src=closed_log_arrow;
+                                    toggle_img.src=closed_log_arrow;
                                 }
                             }
                         }
