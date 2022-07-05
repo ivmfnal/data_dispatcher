@@ -603,7 +603,7 @@ def main():
     
     error_out = logging_config.get("errors")
     
-    init_logger(log_out, debug_out=debug_out, error_out=error_out, debug_enabled)
+    init_logger(log_out, debug_out=debug_out, error_out=error_out, debug_enabled=debug_enabled)
     
     replica_client = ReplicaClient()        # read standard Rucio config file for now
     rse_client = RSEClient()
