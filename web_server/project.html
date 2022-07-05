@@ -99,7 +99,7 @@
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
-                            <td><a href="javascript:toggle_handle_log('{{did}}')"><img id="log_toggle_img:{{did}}" width=10 height=10 style="vertical-align: middle"/></a></td>
+                            <td colspan=2><a href="javascript:toggle_handle_log('{{did}}')"><img id="log_toggle_img:{{did}}" width=10 height=10 style="vertical-align: middle"/></a></td>
                                 <script type="text/javascript">
                                     document.getElementById("log_toggle_img:{{did}}").src=closed_log_arrow;
                                 </script>
@@ -135,7 +135,7 @@
                             </script>
                         </tr>
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
-                            <td colspan=7>
+                            <td colspan=6>
                                 <table class="data">
                                     <tr>
                                         <th>Time</th><th>Event</th><th>Data</th>
