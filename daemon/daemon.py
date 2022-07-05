@@ -140,8 +140,8 @@ class DCachePoller(PyThread, Logged):
                         else:
                             unavailable_dids.append(did)
                             self.log("Replica unavailable:", did, path)
-                DBFile.update_availability_bulk(self.DB, True, self.RSE, available_dids)
-                DBFile.update_availability_bulk(self.DB, False, self.RSE, unavailable_dids)
+                DBReplica.update_availability_bulk(self.DB, True, self.RSE, available_dids)
+                DBReplica.update_availability_bulk(self.DB, False, self.RSE, unavailable_dids)
                 DBReplica.remove_bulk(self.DB, self.RSE, remove_dids)
                 time.sleep(self.STAGGER)
             self.sleep(10)
