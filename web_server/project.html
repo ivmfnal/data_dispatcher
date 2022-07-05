@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 
+
 {% block headline %}Project {{project.ID}}{% endblock %}
 
 {% block content %}
@@ -95,7 +96,10 @@
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
-                            <td><a href="javascript:toggle_handle_log('{{did}}')">log</a></td>
+                            <td><a href="javascript:toggle_handle_log('{{did}}')" id="log_toggle:{{did}}"></a></td>
+                                <script type="text/javascript">
+                                    document.getElementDyId("log_toggle:{{did}}").appendChild(img_arrow_right);
+                                </script>
                             <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set state = handle.state() %}
                             <td class="{{state}}">{{state}}</td>
@@ -128,7 +132,7 @@
                             </script>
                         </tr>
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
-                            <td colspan=6>
+                            <td colspan=7>
                                 <table class="data">
                                     <tr>
                                         <th>Time</th><th>Event</th><th>Data</th>
@@ -152,6 +156,10 @@
                         {
                             var element_id = "handle_log:"+did;
                             var element = document.getElementById(element_id);
+                            var toggle_a_element = document.getElementById(log_toggle:{{did}});
+                            while (toggle_a_element != null && toggle_a_element.firstChild) {
+                                    toggle_a_element.removeChild(toggle_a_element.firstChild);
+                                }
                             if( element != null )
                             {
                                 var v = element.style.visibility;
@@ -159,11 +167,13 @@
                                 {
                                     element.style.visibility = "visible";
                                     element.style.display = "table-row";
+                                    toggle_a_element.appendChild(img_arrow_down);
                                 }
                                 else
                                 {
                                     element.style.visibility = "hidden";
                                     element.style.display = "none";
+                                    toggle_a_element.appendChild(img_arrow_right);
                                 }
                             }
                         }

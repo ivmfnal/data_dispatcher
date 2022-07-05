@@ -261,6 +261,7 @@ class TopHandler(BaseHandler):
         self.P = ProjectsHandler(request, app)
         self.A = AuthHandler(request, app)
         self.R = RSEHandler(request, app)
+        self.static = WPStaticHandler(request, app)
         
     def index(self, request, relpath, **args):
         self.redirect("P/projects")
