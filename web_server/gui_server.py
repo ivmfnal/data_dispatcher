@@ -141,10 +141,9 @@ class ProjectsHandler(BaseHandler):
         
         for log_record in project.handles_log():
             #print("gui.project(): handle log_record:", log_record)
-            if log_record.Type == "state":
-                did = log_record.Namespace + ":" + log_record.Name
-                handles_log.setdefault(did, []).append(log_record)
-                combined_log.setdefault(did, []).append(log_record)
+            did = log_record.Namespace + ":" + log_record.Name
+            handles_log.setdefault(did, []).append(log_record)
+            combined_log.setdefault(did, []).append(log_record)
 
         if False:
             for log_record in project.files_log():
