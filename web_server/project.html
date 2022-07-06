@@ -90,11 +90,11 @@
         const open_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-down.gif";
     </script>
     <tr>    
-            <th>Handles</th>
+            <th>Files</th>
             <td>
                 <table class="data replicas">
                     <tr>
-                        <th></th><th>File</th><th>Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th><th>Timeline</th>
+                        <th></th><th>File</th><th>File Status</th><th>Workflow Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th><th>Timeline</th>
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
@@ -108,8 +108,10 @@
                                 </a>
                             </td>
                             <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
-                            {% set state = handle.state() %}
-                            <td class="{{state}}">{{state}}</td>
+                            {% set wf_state = handle.State %}
+                            {% set file_state = handle.file_state %}
+                            <td class="{{file_state}}">{{file_state}}</td>
+                            <td class="{{wf_state}}">{{wf_state}}</td>
                             <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
@@ -187,138 +189,6 @@
                 </table>
             </td>
     </tr>
-    {#
-    <tr>    <th>Progress</th>
-            <td><canvas id="progress_chart" width=600 height=400></svg></td>
-    </tr>
-    #}
-    
-    <tr>
-            <td></td>
-            <td>
-                <table class="data">
-                    <tr>
-                        <th colspan=2>Time</th>
-                        <th>Event</th>
-                        <th>File</th>
-                        <th>Worker</th>
-                        <th>Data</th>
-                    </tr>
-                    {% for l in handle_log %}
-                        <tr>
-                            <td>{{l.T}}</td>
-                            <td>{{project.time_since_created(l.T)|pretty_time_delta}}</td>
-                            <td class="{{l.Type}}">{{l.Type}}</td>
-                            <td>{{l.Namespace}}:{{l.Name}}</td>
-                            <td>{{l.Data.get("worker") or ""}}</td>
-                            <td>{% for n, v in l.Data.items() %}
-                                    {% if n != "worker" %}
-                                        {{n}}: {{v}} {% if not loop.last %}<br/>{% endif %}
-                                    {% endif %}
-                                {% endfor %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </table>
-            </td>
-    </tr>
-    
-    {#
-    <script type="text/javascript">
-        var project_handle_counts_log = [
-            {% for log_record in handle_log %}
-                // {{log_record}}
-                [ {{log_record.T.timestamp()}}, "{{log_record.Type}}", {{"true" if log_record.Data.get("retry") else "false"}} ]
-                            {%- if not loop.last %},{% endif %}
-            {% endfor %}
-        ];
-        var n_handles = {{handles|length}}
-        var n_ready = n_handles;
-        var n_reserved = 0;
-        var n_done = 0;
-        var n_failed = 0;
-        var t0 = Math.round({{project.CreatedTimestamp.timestamp()}});
-        var t1 = Math.round(new Date().valueOf()/1000);
-        var t = t0;
-        var counts_log = [];
-        for( item of project_handle_counts_log )
-        {
-            var tt = Math.floor(item[0]);
-            if( tt != t )
-            {
-                if( t != null )
-                    counts_log.push([t-t0, n_ready, n_reserved, n_done, n_failed]);
-                t = tt;
-            }
-            var type = item[1];
-            if( type == "reserved" )
-            {
-                n_reserved += 1;
-                n_ready -= 1;
-            }
-            else if ( type == "failed" )
-            {
-                n_reserved -= 1;
-                if ( item[2] )
-                    n_ready += 1;
-                else
-                    n_failed += 1;
-            }
-            else if ( type == "done" )
-            {
-                n_reserved -= 1;
-                n_done += 1;
-            }
-        }
-        counts_log.push([t-t0, n_ready, n_reserved, n_done, n_failed]);
-        counts_log.push([t1-t0, n_ready, n_reserved, n_done, n_failed]);
-
-        var canvas = document.getElementById("progress_chart");
-        var width = parseInt(canvas.getAttribute("width"));
-        var height = parseInt(canvas.getAttribute("height"));
-        var ctx = canvas.getContext("2d");
-        ctx.clearRect(0,0,width,height);      
-        
-        var dt = Math.max(t1-t0, 1.0);
-        var dxdt = Math.min(width/dt, 10.0);
-        var dydn = Math.min(height/n_handles, 10);
-        
-        var colors = [
-            "#CCE",         // ready
-            "#FF8",         // reserved
-            "#DDE",         // done
-            "#FAA"          // failed
-        ];
-        
-        var tup0 = counts_log[0];
-        for( var i = 1; i < counts_log.length; i++ )
-        {
-            var tup1 = counts_log[i];
-            var y = 0;
-            var tt0 = tup0[0];
-            var tt1 = tup1[0];
-            var xx0 = tt0 * dxdt;
-            var dx = (tt1-tt0) * dxdt;
-            
-            for( var k = 0; k < 4; k++ )
-            {
-                var n = tup0[k+1];
-                if( n > 0 )
-                {
-                    var c = colors[k];
-                    var dy = n * dydn;
-                    ctx.fillStyle = c;
-                    ctx.fillRect(xx0,y,dx,dy);
-                    y += dy;
-                }
-            }
-            tup0 = tup1;
-        }
-        
-
-
-    </script>
-    #}
 </table>
 
 {% endblock %}
