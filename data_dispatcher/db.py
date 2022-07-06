@@ -1062,6 +1062,16 @@ class DBFileHandle(DBObject, HasLogRecord):
                 else:
                     return "found"
         return self.State
+        
+    def file_state(self):
+        replicas = list(self.replicas().values())
+        if replicas:
+            if any(r.is_available() for r in replicas):
+                return "available"
+            else:
+                return "found"
+        else:
+            return "not found"
 
     def sorted_replicas(self):
         replicas = self.replicas().values()
