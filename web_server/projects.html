@@ -6,17 +6,6 @@
 
 <script type="text/javascript">
 
-    var FillColors={
-        "initial": "#EEE", 
-        "found": "#88F", 
-        "available": "#8FF", 
-        "failed": "#F88", 
-        "reserved": "#FF8",
-        "done": "#8F8"
-    };
-    
-    var StrokeColors = FillColors;
-    
     var States = {{handle_states}};
     
     function show_fractions(canvas, counts)
@@ -41,8 +30,8 @@
             if( n )
             {
                 var w = counts[state] * dx;
-                var f = FillColors[state];
-                var s = StrokeColors[state];
+                var f = StateColors[state];
+                var s = StateColors[state];
                 ctx.beginPath();
                 ctx.fillStyle = f;
                 ctx.strokeStyle = s;

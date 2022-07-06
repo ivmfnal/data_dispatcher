@@ -42,14 +42,6 @@
     <script type="text/javascript">
         var CanvasH = 10;
         var CanvasW = 400;
-        var EventColors = {
-                "initial":    "#EEE",
-                "found":      "#CCC", 
-                "available":  "#8F8",
-                "reserved":   "#AAF", 
-                "done":       "#4A4", 
-                "failed":     "#F44"
-        };
         
         function show_timeline(canvas, now, handle_timeline, file_timeline)
         {
@@ -64,7 +56,7 @@
                 {
                     var t = event.t;
                     var e = event.event;
-                    var color = EventColors[e];
+                    var color = StateColors[e];
                     if( color != null )
                     {
                         ctx.fillStyle = color;
@@ -76,7 +68,7 @@
             {
                 var t = event.t;
                 var e = event.state;
-                var color = EventColors[e];
+                var color = StateColors[e];
                 if( color != null )
                 {
                     ctx.fillStyle = color;
