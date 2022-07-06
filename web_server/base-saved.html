@@ -6,17 +6,12 @@
 
     <style type="text/css">
 
-    	div#banner {
-    		padding: 30px 10px;
-    	}
-	
-    	div#body {
-                margin-right: 30px;
-                margin-left: 30px;
-                margin-top: 20px;
-                padding: 10px 10px;
-    	}
-        
+        body, td, th, p, div {
+            font: 14px arial;
+        }
+        td, th {
+            vertical-align: top
+        }
         div#content {
             margin-right: 30px;
             margin-left: 30px;
@@ -24,51 +19,31 @@
 	    width: 100%;
         }
 		
+	div#banner {
+		padding: 30px 10px;
+	}
+	
+	#b-anner td {
+		vertical-align: middle;
+		padding: 0px 20px;
+	}
+
+	div#body {
+            margin-right: 30px;
+            margin-left: 30px;
+            margin-top: 20px;
+            padding: 10px 10px;
+	}
         
-        body, td, th, p, div {
-            font: 12px verdana, arial;
-        }
-
-        td, th {
-            vertical-align: top;
-            padding: 3px 6px;
-        }
-
+        
         table.data, table.file_metadata {
-            border-collapse: separate;
+            border-collapse: collapse;
         }
         
-        .data th {
-          border-bottom: 1px solid #888888;
-          text-align: left;
-        }
-
-    	.form th {
-    		font-weight: bold;
-    		text-align:  right;
-    	}
-
-    	.form td {
-    		text-align:  left;
-    	}
-    	.form td, .form th {
-    		padding: 5px;
-    	}
-
-        /*
-        .data td, .data th {
-            padding: 3px 5px;
-            border: 1px solid #CCC;
-        }
-    
-        .data th {
-            font-weight: bold;
-            text-align: left;
-        }
-        */
-
-
-
+        .placement td, th {
+            p-adding: 5px;
+        } 
+            
         .placement th {
             font-weight: bold;
             text-align:  left;
@@ -100,6 +75,28 @@
             text-align: right;
         }
 
+	.form th {
+		font-weight: bold;
+		text-align:  right;
+	}
+
+	.form td {
+		text-align:  left;
+	}
+	.form td, .form th {
+		padding: 5px;
+	}
+
+    .data td, .data th {
+        padding: 3px 5px;
+        border: 1px solid #CCC;
+    }
+    
+    .data th {
+        font-weight: bold;
+        text-align: left;
+    }
+    
         textarea {
             font: 14px courier;
             }
