@@ -99,7 +99,7 @@
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
-                            <td rowspan=1 id="log_toggle_td:{{did}}">
+                            <td rowspan=1 id="log_toggle_td:{{did}}" style="border-bottom: 0">
                                 <a href="javascript:toggle_handle_log('{{did}}')" style="vertical-align: middle">
                                     <img id="log_toggle_img:{{did}}" width=10 height=10 style="vertical-align: middle"/>
                                     <script type="text/javascript">
