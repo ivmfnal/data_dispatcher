@@ -99,10 +99,14 @@
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
-                            <td rowspan><a href="javascript:toggle_handle_log('{{did}}')"><img id="log_toggle_img:{{did}}" width=10 height=10 style="vertical-align: middle"/></a></td>
-                                <script type="text/javascript">
-                                    document.getElementById("log_toggle_img:{{did}}").src=closed_log_arrow;
-                                </script>
+                            <td rowspan=1 id="log_toggle_td:{{did}}">
+                                <a href="javascript:toggle_handle_log('{{did}}')" style="vertical-align: middle">
+                                    <img id="log_toggle_img:{{did}}" width=10 height=10 style="vertical-align: middle"/>
+                                    <script type="text/javascript">
+                                        document.getElementById("log_toggle_img:{{did}}").src=closed_log_arrow;
+                                    </script>
+                                </a>
+                            </td>
                             <td><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set state = handle.state() %}
                             <td class="{{state}}">{{state}}</td>
@@ -158,23 +162,25 @@
                     <script>
                         function toggle_handle_log(did)
                         {
-                            var element_id = "handle_log:"+did;
-                            var element = document.getElementById(element_id);
+                            var tr = document.getElementById("handle_log:"+did);
                             var toggle_img = document.getElementById("log_toggle_img:" + did);
+                            var toggle_td = document.getElementById("log_toggle_td:" + did);
                             if( element != null )
                             {
                                 var v = element.style.visibility;
                                 if( v == "hidden" )
                                 {
-                                    element.style.visibility = "visible";
-                                    element.style.display = "table-row";
+                                    tr.style.visibility = "visible";
+                                    tr.style.display = "table-row";
                                     toggle_img.src=open_log_arrow;
+                                    toggle_td.rowSpan = 2;
                                 }
                                 else
                                 {
-                                    element.style.visibility = "hidden";
-                                    element.style.display = "none";
+                                    tr.style.visibility = "hidden";
+                                    tr.style.display = "none";
                                     toggle_img.src=closed_log_arrow;
+                                    toggle_td.rowSpan = 1;
                                 }
                             }
                         }
