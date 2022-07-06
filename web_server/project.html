@@ -94,7 +94,7 @@
             <td>
                 <table class="data replicas">
                     <tr>
-                        <th></th><th>File</th><th>File Status</th><th>Workflow Status</th><th>Replicas(available)</th><th>Worker</th><th>Attempts</th><th>Timeline</th>
+                        <th></th><th>File</th><th>File Status</th><th>Replicas(available)</th><th>Workflow Status</th><th>Worker</th><th>Attempts</th><th>Timeline</th>
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
@@ -111,8 +111,8 @@
                             {% set wf_state = handle.State %}
                             {% set file_state = handle.file_state() %}
                             <td class="{{file_state}}">{{file_state}}</td>
-                            <td class="{{wf_state}}">{{wf_state}}</td>
                             <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
+                            <td class="{{wf_state}}">{{wf_state}}</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
                             <td><canvas id="timeline:{{did}}" style="vertical-align: middle"></canvas></td>
