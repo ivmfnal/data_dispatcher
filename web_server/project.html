@@ -46,10 +46,11 @@
             <td>
     </tr>
     
-    {#
-    <s-cript type="text/javascript">
+    <script type="text/javascript">
         var CanvasH = 10;
         var CanvasW = 400;
+        
+        console.log("hello");
         
         function element_under(parent, type, attributes)
         {
@@ -106,8 +107,8 @@
                 }
             }
         }
-    </s-cript>
-    #}
+    </script>
+    
     <script>
         const closed_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-right.gif";
         const open_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-down.gif";
