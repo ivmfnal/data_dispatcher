@@ -25,7 +25,6 @@
             {% set enabled = 'enabled' if rse.Enabled else 'disabled' %}
             <tr class="{{enabled}}">
                 <td><a href="./rse?name={{rse.Name}}">{{rse.Name}}</a></td>
-                <td>{{enabled}}</td>
                 <td>{{'tape' if rse.Tape else 'disk'}}</td>
                 <td class="{{status}}">{{status}}</td>
                 <td>{{rse.Description}}</td>
