@@ -15,11 +15,11 @@
 
 <table class="data">
     <tr>
-        <th rowspan=2>CPU Site</th><th colspan="{{proximity_map.rses()|length}}">Enabled RSEs</th>
+        <th rowspan=2>CPU Site</th><th colspan="{{proximity_map.rses()|length}}" class="combined">RSEs</th>
     </tr>
     <tr>
         {% for rse in proximity_map.rses() %}
-            <th>{{rse}}</th>
+            <th class="no__">{{rse}}</th>
         {% endfor %}
     </tr>
     {% for cpu in proximity_map.cpus() %}
