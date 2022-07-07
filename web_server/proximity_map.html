@@ -19,12 +19,12 @@
     </tr>
     <tr>
         {% for rse in proximity_map.rses() %}
-            <th class="no__">{{rse}}</th>
+            <th>{{rse}}</th>
         {% endfor %}
     </tr>
     {% for cpu in proximity_map.cpus() %}
         <tr>
-            <th>{{cpu}}</th>
+            <th class="no__">{{cpu}}</th>
             {% for rse in proximity_map.rses() %}
                 <td>{{proximity_map.raw(cpu, rse, "")}}</td>
             {% endfor %}
