@@ -87,12 +87,11 @@
                 if( color != null )
                 {
                     var segment_g = element_under(scale_g, "g", {
-                        transform: `translate(${t} 0)`,
                         class: "segment"
                     });
                     var hover_text = element_under(segment_g, "text", {
                         class: "tooltip",
-                        x:0,
+                        x:t,
                         y:0
                     });
                     hover_text.innerHTML = `${t}...${tnext}:${e}`;
