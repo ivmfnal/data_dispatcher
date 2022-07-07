@@ -57,7 +57,10 @@
             var element = document.createElement(type);
             if( attributes != null )
                 for( attr in attributes )
+                {
+                    console.log("set attr "+attr+" "+attributes[attr]);
                     element.setAttribute(attr, attributes[attr]);
+                }
             if( parent != null )
                 parent.appendChild(element);
             return element;
