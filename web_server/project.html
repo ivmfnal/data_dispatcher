@@ -72,7 +72,7 @@
             });
             
             var scale_g = element_under(svg, "g", {
-                transform: `scale(${CanvasW/now}, 1)`
+                transform: `scale(${CanvasW/now} 1)`
             });
 
             var tnext = now;
@@ -87,7 +87,7 @@
                 if( color != null )
                 {
                     var segment_g = element_under(scale_g, "g", {
-                        transform: `translate(${t}, 0)`,
+                        transform: `translate(${t} 0)`,
                         class: "segment"
                     });
                     var hover_text = element_under(segment_g, "text", {
