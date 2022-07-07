@@ -146,15 +146,16 @@
                             <td class="{{wf_state}}">{{wf_state}}</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
-                            <td id="timeline:{{did}}" style="vertical-align: middle">
+                            <td id="timeline:{{did}}" style="vertical-align: middle"></td>
+                            <td>
                                 <svg width="400" height="10" class="timeline">
-                            	<g transform="scale(0.0022 1)">
-                                    <g class="segment">
-                                        <text x="0.018" y="0" class="tooltip">hello 1</text>
-                                        <rect x="0.018" y="0" width="180000" height="10" style="fill:#EEE"></rect>
-                                    </g>  
-                            	</g>  
-                            </svg>
+                                	<g transform="scale(0.0022 1)">
+                                        <g class="segment">
+                                            <text x="0.018" y="0" class="tooltip">hello 1</text>
+                                            <rect x="0.018" y="0" width="180000" height="10" style="fill:#EEE"></rect>
+                                        </g>  
+                                	</g>  
+                                </svg>
                             </td>
                             <script type="text/javascript">
                                 var handle_timeline = [];
