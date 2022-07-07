@@ -140,7 +140,7 @@
                             <td class="{{wf_state}}">{{wf_state}}</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
-                            <td><canvas id="timeline:{{did}}" style="vertical-align: middle"></canvas></td>
+                            <td id="timeline:{{did}}" style="vertical-align: middle"></td>
                             <script type="text/javascript">
                                 var handle_timeline = [];
                                 {% for record in handles_log[did] %}
@@ -162,7 +162,7 @@
                                     ];
                                 #}
                                 var now = {{project.time_since_created()}};
-                                //show_timeline(document.getElementById("timeline:{{did}}"), now, handle_timeline);           //, file_timeline);
+                                show_timeline(document.getElementById("timeline:{{did}}"), now, handle_timeline);           //, file_timeline);
                             </script>
                         </tr>
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
