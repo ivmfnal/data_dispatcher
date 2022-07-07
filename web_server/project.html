@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 
+{% block html_head %}
+<style type="text/css">
+	svg.timeline text.tooltip {display: none;}
+	svg.timeline g:hover text.tooltip {display: block;}
+</style>
+{% endblock %}
 
 {% block headline %}Project {{project.ID}}{% endblock %}
 
@@ -40,10 +46,6 @@
             <td>
     </tr>
     
-    <style type="text/css">
-    	svg.timeline text.tooltip {display: none;}
-		svg.timeline g:hover text.tooltip {display: block;}
-    </style>
     <script type="text/javascript">
         var CanvasH = 10;
         var CanvasW = 400;
@@ -69,7 +71,7 @@
             
             var scale_g = element_under(svg, "g", {
                 transform: `scale(${CanvasW/now})`
-            })
+            });
 
             var tnext = now;
 
@@ -103,10 +105,10 @@
                 }
             }
         }
-        
         const closed_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-right.gif";
         const open_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-down.gif";
     </script>
+
     <tr>    
             <th>Files</th>
             <td>
