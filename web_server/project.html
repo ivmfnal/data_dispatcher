@@ -118,7 +118,14 @@
             <td>
                 <table class="data replicas">
                     <tr>
-                        <th style="border-bottom: 0"></th><th>File</th><th>File<br/>Status</th><th>Replicas<br/>(available)</th><th>Workflow<br/>Status</th><th>Worker</th><th>Attempts</th><th>Timeline</th>
+                        <th style="border-bottom: 0"></th>
+                        <th>File</th>
+                        <th>File<br/>Status</th>
+                        <th>Replicas<br/>(available)</th>
+                        <th>Workflow<br/>Status</th>
+                        <th>Worker</th>
+                        <th>Attempts</th>
+                        <th>Timeline</th>
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
@@ -139,7 +146,16 @@
                             <td class="{{wf_state}}">{{wf_state}}</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
-                            <td id="timeline:{{did}}" style="vertical-align: middle"></td>
+                            <td id="timeline:{{did}}" style="vertical-align: middle">
+                                <svg width="400" height="10" class="timeline">
+                            	<g transform="scale(0.0022 1)">
+                                    <g class="segment">
+                                        <text x="0.018" y="0" class="tooltip">hello 1</text>
+                                        <rect x="0.018" y="0" width="180000" height="10" style="fill:#EEE"></rect>
+                                    </g>  
+                            	</g>  
+                            </svg>
+                            </td>
                             <script type="text/javascript">
                                 var handle_timeline = [];
                                 {% for record in handles_log[did] %}
