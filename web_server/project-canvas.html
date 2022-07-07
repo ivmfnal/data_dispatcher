@@ -39,67 +39,41 @@
                 </table>
             <td>
     </tr>
-    
-    <style type="text/css">
-    	svg.timeline text.tooltip {display: none;}
-		svg.timeline g:hover text.tooltip {display: block;}
-    </style>
     <script type="text/javascript">
         var CanvasH = 10;
         var CanvasW = 400;
         
-        function element_under(parent, type, attributes)
+        function show_timeline(canvas, now, handle_timeline, file_timeline)
         {
-            var element = document.createElement(type);
-            if( attributes != null )
-                for( attr in attributes )
-                    element.setAttribute(attr, attributes[attr]);
-            if( parent != null )
-                parent.appendChild(element);
-            return element;
-        }
-        
-        function show_timeline(parent, now, handle_timeline, file_timeline)
-        {
-            var svg = element_under(parent, "svg", {
-                "height":  CanvasH,
-                "width":   CanvasW,
-                class: "timeline"
-            });
+            canvas.setAttribute("height", CanvasH);
+            canvas.setAttribute("width", CanvasW);
             
-            var scale_g = element_under(svg, "g", {
-                transform: `scale(${CanvasW/now})`
-            })
-
-            var tnext = now;
-
-            for( j in handle_timeline )
+            var t0 = 0.0;       // relative to project creation
+            var ctx = canvas.getContext("2d");
+            ctx.clearRect(0,0,CanvasW,CanvasH);
+            if( false )
+                for( event of file_timeline )
+                {
+                    var t = event.t;
+                    var e = event.event;
+                    var color = StateColors[e];
+                    if( color != null )
+                    {
+                        ctx.fillStyle = color;
+                        var x = t/now * CanvasW;
+                        ctx.fillRect(x,CanvasH/2,CanvasW-x,CanvasH/2);
+                    }
+                }
+            for( event of handle_timeline )
             {
-                var i = handle_timeline.length - 1 - j;
-                var event = handle_timeline[i];
                 var t = event.t;
                 var e = event.state;
                 var color = StateColors[e];
                 if( color != null )
                 {
-                    var segment_g = element_under(scale_g, "g", {
-                        transform: `translate(${t}, 0)`,
-                        class: "segment"
-                    });
-                    var hover_text = element_under(segment_g, "text", {
-                        class: "tooltip",
-                        x:0,
-                        y:0
-                    });
-                    hover_text.innerHTML = `${t}...${tnext}:${e}`;
-                    var the_rect = element_under(segment_g, "rect", {
-                        x: t,
-                        y: 0,
-                        width: tnext-t,
-                        height:  CanvasH,
-                        style: `fill:${color}; opacity:1.0`
-                    });
-                    tnext = t;
+                    ctx.fillStyle = color;
+                    var x = t/now * CanvasW;
+                    ctx.fillRect(x,0,CanvasW-x,CanvasH);
                 }
             }
         }
