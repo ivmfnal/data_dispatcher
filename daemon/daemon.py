@@ -152,6 +152,7 @@ class PinRequest(Logged):
     # see https://docs.google.com/document/d/14sdrRmJts5JYBFKSvedKCxT1tcrWtWchR-PJhxdunT8/edit?usp=sharing
     
     PinLifetime = 3600
+    SafetyInterval = 600            # if the expiration time is too close, consider the request expired
     
     def __init__(self, project_id, url, ssl_config, replicas):
         Logged.__init__(self, f"PinRequest({project_id})")
@@ -164,6 +165,8 @@ class PinRequest(Logged):
         self.CertTuple = (self.Cert, self.Key) if self.Cert else None
         self.Error = False
         self.ErrorText = True
+        self.Complete = False
+        self.Expiration = None
         self.debug("created with base url:", self.BaseURL)
         
 
@@ -211,7 +214,10 @@ class PinRequest(Logged):
         return self.Error
 
     def complete(self):
-        return self.status().upper() == "COMPLETED"
+        return self.Complete or self.status().upper() == "COMPLETED"
+        
+    def expired(self):
+        return self.Expiration is None or time.time() >= self.Expiration - self.SafetyInterval
 
     def same_files(self, replicas):
         return set(replicas.keys()) == set(self.Replicas.keys())
@@ -414,7 +420,7 @@ class ProjectMonitor(Logged):
 
         for rse, replicas in tape_replicas_by_rse.items():
             pin_request = self.PinRequests.get(rse)
-            if pin_request is None or not pin_request.same_files(replicas):
+            if pin_request is None or pin_request.expired() or not pin_request.same_files(replicas):
                 self.create_pin_request(rse, replicas)
                 next_run = self.NewRequestInterval     # this is new pin request. Check it in 20 seconds
             elif pin_request.complete():
