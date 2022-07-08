@@ -864,21 +864,30 @@ class DBReplica(DBObject, HasLogRecord):
     # bulk operations
     #
     @staticmethod
-    def remove_bulk(db, rse, dids):
+    def remove_bulk(db, rse=None, dids=None):
         if not dids:    return
         c = db.cursor()
         table = DBReplica.Table
+        wheres = "true"
+        if rse is not None: wheres += f" and rse='{rse}'"
         try:
-            c.execute(f"""
-                begin;
-                delete from {table}
-                    where rse=%s and namespace || ':' || name = any(%s);
-                commit
-            """, (rse, dids))
+            if dids is not None:
+                c.execute(f"""
+                    begin;
+                    delete from {table}
+                        where {wheres} and namespace || ':' || name = any(%s);
+                    commit
+                """, (dids,))
+            else:
+                c.execute(f"""
+                    begin;
+                    delete from {table}
+                        where {wheres};
+                    commit
+                """)
         except:
             c.execute("rollback")
             raise
-
 
     @staticmethod
     def create_bulk(db, rse, available, preference, replicas):

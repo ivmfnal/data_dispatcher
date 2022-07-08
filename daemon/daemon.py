@@ -610,21 +610,9 @@ def main():
     
     error_out = logging_config.get("errors")
     
-    init_logger(log_out, debug_out=debug_out, error_out=error_out, debug_enabled=debug_enabled)
-    
-    replica_client = ReplicaClient()        # read standard Rucio config file for now
-    rse_client = RSEClient()
-    
-    pollers = {}
+    default_logger = init_logger(log_out, debug_out=debug_out, error_out=error_out, debug_enabled=debug_enabled)
 
-    for rse in rse_config.rses():
-        if rse_config.is_tape(rse):
-            poller = pollers[rse] = DCachePoller(rse, connection_pool, 
-                 rse_config.poll_url(rse), rse_config.max_burst(rse), rse_config.ssl_config(rse)
-            )
-            poller.start()
-
-    # test the connection
+    # test the DB connection
     try:
         connection = connection_pool.connect()
     except Exception as e:
@@ -633,6 +621,24 @@ def main():
     else:
         connection.close()
         del connection
+
+    replica_client = ReplicaClient()        # read standard Rucio config file for now
+    rse_client = RSEClient()
+    
+    pollers = {}
+
+    for rse in rse_config.rses():
+        #
+        # remove all replicas to reset old status
+        #
+        DBReplica.remove_bulk(connection_pool, rse=rse)
+        default_logger.log("all replicas removed for RSE", rse, who="main()")
+
+        if rse_config.is_tape(rse):
+            poller = pollers[rse] = DCachePoller(rse, connection_pool, 
+                 rse_config.poll_url(rse), rse_config.max_burst(rse), rse_config.ssl_config(rse)
+            )
+            poller.start()
 
     proximity_map_loader = None
     proximity_map_url = config.get("proximity_map_url")
