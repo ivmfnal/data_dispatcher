@@ -71,13 +71,12 @@
     
         function show_timeline(parent, now, handle_timeline, file_timeline)
         {
-            //var svg = element_under(parent, "svg", {
-            //    "height":  ""+CanvasH,
-            //    "width":   ""+CanvasW,
-            //    class: "timeline"
-            //});
+            var svg = element_under(parent, "svg", {
+                "height":  ""+CanvasH,
+                "width":   ""+CanvasW,
+                class: "timeline"
+            }, svgns);
         
-            svg = document.getElementById("the_svg");
             var scale = CanvasW/now;
         
             var tnext = now;
@@ -154,16 +153,6 @@
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
                             <td id="timeline:{{did}}" style="vertical-align: middle"></td>
-                            <td>
-                                <svg width="400" height="10" class="timeline">
-                                	<g transform="scale(0.0022 1)">
-                                        <g class="segment">
-                                            <text x="0.018" y="0" class="tooltip">hello 1</text>
-                                            <rect x="0.018" y="0" width="180000" height="10" style="fill:#EEE"></rect>
-                                        </g>  
-                                	</g>  
-                                </svg>
-                            </td>
                             <script type="text/javascript">
                                 var handle_timeline = [];
                                 {% for record in handles_log[did] %}
