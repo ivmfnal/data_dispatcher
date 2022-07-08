@@ -173,7 +173,7 @@
                                             handle_timeline.push(
                                                 {   t: {{project.time_since_created(record.T)}},
                                                     state: "{{record['state']}}",
-                                                    t_utc: {{record.T|as_dt_utc}}
+                                                    t_utc: "{{record.T|as_dt_utc}}"
                                                 }
                                             );
                                         {% endif %}
