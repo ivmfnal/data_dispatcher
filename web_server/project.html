@@ -52,32 +52,34 @@
         
         console.log("hello");
         
-        function element_under(parent, type, attributes)
+        var svgns = "http://www.w3.org/2000/svg";
+    
+        function element_under(parent, type, attributes, ns)
         {
-            var element = document.createElement(type);
+            var element = null;
+            if ( ns == null )
+                element = document.createElement(type);
+            else
+                element = document.createElementNS(ns, type);
             if( attributes != null )
                 for( attr in attributes )
-                {
-                    console.log("set attr "+attr+" "+attributes[attr]);
                     element.setAttribute(attr, attributes[attr]);
-                }
             if( parent != null )
                 parent.appendChild(element);
             return element;
         }
-        
+    
         function show_timeline(parent, now, handle_timeline, file_timeline)
         {
-            var svg = element_under(parent, "svg", {
-                "height":  CanvasH,
-                "width":   CanvasW,
-                class: "timeline"
-            });
-            
-            var scale_g = element_under(svg, "g", {
-                transform: `scale(${CanvasW/now} 1)`
-            });
-
+            //var svg = element_under(parent, "svg", {
+            //    "height":  ""+CanvasH,
+            //    "width":   ""+CanvasW,
+            //    class: "timeline"
+            //});
+        
+            svg = document.getElementById("the_svg");
+            var scale = CanvasW/now;
+        
             var tnext = now;
 
             for( j in handle_timeline )
@@ -89,22 +91,24 @@
                 var color = StateColors[e];
                 if( color != null )
                 {
-                    var segment_g = element_under(scale_g, "g", {
+                    var segment_g = element_under(svg, "g", {
                         class: "segment"
-                    });
+                    }, svgns);
+                
+                    var the_rect = element_under(segment_g, "rect", {
+                        x: t*scale,
+                        y: 0,
+                        width: (tnext-t)*scale,
+                        height:  CanvasH,
+                    }, svgns);
+                    the_rect.style.fill = color;
+
                     var hover_text = element_under(segment_g, "text", {
                         class: "tooltip",
-                        x:t,
-                        y:0
-                    });
-                    hover_text.innerHTML = `${t}...${tnext}:${e}`;
-                    var the_rect = element_under(segment_g, "rect", {
-                        x: t,
-                        y: 0,
-                        width: tnext-t,
-                        height:  CanvasH,
-                        style: `fill:${color}; opacity:1.0`
-                    });
+                        x:t*scale + 3,
+                        y:CanvasH - 5
+                    }, svgns);
+                    hover_text.innerHTML = "hello"; //`${t}...${tnext}:${e}`;
                     tnext = t;
                 }
             }
