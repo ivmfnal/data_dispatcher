@@ -865,7 +865,6 @@ class DBReplica(DBObject, HasLogRecord):
     #
     @staticmethod
     def remove_bulk(db, rse=None, dids=None):
-        if not dids:    return
         c = db.cursor()
         table = DBReplica.Table
         wheres = "true"
@@ -876,18 +875,19 @@ class DBReplica(DBObject, HasLogRecord):
                     begin;
                     delete from {table}
                         where {wheres} and namespace || ':' || name = any(%s);
-                    commit
                 """, (dids,))
             else:
                 c.execute(f"""
                     begin;
                     delete from {table}
                         where {wheres};
-                    commit
                 """)
+            nremoved = c.rowcount
+            c.execute("commit")
         except:
             c.execute("rollback")
             raise
+        return nremoved
 
     @staticmethod
     def create_bulk(db, rse, available, preference, replicas):

@@ -207,7 +207,7 @@ class PinRequest(Logged):
             return "ERROR"
         r.raise_for_status()
         #self.debug("request status response:", r.json())
-        self.log("request status:", r.json()["status"])
+        self.log("DCache pin request status returned:", r.json()["status"])
         return r.json()["status"]
 
     def error(self):
