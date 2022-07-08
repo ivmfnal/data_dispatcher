@@ -346,44 +346,50 @@ class ProjectMonitor(Logged):
         return tape_replicas_by_rse
         
     def init(self):
-        active_handles = self.active_handles()
-        if active_handles is None:
-            self.remove_me("deleted")
-            return "stop"
+        try:
+            active_handles = self.active_handles()
+            if active_handles is None:
+                self.remove_me("deleted")
+                return "stop"
             
-        dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
+            dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
 
-        self.log("rucio replica loader started for", len(dids), "files")
-        with self.Master:
-            # locked, in case the client needs to refresh the token
-            rucio_replicas = self.RucioClient.list_replicas(dids, all_states=False, ignore_availability=False)
-            n = len(rucio_replicas)
-            self.log("replicas found:", n)
+            self.log("rucio replica loader started for", len(dids), "files")
+            with self.Master:
+                # locked, in case the client needs to refresh the token
+                rucio_replicas = self.RucioClient.list_replicas(dids, all_states=False, ignore_availability=False)
+                rucio_replicas = list(rucio_replicas)
+                n = len(rucio_replicas)
+                self.log("replicas found:", n)
 
-        by_rse = {}             # {rse -> {(namespace, name) -> path}
-        for r in rucio_replicas:
-            namespace = r["scope"]
-            name = r["name"]
-            for rse, urls in r["rses"].items():
-                if rse in self.RSEConfig:
-                    url = urls[0]           # assume there is only one
-                    path = self.RSEConfig.url_to_path(rse, url)          
-                    by_rse_dict = by_rse.setdefault(rse, {})
-                    by_rse_dict[(namespace, name)] = dict(path=path, url=url)
-                    #self.debug("added for rse:", rse, "  ", namespace, name, "  data:", by_rse_dict[(namespace, name)])
-                else:
-                    pass
-        for rse, replicas in by_rse.items():
-            preference = self.RSEConfig.preference(rse)
-            #self.debug(f"replicas for {rse}")
-            #for k, v in replicas.items():
-            #    self.debug(k, v)
-            available = not self.RSEConfig.is_tape(rse)
-            DBReplica.create_bulk(self.DB, rse, available, preference, replicas)
-            #self.debug("replicas found in", rse, " : ", len(replicas))
-        self.log(f"project loading done")
-        self.Scheduler.add(self.run)
-        self.debug("initialized")
+            by_rse = {}             # {rse -> {(namespace, name) -> path}
+            for r in rucio_replicas:
+                namespace = r["scope"]
+                name = r["name"]
+                for rse, urls in r["rses"].items():
+                    if rse in self.RSEConfig:
+                        url = urls[0]           # assume there is only one
+                        path = self.RSEConfig.url_to_path(rse, url)          
+                        by_rse_dict = by_rse.setdefault(rse, {})
+                        by_rse_dict[(namespace, name)] = dict(path=path, url=url)
+                        #self.debug("added for rse:", rse, "  ", namespace, name, "  data:", by_rse_dict[(namespace, name)])
+                    else:
+                        pass
+            for rse, replicas in by_rse.items():
+                preference = self.RSEConfig.preference(rse)
+                #self.debug(f"replicas for {rse}")
+                #for k, v in replicas.items():
+                #    self.debug(k, v)
+                available = not self.RSEConfig.is_tape(rse)
+                DBReplica.create_bulk(self.DB, rse, available, preference, replicas)
+                #self.debug("replicas found in", rse, " : ", len(replicas))
+            self.log(f"project loading done")
+            self.Scheduler.add(self.run)
+            self.debug("initialized")
+        except Exception as e:
+            self.error("Exception in init:", e)
+            self.error(textwrap.indent(traceback.format_exc(), "  ")
+            raise
  
     def create_pin_request(self, rse, replicas):
         try:
