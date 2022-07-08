@@ -357,6 +357,8 @@ class ProjectMonitor(Logged):
         with self.Master:
             # locked, in case the client needs to refresh the token
             rucio_replicas = self.RucioClient.list_replicas(dids, all_states=False, ignore_availability=False)
+            n = len(rucio_replicas)
+            self.log("replicas found:", n)
 
         by_rse = {}             # {rse -> {(namespace, name) -> path}
         for r in rucio_replicas:
