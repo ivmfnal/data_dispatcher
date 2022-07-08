@@ -85,7 +85,7 @@ create table project_log
     t           timestamp with time zone     default now(),
     type        text,
     data        jsonb,
-    primary key (project_id, t)
+    primary key (project_id, t, type)
 );
 
 create table file_handle_log
@@ -96,7 +96,7 @@ create table file_handle_log
     t           timestamp with time zone     default now(),
     type        text,
     data        jsonb,
-    primary key (project_id, namespace, name, t),
+    primary key (project_id, namespace, name, t, type),
     foreign key (project_id, namespace, name) references file_handles on delete cascade
 );
 
@@ -108,7 +108,7 @@ create table replica_log
     t           timestamp with time zone     default now(),
     type        text,
     data        jsonb,
-    primary key (namespace, name, rse, t),
+    primary key (namespace, name, rse, t, type),
     foreign key (namespace, name) references files(namespace, name) on delete cascade,
     foreign key (rse) references rses(name) on delete cascade
 );
