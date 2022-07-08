@@ -68,6 +68,16 @@
                 parent.appendChild(element);
             return element;
         }
+        
+        function format_time(t)
+        {
+            var dt = new Date(t*1000);
+            var year = dt.getUTCFullYear();
+            var month = dt.getUTCMonth();
+            var day = dt.getUTCDate();
+            var hour = dt.getUTCHour();
+            var hour = dt.getUTCHour();
+        }
     
         function show_timeline(parent, now, handle_timeline, file_timeline)
         {
@@ -80,6 +90,7 @@
             var scale = CanvasW/now;
         
             var tnext = now;
+            var tnext_utc = "";
 
             for( j in handle_timeline )
             {
@@ -87,6 +98,7 @@
                 var event = handle_timeline[i];
                 var t = event.t;
                 var e = event.state;
+                var t_utc = event.t_utc;
                 var color = StateColors[e];
                 if( color != null )
                 {
@@ -107,8 +119,9 @@
                         x:t*scale + 3,
                         y:CanvasH - 3
                     }, svgns);
-                    hover_text.innerHTML = "hello"; //`${t}...${tnext}:${e}`;
+                    hover_text.innerHTML = `${e}:${t_utc}`+tnext_utc;
                     tnext = t;
+                    tnext_utc = "-"+t_utc;
                 }
             }
         }
@@ -159,7 +172,8 @@
                                         {% if record.Type == "state" %}
                                             handle_timeline.push(
                                                 {   t: {{project.time_since_created(record.T)}},
-                                                    state: "{{record['state']}}"
+                                                    state: "{{record['state']}}",
+                                                    t_utc: {{record.T|as_dt_utc}}
                                                 }
                                             );
                                         {% endif %}
