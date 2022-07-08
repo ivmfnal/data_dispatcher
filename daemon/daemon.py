@@ -214,7 +214,8 @@ class PinRequest(Logged):
         return self.Error
 
     def complete(self):
-        return self.Complete or self.status().upper() == "COMPLETED"
+        self.Complete = self.Complete or self.status().upper() == "COMPLETED"
+        return self.Complete
         
     def expired(self):
         return self.Expiration is None or time.time() >= self.Expiration - self.SafetyInterval
