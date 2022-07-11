@@ -351,38 +351,36 @@ class ProjectMonitor(Logged):
             if active_handles is None:
                 self.remove_me("deleted")
                 return "stop"
-            
             dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
+            self.log("init(): active replicas:", len(dids))
+            
+            existing_replicas_by_rse = {}           # { rse -> set( did, ...) }
+            for r in DBReplica.list_many_files(self.DB, [(h.Namespace, h.Name) for h in active_handles]):
+                existing_replicas_by_rse.setdefault(r.RSE, set()).add(r.did())
 
-            self.log("rucio replica loader started for", len(dids), "files")
             with self.Master:
                 # locked, in case the client needs to refresh the token
                 rucio_replicas = self.RucioClient.list_replicas(dids, all_states=False, ignore_availability=False)
                 rucio_replicas = list(rucio_replicas)
                 n = len(rucio_replicas)
-                self.log("replicas found:", n)
+                self.log("init() replicas found in Rucio:", n)
 
-            by_rse = {}             # {rse -> {(namespace, name) -> path}
+            by_namespace_name_rse = {}
             for r in rucio_replicas:
                 namespace = r["scope"]
                 name = r["name"]
                 for rse, urls in r["rses"].items():
                     if rse in self.RSEConfig:
+                        preference = self.RSEConfig.preference(rse)
+                        available = not self.RSEConfig.is_tape(rse)
                         url = urls[0]           # assume there is only one
                         path = self.RSEConfig.url_to_path(rse, url)          
-                        by_rse_dict = by_rse.setdefault(rse, {})
-                        by_rse_dict[(namespace, name)] = dict(path=path, url=url)
-                        #self.debug("added for rse:", rse, "  ", namespace, name, "  data:", by_rse_dict[(namespace, name)])
+                        by_namespace_name.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
                     else:
                         pass
-            for rse, replicas in by_rse.items():
-                preference = self.RSEConfig.preference(rse)
-                #self.debug(f"replicas for {rse}")
-                #for k, v in replicas.items():
-                #    self.debug(k, v)
-                available = not self.RSEConfig.is_tape(rse)
-                DBReplica.create_bulk(self.DB, rse, available, preference, replicas)
-                #self.debug("replicas found in", rse, " : ", len(replicas))
+
+            DBReplica.sync_replicas(self.DB, by_namespace_name)
+
             self.log(f"project loading done")
             self.Scheduler.add(self.run)
             self.debug("initialized")
@@ -638,9 +636,9 @@ def main():
     for rse in rse_config.rses():
         #
         # remove all replicas to reset old status
-        #
-        DBReplica.remove_bulk(connection_pool, rse=rse)
-        default_logger.log("all replicas removed for RSE", rse, who="main()")
+        # done in ProjectMonitor.init()
+        #DBReplica.remove_bulk(connection_pool, rse=rse)
+        #default_logger.log("all replicas removed for RSE", rse, who="main()")
 
         if rse_config.is_tape(rse):
             poller = pollers[rse] = DCachePoller(rse, connection_pool, 

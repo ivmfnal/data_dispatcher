@@ -49,12 +49,11 @@ create table replicas
     available   boolean     default false,
     preference  int         default 0,
     primary key (namespace, name, rse),
-    foreign key (namespace, name) references files (namespace, name)    on delete cascade
+    foreign key (namespace, name) references files (namespace, name) on delete cascade
 );
 
-create index replicas_specs on replicas ((namespace || ':' || name));
+create index replicas_dids on replicas ((namespace || ':' || name));
 create index replicas_rse on replicas(rse);
-        
 
 create view replicas_with_rse_availability as
     select replicas.*, rses.is_available as rse_available
@@ -109,7 +108,7 @@ create table replica_log
     type        text,
     data        jsonb,
     primary key (namespace, name, rse, t, type),
-    foreign key (namespace, name) references files(namespace, name) on delete cascade,
+    foreign key (namespace, name, rse) references replicas(namespace, name, rse) on delete cascade,
     foreign key (rse) references rses(name) on delete cascade
 );
 

@@ -791,11 +791,12 @@ class DBReplica(DBObject, HasLogRecord):
         return self.Available and self.RSEAvailable
 
     @staticmethod
-    def list(db, namespace=None, name=None):
+    def list(db, namespace=None, name=None, rse=None):
         c = db.cursor()
         wheres = " true "
         if namespace:   wheres += f" and namespace='{namespace}'"
         if name:        wheres += f" and name='{name}'"
+        if rse:         wheres += f" and rse='{rse}'"
         columns = DBReplica.columns(as_text=True)
         table = DBReplica.Table
         c.execute(f"""
@@ -806,6 +807,25 @@ class DBReplica(DBObject, HasLogRecord):
             r = DBReplica.from_tuple(db, tup[:-1])
             r.RSEAvailable = tup[-1]
             yield r
+        
+    @staticmethod
+    def list_many_files(db, namespace_names, rse=None):
+        # namespace_names is list of tuples (namespace, name)
+        if namespace_names:
+            c = db.cursor()
+            wheres = ""
+            if rse:         wheres += f" and rse='{rse}'"
+            columns = DBReplica.columns(as_text=True)
+            table = DBReplica.Table
+            c.execute(f"""
+                select {columns}, rse_available from {DBReplica.ViewWithRSEStatus}
+                where row(namespace, name) = any(%s)
+                        {wheres}
+            """, list(namespace_names))
+            for tup in cursor_iterator(c):
+                r = DBReplica.from_tuple(db, tup[:-1])
+                r.RSEAvailable = tup[-1]
+                yield r
         
     def as_jsonable(self):
         out = dict(name=self.Name, namespace=self.Namespace, path=self.Path, 
@@ -863,6 +883,73 @@ class DBReplica(DBObject, HasLogRecord):
     #
     # bulk operations
     #
+    
+    @staticmethod
+    def sync_replicas(db, by_namespace_name):
+        # by_namespace_name: {(namespace, name) -> {rse: dict(path=path, url=url, available=available, preference=preference)}}
+        # The input dictionary is presumed to have all the replicas found for (namespace, name). I.e. if the replica is not found
+        # in the input dictionary, it should be deleted
+        
+        t = int(time.time()*1000)
+        temp_table = f"replicas_temp_{t}"
+        c = db.cursor()
+        c.execute(f"""
+            begin;
+        """)
+        
+        csv = ['%s\t%s\t%s\t%s\t%s\t%s\t%s' % (namespace, name, rse, info["path"], info["url"], 'true' if info["available"] else 'false', info["preference"]) 
+            for rse, info in record.items()
+            for (namespace, name), record in by_namespace_name.items()
+        ]
+        #print("DBReplica.create_bulk: csv:", csv)
+        csv = io.StringIO("\n".join(csv))
+        
+        try:
+            c.execute(f"""
+                create temp table {temp_table}
+                (
+                    namespace   text,
+                    name        text,
+                    rse         text,
+                    path        text,
+                    url         text,
+                    available   boolean,
+                    preference  int
+            )
+            """)
+            c.copy_from(csv, temp_table)
+            
+            #
+            # delete replicas if (namespace, name, rse) not present in the list for (namespace, name)
+            #
+            c.execute(f"""
+                delete from replicas r 
+                    where row(r.namespace, r.name) in (select namespace, name from {temp_table})
+                        and not row(r.namespace, r.name, r.rse) in (select namespace, name, rse from {temp_table});
+            """)
+            ndeleted = c.rowcount;
+            
+            #
+            # insert new replicas and update existing ones
+            #
+            c.execute(f"""
+                insert into replicas(namespace, name, rse, path, url, preference, available)
+                    (
+                        select namespace, name, rse, path, url, preference, available
+                            from {temp_table}
+                    )
+                    on conflict(namespace, name, rse)
+                    do update set replicas.path=excluded.path,
+                        replicas.url=excluded.url,
+                        replicas.preference=excluded.preference,
+                        replicas.available=replicas.available or excluded.available
+            """)
+            c.execute(f"drop table {temp_table}")
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+    
     @staticmethod
     def remove_bulk(db, rse=None, dids=None):
         c = db.cursor()
