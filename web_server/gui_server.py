@@ -311,6 +311,7 @@ class App(BaseApp):
         BaseApp.__init__(self, config, TopHandler, prefix=prefix)
         self.Config = config
         self.DefaultProximity = int(config.get("default_proximity", -1))
+        self.SiteTitle = config.get("web_server", {}).get("site_title", "DEMO Data Dispatcher")
 
     def proximity_map(self, rses=None):
         return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses)
@@ -322,7 +323,7 @@ class App(BaseApp):
             tempdirs=[templdir, "."],
             globals={
                 "GLOBAL_Version": Version, 
-                "GLOBAL_SiteTitle": self.Config.get("site_title", "DEMO Data Dispatcher")
+                "GLOBAL_SiteTitle": self.SiteTitle
             },
             filters = {
                 "pretty_time_delta": pretty_time_delta,
