@@ -50,6 +50,7 @@ create table replicas
     preference  int         default 0,
     primary key (namespace, name, rse),
     foreign key (namespace, name) references files (namespace, name) on delete cascade
+    foreign key (rse) references rses (name) on delete cascade
 );
 
 create index replicas_dids on replicas ((namespace || ':' || name));
