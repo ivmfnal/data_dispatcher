@@ -4,6 +4,7 @@ FILES=data_server.py gui_server.py \
 
 build:	$(SERVER_DIR)
 	cp $(FILES)  $(SERVER_DIR)
+	cp -R static $(SERVER_DIR)
 	
 $(SERVER_DIR):
 	mkdir -p $@
