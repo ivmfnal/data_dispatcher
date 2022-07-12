@@ -319,7 +319,7 @@
             <td style="width:100%"></td>
     		<td>
                         {% if GLOBAL_User %}
-                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;{{GLOBAL_User.Username}}&nbsp;</span><a class=button  href="{{GLOBAL_AppTopPath}}/A/logout?redirect={{GLOBAL_AppTopPath}}}/index">log out</a>
+                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;{{GLOBAL_User.Username}}&nbsp;</span><a class=button  href="{{GLOBAL_AppTopPath}}/A/logout?redirect={{GLOBAL_AppTopPath}}/index">log out</a>
                         {% else %}
                             <a class=button href="{{GLOBAL_AppTopPath}}/A/login?redirect={{GLOBAL_AppTopPath}}/index">log in</a>
                         {% endif %}
