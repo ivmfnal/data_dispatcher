@@ -1,4 +1,4 @@
-from webpie import WPApp, WPHandler
+from webpie import WPApp, WPHandler, WPStaticHandler
 from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap       # , DBUser
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
