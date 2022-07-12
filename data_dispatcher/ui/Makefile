@@ -1,5 +1,5 @@
 BINFILES = dd
-LIBFILES = __init__.py ui.py ui_project.py ui_file.py ui_lib.py ui_rse.py ui_worker.py 
+LIBFILES = ui_main.py ui_project.py ui_file.py ui_lib.py ui_rse.py ui_worker.py 
 
 build:	$(UI_DIR)
 	cp $(BINFILES) $(LIBFILES) $(UI_DIR)
