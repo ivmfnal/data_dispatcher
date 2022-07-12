@@ -346,7 +346,7 @@ if __name__ == "__main__":
     config = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)
     server_config = config.get("web_server", {})
     port = server_config.get("gui_port", 8080)
-    print("port:", port)
+    print("Starting on port:", port)
     logging = "-l" in opts or server_config.get("gui_logging")
     app = create_application(config)
     app.run_server(port, logging=logging)
