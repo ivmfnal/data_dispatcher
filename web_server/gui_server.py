@@ -341,12 +341,13 @@ def create_application(config):
 if __name__ == "__main__":
     import getopt, sys
     
-    opts, args = getopt.getopt(sys.argv[1:], "c:")
+    opts, args = getopt.getopt(sys.argv[1:], "c:l")
     opts = dict(opts)
     config = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)
     server_config = config.get("web_server", {})
     port = server_config.get("gui_port", 8080)
     print("port:", port)
+    logging = "-l" in opts or server_config.get("gui_logging")
     app = create_application(config)
-    app.run_server(port, logging=True)
+    app.run_server(port, logging=logging)
     
