@@ -304,7 +304,7 @@ class RSEConfig(Logged):
 
         return path
 
-    def fix_url(self, url):
+    def fix_url(self, rse, url):
         # make sure the URL is valid given the schema
         parts = urllib.parse.urlparse(url)
         if parts.scheme in ("root", "xroot"):
@@ -391,7 +391,7 @@ class ProjectMonitor(Logged):
                     if rse in self.RSEConfig:
                         preference = self.RSEConfig.preference(rse)
                         available = not self.RSEConfig.is_tape(rse)
-                        url = urls[0]           # assume there is only one
+                        url = self.RSEConfig.fix_url(rse, urls[0])           # assume there is only one
                         path = self.RSEConfig.url_to_path(rse, url)          
                         by_namespace_name_rse.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
                     else:
@@ -573,7 +573,7 @@ class RucioListener(PyThread, Logged):
         f = DBFile.get(self.DB, scope, name)
         if f is None:
             return
-        url = replica_info["dst-url"]
+        url = self.RSEConfig.fix_url(rse, replica_info["dst-url"])
         path = self.RSEConfig.url_to_path(rse, url)
         preference = self.RSEConfig.preference(rse)
         available = not self.RSEConfig.is_tape(rse)         # do not trust dst-type from Rucio
