@@ -1,4 +1,4 @@
-import json, time, io
+import json, time, io, traceback
 from datetime import datetime, timedelta, timezone
 from metacat.auth import BaseDBUser as DBUser
 
@@ -809,19 +809,19 @@ class DBReplica(DBObject, HasLogRecord):
             yield r
         
     @staticmethod
-    def list_many_files(db, namespace_names, rse=None):
-        # namespace_names is list of tuples (namespace, name)
-        if namespace_names:
+    def list_many_files(db, dids, rse=None):
+        if dids:
             c = db.cursor()
             wheres = ""
             if rse:         wheres += f" and rse='{rse}'"
             columns = DBReplica.columns(as_text=True)
             table = DBReplica.Table
+
             c.execute(f"""
                 select {columns}, rse_available from {DBReplica.ViewWithRSEStatus}
-                where row(namespace, name) = any(%s)
+                where namespace || ':' || name = any(%s)
                         {wheres}
-            """, list(namespace_names))
+            """, (list(dids),))
             for tup in cursor_iterator(c):
                 r = DBReplica.from_tuple(db, tup[:-1])
                 r.RSEAvailable = tup[-1]
@@ -889,19 +889,23 @@ class DBReplica(DBObject, HasLogRecord):
         # by_namespace_name: {(namespace, name) -> {rse: dict(path=path, url=url, available=available, preference=preference)}}
         # The input dictionary is presumed to have all the replicas found for (namespace, name). I.e. if the replica is not found
         # in the input dictionary, it should be deleted
-        
+
         t = int(time.time()*1000)
         temp_table = f"replicas_temp_{t}"
         c = db.cursor()
         c.execute(f"""
             begin;
         """)
-        
+
+        records = []
+        for (namespace, name), by_rse in by_namespace_name.items():
+            for rse, info in by_rse.items():
+                records.append((namespace, name, rse, info))
+
+
         csv = ['%s\t%s\t%s\t%s\t%s\t%s\t%s' % (namespace, name, rse, info["path"], info["url"], 'true' if info["available"] else 'false', info["preference"]) 
-            for rse, info in record.items()
-            for (namespace, name), record in by_namespace_name.items()
+            for namespace, name, rse, info in records
         ]
-        #print("DBReplica.create_bulk: csv:", csv)
         csv = io.StringIO("\n".join(csv))
         
         try:
@@ -939,15 +943,16 @@ class DBReplica(DBObject, HasLogRecord):
                             from {temp_table}
                     )
                     on conflict(namespace, name, rse)
-                    do update set replicas.path=excluded.path,
-                        replicas.url=excluded.url,
-                        replicas.preference=excluded.preference,
-                        replicas.available=replicas.available or excluded.available
+                    do update set path=excluded.path,
+                        url=excluded.url,
+                        preference=excluded.preference,
+                        available=replicas.available or excluded.available
             """)
             c.execute(f"drop table {temp_table}")
             c.execute("commit")
         except:
             c.execute("rollback")
+            traceback.print_exc()
             raise
     
     @staticmethod

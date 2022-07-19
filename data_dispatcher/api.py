@@ -307,7 +307,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Returns:
             dictionary with the file information or None if not found
         """
-        return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found)
+        return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found=True)
 
     def list_handles(self, project_id, state=None, not_state=None, rse=None, with_replicas=False):
         """Returns information about project file handles, selecting them by specified criteria

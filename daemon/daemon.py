@@ -228,6 +228,8 @@ class RSEConfig(Logged):
     def __init__(self, config, db):
         Logged.__init__(self)
         self.Config = config
+        #print("RSEConfig: config:")
+        #pprint.pprint(config)
         self.DB = db
 
     def unview(self, rse):
@@ -355,7 +357,7 @@ class ProjectMonitor(Logged):
             self.log("init(): active replicas:", len(dids))
             
             existing_replicas_by_rse = {}           # { rse -> set( did, ...) }
-            for r in DBReplica.list_many_files(self.DB, [(h.Namespace, h.Name) for h in active_handles]):
+            for r in DBReplica.list_many_files(self.DB, [h.did() for h in active_handles]):
                 existing_replicas_by_rse.setdefault(r.RSE, set()).add(r.did())
 
             with self.Master:
@@ -375,18 +377,17 @@ class ProjectMonitor(Logged):
                         available = not self.RSEConfig.is_tape(rse)
                         url = urls[0]           # assume there is only one
                         path = self.RSEConfig.url_to_path(rse, url)          
-                        by_namespace_name.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
+                        by_namespace_name_rse.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
                     else:
                         pass
-
-            DBReplica.sync_replicas(self.DB, by_namespace_name)
+            DBReplica.sync_replicas(self.DB, by_namespace_name_rse)
 
             self.log(f"project loading done")
             self.Scheduler.add(self.run)
             self.debug("initialized")
         except Exception as e:
-            self.error("Exception in init:", e)
-            self.error(textwrap.indent(traceback.format_exc(), "  ")
+            self.error("exception in init:", e)
+            self.error(textwrap.indent(traceback.format_exc()), "  ")
             raise
  
     def create_pin_request(self, rse, replicas):

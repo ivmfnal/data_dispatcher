@@ -143,7 +143,7 @@ class ShowCommand(CLICommand):
                         print(did)
             else:
                 print("Project ID:         ", project_id)
-                print("Query:              ", textwrap.indent(info.get("query") or "", 10).lstrip())
+                print("Query:              ", textwrap.indent(info.get("query") or "", " "*10).lstrip())
                 print("Status:             ", info["state"])
                 print("Project Attributes: ")
                 for k, v in info.get("attributes", {}).items():

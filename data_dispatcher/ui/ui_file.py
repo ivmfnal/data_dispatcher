@@ -52,7 +52,7 @@ class ShowCommand(CLICommand):
                     print("  URL:        ", r["url"] or "")
                     print("  Available:  ", "yes" if r["available"] else "no")
 
-    def __call__(command, client, opts, args):
+    def __call__(self, command, client, opts, args):
         did = args[0]
         if "-p" in opts:
             project_id = int(opts["-p"])
@@ -69,7 +69,7 @@ class ListHandlesCommand(CLICommand):
     """
     MinArgs = 1
 
-    def __call__(command, client, opts, args):
+    def __call__(self, command, client, opts, args):
         project_id = int(args[0])
         lst = client.list_handles(project_id=project_id, rse=opts.get("-r"), state=opts.get("-s"), with_replicas=True)
         if "-j" in opts:
