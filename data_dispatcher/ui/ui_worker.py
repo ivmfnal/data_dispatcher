@@ -26,8 +26,11 @@ class NextFileCommand(CLICommand):
         retry = True
         while retry:
             try:    
+                project_info = client.get_project(project_id)
+                if not project_info["active"]:
+                    print("done")
+                    sys.exit(1)    # project finished
                 reply = client.next_file(project_id, cpu_site)
-                #print("reply:", reply)
                 info = reply["handle"]
                 reason = reply["reason"]
                 retry = reply["retry"]
@@ -43,10 +46,6 @@ class NextFileCommand(CLICommand):
                 sys.exit(0)
             if retry:
                 if timeout is None or (timeout > 0 and time.time() < t1):
-                    project_info = client.get_project(project_id)
-                    if not project_info["active"]:
-                        print("done")
-                        sys.exit(1)    # project finished
                     dt = 5
                     if t1 is not None:
                         dt = min(5, t1-time.time())
@@ -55,6 +54,7 @@ class NextFileCommand(CLICommand):
                 else:
                     print("timeout")
                     sys.exit(1)        # timeout
+           
 
 class DoneCommand(CLICommand):
     

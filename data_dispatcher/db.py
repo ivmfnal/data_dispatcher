@@ -65,6 +65,9 @@ class DBObject(object):
         cursor = cursor or self.DB.cursor()
         where_clause = " and ".join(f"{column} = '{value}'" for column, value in pk_values.items())
         try:
+            print("delete: sql:", f"""
+                delete from {self.Table} where {where_clause}
+            """)
             cursor.execute(f"""
                 delete from {self.Table} where {where_clause}
             """)
@@ -82,7 +85,8 @@ class DBObject(object):
         c.execute(f"select {columns} from {table}")
         return (cls.from_tuple(db, tup) for tup in cursor_iterator(c))
     
-    def delete(self, cursor=None, do_commit=True, **pk_values):
+    def delete(self, cursor=None, do_commit=True):
+        pk_values = {column:value for column, value in zip(self.PK, self.pk())}
         return self._delete(cursor=None, do_commit=True, **pk_values)
     
 class DBManyToMany(object):
@@ -529,7 +533,7 @@ class DBProject(DBObject, HasLogRecord):
     def reserve_handle(self, worker_id, proximity_map, cpu_site=None):
 
         if not self.is_active(reload=True):
-            return None, "inactive", False
+            return None, "project inactive", False
 
         handles = sorted(
             self.handles(with_replicas=True, reload=True, state=DBFileHandle.ReadyState),
