@@ -27,6 +27,10 @@ class APIError(ServerError):
         #print("WebAPIError.json: body:", self.Body)
         return json.loads(self.Body)
 
+class NotFoundError(ServerError):
+
+    def __init__(self, url, message):
+        ServerError.__init__(self, url, 404, message, "")
 
 def to_bytes(x):
     if not isinstance(x, bytes):
@@ -47,6 +51,7 @@ class HTTPClient(object):
     def get(self, uri_suffix, none_if_not_found=False):
         if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
         url = "%s%s" % (self.ServerURL, uri_suffix)
+        #print("url:", url)
         headers = {}
         if self.Token is not None:
             headers["X-Authentication-Token"] = self.Token.encode()
@@ -55,11 +60,15 @@ class HTTPClient(object):
         if response.status_code != 200:
             if none_if_not_found and response.status_code == 404:
                 return None
-            raise APIError(url, response.status_code, response.text)
+            elif response.status_code == 404:
+                raise NotFoundError(url, response.text)
+            else:
+                raise APIError(url, response.status_code, response.text)
         if response.headers.get("Content-Type", "").startswith("text/json"):
             data = json.loads(response.text)
         else:
             data = response.text
+        #print("   data:", data)
         return data
         
     def post(self, uri_suffix, data):
@@ -83,7 +92,10 @@ class HTTPClient(object):
         
         response = requests.post(url, data = data, headers = headers)
         if response.status_code != 200:
-            raise APIError(url, response.status_code, response.text)
+            if response.status_code == 404:
+                raise NotFoundError(url, response.text)
+            else:
+                raise APIError(url, response.status_code, response.text)
         #print("response.text:", response.text)
         if response.headers.get("Content-Type", "").startswith("text/json"):
             data = json.loads(response.text)

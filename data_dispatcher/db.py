@@ -527,8 +527,9 @@ class DBProject(DBObject, HasLogRecord):
         return p.State == "active" and not all(h.State in ("done", "failed") for h in p.handles())
             
     def reserve_handle(self, worker_id, proximity_map, cpu_site=None):
+
         if not self.is_active(reload=True):
-            return None, "project inactive"
+            return None, "inactive", False
 
         handles = sorted(
             self.handles(with_replicas=True, reload=True, state=DBFileHandle.ReadyState),
@@ -567,9 +568,9 @@ class DBProject(DBObject, HasLogRecord):
                     key=lambda h: min(r.Preference for r in h.Replicas.values())
                     ):
             if h.reserve(worker_id):
-                return h, "ok"
+                return h, "ok", False
 
-        return None, "retry"
+        return None, "retry", True
 
     def file_state_counts(self):
         counts = {}

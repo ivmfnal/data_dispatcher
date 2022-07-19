@@ -70,9 +70,10 @@ def extract(data, path):
     else:
         return extract(getitem(data, index), down)
 
-opts, args = getopt.getopt(sys.argv[1:], "n:q")
+opts, args = getopt.getopt(sys.argv[1:], "n:qj")
 opts = dict(opts)
 quiet = '-q' in opts
+force_json = '-j' in opts
 not_found_mode=opts.get("-n", "omit")
 if not_found_mode.startswith("default:"):
     not_found_mode, defaut_value = not_found_mode.split(':', 1)
@@ -110,4 +111,9 @@ except NotFound as e:
     if not quiet:   print("Index", e.Index, "not found in:", json.dumps(e.Data, indent=4, sort_keys=True))
     sys.exit(1)
 else:
-    if not quiet:   print(json.dumps(extracted, indent=4, sort_keys=True))
+    if not quiet:   
+        if isinstance(extracted, (dict,list)) or force_json:
+            print(json.dumps(extracted, indent=4, sort_keys=True))
+        else:
+            print(extracted)
+

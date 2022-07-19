@@ -167,13 +167,23 @@ class Handler(BaseHandler):
             return 404, "Project not found"
         if not user.is_admin() and user.Username != project.Owner:
             return 403
-        handle, reason = project.reserve_handle(worker_id, self.App.proximity_map(), cpu_site)
+        handle, reason, retry = project.reserve_handle(worker_id, self.App.proximity_map(), cpu_site)
         if handle is None:
-            return "null", "text/json"
-        info = handle.as_jsonable(with_replicas=True)
-        info["replicas"] = {rse:r for rse, r in info["replicas"].items() if r["available"] and r["rse_available"]}
-        info["project_attributes"] = project.Attributes or {}
-        return json.dumps(info), "text/json"
+            out = {
+                "handle": None,
+                "reason": reason,
+                "retry": retry
+            }
+        else:
+            info = handle.as_jsonable(with_replicas=True)
+            info["replicas"] = {rse:r for rse, r in info["replicas"].items() if r["available"] and r["rse_available"]}
+            info["project_attributes"] = project.Attributes or {}
+            out = {
+                "handle": info,
+                "reason": "reserved",
+                "retry": False
+            }
+        return json.dumps(out), "text/json"
         
     def release(self, request, relpath, handle_id=None, failed="no", retry="yes", **args):
         if handle_id is None:
@@ -369,6 +379,6 @@ if __name__ == "__main__":
     server_config = config.get("web_server", {})
     app = create_application(config)
     port = server_config.get("data_port", 8088)
-    app.run_server(port)
+    app.run_server(port, logging=True)
     
     
