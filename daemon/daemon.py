@@ -306,15 +306,16 @@ class RSEConfig(Logged):
 
     def fix_url(self, rse, url):
         # make sure the URL is valid given the schema
-        parts = urllib.parse.urlparse(url)
-        if parts.scheme in ("root", "xroot"):
-            path = parts.path
-            if not path.startswith "//":
+        parts = list(urllib.parse.urlsplit(url))
+        scheme = parts[0]
+        if scheme in ("root", "xroot"):
+            path = parts[2]
+            if not path.startswith("//"):
                 if path.startswith('/'):
                     path = '/'+path
                 else:
                     path = '//' + path
-            parts.path = path
+            parts[2] = path
             url = urllib.parse.urlunsplit(parts)
         return url
 
@@ -402,6 +403,7 @@ class ProjectMonitor(Logged):
             self.Scheduler.add(self.run)
             self.debug("initialized")
         except Exception as e:
+            traceback.print_exc()
             self.error("exception in init:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
             raise
