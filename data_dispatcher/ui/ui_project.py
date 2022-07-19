@@ -23,6 +23,9 @@ class CreateCommand(CLICommand):
 
         -p (json|pprint|id)                             - print created project info as JSON, 
                                                           pprint or just project id (default)
+
+        -r <project id>                                 - re-run existing project. Use -A, -a to override metadata
+                                                          -j, -l, -q are ignored
     """
     
     def __call__(self, command, client, opts, args):
@@ -50,43 +53,63 @@ class CreateCommand(CLICommand):
                 project_attrs = json.load(open(attr_src[1:], "r"))
             else:
                 project_attrs = parse_attrs(attr_src)
+                
+        if "-r" in opts:
+            if query or "-q" in opts or "-l" in opts or "-j" in opts:
+                print("Warning: MQL query, -l, -j are ignored when re-running an existing project")
+            project_id = int(opts["-r"])
 
-        if query:
-            files = MetaCatClient().query(query, with_metadata = "-c" in opts)
-            for info in files:
-                info["attributes"] = common_attrs.copy()
-            #
-            # copy file attributes from metacat
-            #
-        
-            if "-c" in opts:
-                fields = opts["-c"].split(",")
-                for info in files:
-                    #print(info["metadata"])
-                    attrs = {k:info["metadata"].get(k) for k in fields}
-                    info["attributes"].update(attrs)    
-        
-        elif "-j" in opts:
-            inp = opts["-j"]
-            if inp == "-":
-                inp = sys.stdin
-            else:
-                inp = open(inp, "r")
-            files = json.load(inp)
+            project_info = client.get_project(project_id)
+            attrs = project_info.get("attributes", {})
+            attrs.update(project_attrs) 
+            project_attrs = attrs
 
-        elif "-l" in opts:
-            inp = opts["-l"]
-            if inp == "-":
-                inp = sys.stdin
-            else:
-                inp = open(inp, "r")
             files = []
-            for line in inp:
-                line = line.strip()
-                if line:
-                    did, rest = (tuple(line.split(None, 1)) + (None,))[:2]
-                    namespace, name = did.split(":", 1)
-                    files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
+            for h in project_info["handles"]:
+                h_attrs = h.get("attributes", {}).copy()
+                h_attrs.update(common_attrs)
+                files.append(dict(
+                    namespace = h["namespace"],
+                    name = h["name"],
+                    attributes = h_attrs
+                ))
+        else:
+            if query:
+                files = MetaCatClient().query(query, with_metadata = "-c" in opts)
+                for info in files:
+                    info["attributes"] = common_attrs.copy()
+                #
+                # copy file attributes from metacat
+                #
+        
+                if "-c" in opts:
+                    fields = opts["-c"].split(",")
+                    for info in files:
+                        #print(info["metadata"])
+                        attrs = {k:info["metadata"].get(k) for k in fields}
+                        info["attributes"].update(attrs)    
+        
+            elif "-j" in opts:
+                inp = opts["-j"]
+                if inp == "-":
+                    inp = sys.stdin
+                else:
+                    inp = open(inp, "r")
+                files = json.load(inp)
+
+            elif "-l" in opts:
+                inp = opts["-l"]
+                if inp == "-":
+                    inp = sys.stdin
+                else:
+                    inp = open(inp, "r")
+                files = []
+                for line in inp:
+                    line = line.strip()
+                    if line:
+                        did, rest = (tuple(line.split(None, 1)) + (None,))[:2]
+                        namespace, name = did.split(":", 1)
+                        files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
 
         #print("files:", files)
         info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query)

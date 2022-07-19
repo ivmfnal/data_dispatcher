@@ -302,6 +302,20 @@ class RSEConfig(Logged):
 
         return path
 
+    def fix_url(self, url):
+        # make sure the URL is valid given the schema
+        parts = urllib.parse.urlparse(url)
+        if parts.scheme in ("root", "xroot"):
+            path = parts.path
+            if not path.startswith "//":
+                if path.startswith('/'):
+                    path = '/'+path
+                else:
+                    path = '//' + path
+            parts.path = path
+            url = urllib.parse.urlunsplit(parts)
+        return url
+
     def preference(self, rse):
         return self.get(rse).get("preference", 0)
 
