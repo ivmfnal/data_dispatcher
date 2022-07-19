@@ -123,6 +123,7 @@ class DCachePoller(PyThread, Logged):
                 for did, path in burst:
                     url = self.BaseURL + path + "?locality=true"
                     cert = None if self.Cert is None else (self.Cert, self.Key)
+                    self.debug("dCache poll URL:", url)
                     response = requests.get(url, headers=headers, cert=cert, verify=False)
                     #self.debug("response:", response.status_code, response.text)
                     if response.status_code == 404:
@@ -184,7 +185,7 @@ class PinRequest(Logged):
                 "lifetime-unit": "SECONDS"
             }
         }
-        #print("request data:", json.dumps(data, indent="  "))
+        self.debug("request data:", json.dumps(data, indent="  "))
         r = requests.post(self.BaseURL, data = json.dumps(data), headers=headers, 
                 verify=False, cert = self.CertTuple)
 
@@ -207,6 +208,7 @@ class PinRequest(Logged):
             return "ERROR"
         r.raise_for_status()
         #self.debug("request status response:", r.json())
+        self.debug("my URL:", self.URL)
         self.log("DCache pin request status returned:", r.json()["status"])
         return r.json()["status"]
 
