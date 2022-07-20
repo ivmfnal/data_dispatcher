@@ -442,12 +442,12 @@ class DBProject(DBObject, HasLogRecord):
                 with 
                     found_files as  
                     (
-                        select distinct r.namespace, r.name, 'found' as found
+                        select distinct r.namespace, r.name, true as found
                             from {rep_table} r
                     ),
                     available_files as 
                     (
-                        select distinct r.namespace, r.name, 'available' as available
+                        select distinct r.namespace, r.name, true as available
                             from {rep_table} r, {rse_table} s
                             where r.available and r.rse = s.name and s.is_available
                     ),
@@ -455,10 +455,10 @@ class DBProject(DBObject, HasLogRecord):
                     (
                         select h.project_id, h.namespace, h.name, 
                                 case
-                                    when h.state = 'active' then (
+                                    when h.state = 'initial' then (
                                         case
-                                            when af.available = 'available' then 'available'
-                                            when ff.found = 'found' then 'found'
+                                            when af.available = true then 'available'
+                                            when ff.found = true then 'found'
                                             else 'not found'
                                         end
                                     )
