@@ -24,7 +24,7 @@
 
     <tr>    <th>Status</th>             <td><span class="{{project.State}}" style="padding: 3px">{{project.State}}</span></td> </tr>
     <tr>    <th>Query</th>              <td><pre>{{project.Query or ""}}</pre></td> </tr>
-    <tr>    <th>Attributes</th>         <td class="nopadding">
+    <tr>    <th>Project attributes</th>         <td class="nopadding">
             {% if project.Attributes|length %}
                 <table class="placement attributes dense">
                     {% for name, value in project.Attributes.items() %}
