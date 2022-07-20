@@ -47,7 +47,6 @@ class Handler(BaseHandler):
         #print(specs.get("files"))
         db = self.App.db()
         project = DBProject.create(db, user.Username, attributes=attributes, query=query)
-        print("project created")
         files_converted = []
         for f in files:
             if isinstance(f, str):
@@ -108,6 +107,36 @@ class Handler(BaseHandler):
         project.restart(force=force, failed_only=failed_only)
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
+    def copy_project(self, request, relpath, **args):
+        user = self.authenticated_user()
+        if user is None:
+            return "Unauthenticated user", 403
+        specs = json.loads(to_str(request.body))
+        project_attributes = specs.get("project_attributes", {})
+        file_attributes = specs.get("file_attributes", {})
+        project_id = specs["project_id"]
+        #print(specs.get("files"))
+        db = self.App.db()
+        original_project = DBProject.get(db, project_id)
+        if original_project is None:
+            return 404, "Project not found"
+        files = original_project.files()
+        files_updated = []
+        for f in files:
+            attrs = f["attributes"].copy()
+            attrs.update(file_attributes)
+            files_updated.append(dict(
+                namespace=f["namespace"],
+                name=f["name"],
+                attributes=attrs
+            ))
+        project_attrs = original_project.Attributes.copy()
+        project_attrs.update(project_attributes)
+        project = DBProject.create(db, user.Username, attributes=project_attrs)
+        project.add_files(files_updated)
+        self.App.project_created(project.ID)
+        return json.dumps(project.as_jsonable(with_handles=True)), "text/json"
+
     def cancel_project(self, request, relpath, project_id=None, **args):
         if not project_id:
             return 400, "Project id must be specified"
