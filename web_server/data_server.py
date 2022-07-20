@@ -37,10 +37,8 @@ class Handler(BaseHandler):
             return "OK"
     
     def create_project(self, request, relpath, **args):
-        print("create project...")
         user = self.authenticated_user()
         if user is None:
-            print("unauthenticated")
             return "Unauthenticated user", 403
         specs = json.loads(to_str(request.body))
         files = specs["files"]
@@ -72,11 +70,10 @@ class Handler(BaseHandler):
             else:
                 return 400, f"Invalid file specification: {f} - unsupported type"
         project.add_files(files_converted)
-        print("files added")
         self.App.project_created(project.ID)
         return json.dumps(project.as_jsonable(with_handles=True)), "text/json"
         
-    def delete_project(self, equest, relpath, project_id=None, **args):
+    def delete_project(self, request, relpath, project_id=None, **args):
         if not project_id:
             return 400, "Project id must be specified"
         user = self.authenticated_user()
@@ -92,6 +89,24 @@ class Handler(BaseHandler):
             return 403, "Forbidden"
         project.delete()
         return "null", "text/json"
+        
+    def restart_project(self, request, relpath, project_id=None, force="no", failed_only="yes", **args):
+        force = force == "yes"
+        failed_only = failed_only == "yes"
+        if not project_id:
+            return 400, "Project id must be specified"
+        user = self.authenticated_user()
+        if user is None:
+            return "Unauthenticated user", 403        
+        project_id = int(project_id)
+        db = self.App.db()
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        if user.Username != project.Owner and not user.is_admin():
+            return 403, "Forbidden"
+        project.restart(force=force, failed_only=failed_only)
+        return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
     def cancel_project(self, request, relpath, project_id=None, **args):
         if not project_id:

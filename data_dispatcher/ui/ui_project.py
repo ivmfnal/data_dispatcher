@@ -23,9 +23,6 @@ class CreateCommand(CLICommand):
 
         -p (json|pprint|id)                             - print created project info as JSON, 
                                                           pprint or just project id (default)
-
-        -r <project id>                                 - re-run existing project. Use -A, -a to override metadata
-                                                          -j, -l, -q are ignored
     """
     
     def __call__(self, command, client, opts, args):
@@ -120,7 +117,22 @@ class CreateCommand(CLICommand):
             pprint.pprint(info)
         else:
             print(info["project_id"])
-        
+
+
+class RestartCommand(CLICommand):
+    
+    Opts = ""
+    Usage = """[-a[-F]] <project_id>                 -- restart project
+        -a                                              - restart all files, otherwise - failed only
+        -F                                              - restart reserved handles too
+    """
+    
+    def __call__(self, command, client, opts, args):
+        project_id = args[0]
+        client.restart_project
+        client.restart_project(project_id, failed_only="-a" not in opts, force = "-F" in opts)
+
+
 class ShowCommand(CLICommand):
     
     Opts = "arjf:"
@@ -243,5 +255,6 @@ ProjectCLI = CLI(
     "list",     ListCommand(),
     "cancel",   CancelCommand(),
     "delete",   DeleteCommand()
+    "restart",  RestartCommand()
 )
 

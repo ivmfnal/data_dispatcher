@@ -519,6 +519,11 @@ class DBProject(DBObject, HasLogRecord):
         self.EndTimestamp = datetime.now(timezone.utc)
         self.save()
         self.add_log("state", state="cancelled")
+        
+    def restart(self, failed_only=False, force=False):
+        for h in self.handles(reload=True, state="failed" if failed_only else None):
+            if force or h.State != "reserved":
+                h.set_state("initial")
 
     def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:

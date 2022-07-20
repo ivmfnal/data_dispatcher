@@ -206,6 +206,14 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 }
             )
         )
+        
+    def restart_project(self, project_id, failed_only=True, force=False):
+        return self.get("restart_project?project_id=%s&failed_only=%s&force=%s" % (
+                project_id,
+                "yes" if failed_only else "no",
+                "yes" if force else "no"
+            )
+        )
 
     def delete_project(self, project_id):
         """Deletes a project by id
