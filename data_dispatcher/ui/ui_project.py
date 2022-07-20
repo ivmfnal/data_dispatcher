@@ -121,7 +121,7 @@ class CreateCommand(CLICommand):
 
 class RestartCommand(CLICommand):
     
-    Opts = ""
+    Opts = "aF"
     Usage = """[-a[-F]] <project_id>                 -- restart project
         -a                                              - restart all files, otherwise - failed only
         -F                                              - restart reserved handles too
