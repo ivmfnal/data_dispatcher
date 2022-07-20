@@ -442,12 +442,12 @@ class DBProject(DBObject, HasLogRecord):
                 with 
                     found_files as  
                     (
-                        select distinct r.namespace, r.name, true as found
+                        select distinct r.namespace, r.name, 'found' as found
                             from {rep_table} r
                     ),
                     available_files as 
                     (
-                        select distinct r.namespace, r.name, true as available
+                        select distinct r.namespace, r.name, 'available' as available
                             from {rep_table} r, {rse_table} s
                             where r.available and r.rse = s.name and s.is_available
                     ),
@@ -455,8 +455,13 @@ class DBProject(DBObject, HasLogRecord):
                     (
                         select h.project_id, h.namespace, h.name, 
                                 case
-                                    when af.available = true then 'available'
-                                    when ff.found = true then 'found'
+                                    when h.state = 'active' then (
+                                        case
+                                            when af.available = 'available' then 'available'
+                                            when ff.found = 'found' then 'found'
+                                            else 'not found'
+                                        end
+                                    )
                                     else h.state
                                 end as state
                             from {table} p, {h_table} h
@@ -483,6 +488,7 @@ class DBProject(DBObject, HasLogRecord):
                         yield p
                     p = p1
                     p.HandleCounts = {}
+                print(p.ID, h_state, count)
                 p.HandleCounts[h_state] = count
             if p is not None:
                 yield p
