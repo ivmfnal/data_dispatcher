@@ -488,7 +488,7 @@ class DBProject(DBObject, HasLogRecord):
                         yield p
                     p = p1
                     p.HandleCounts = {}
-                print(p.ID, h_state, count)
+                #print(p.ID, h_state, count)
                 p.HandleCounts[h_state] = count
             if p is not None:
                 yield p
