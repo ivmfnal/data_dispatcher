@@ -347,6 +347,7 @@ class ProjectMonitor(Primitive, Logged):
     def remove_me(self, reason):
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
+        self.log("removed")
 
     def active_handles(self, as_dids = True):
         # returns {did -> handle} for all active handles, or None if the project is not found
@@ -367,7 +368,9 @@ class ProjectMonitor(Primitive, Logged):
     
     @synchronized
     def sync_replicas(self):
+        self.debug("sync_replicas() started...")
         active_handles = self.active_handles()
+        self.log("    active_handles:", None if active_handles is None else len(active_handles))
         if active_handles is None:
             self.remove_me("deleted")
             return "stop"
