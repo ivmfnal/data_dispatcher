@@ -1434,8 +1434,8 @@ class DBFileHandle(DBObject, HasLogRecord):
     def set_state(self, new_state):
         assert new_state in self.States, "Unknown file handle state: "+new_state
         if self.State != new_state:
-            self.State = state
-            self.add_log("state", state=state)
+            self.State = new_state
+            self.add_log("state", state=new_state)
             self.save()
             
     def done(self):
