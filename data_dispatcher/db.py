@@ -1151,7 +1151,7 @@ class DBFileHandle(DBObject, HasLogRecord):
     ReservedState = "reserved"
     States = ["initial", "reserved", "done", "failed"]
     DerivedStates = [
-            "initial",
+            "not found",
             "found",
             "available", 
             "reserved",
