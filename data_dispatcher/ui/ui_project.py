@@ -278,6 +278,7 @@ ProjectCLI = CLI(
     "list",     ListCommand(),
     "cancel",   CancelCommand(),
     "delete",   DeleteCommand(),
-    "restart",  RestartCommand()
+    "restart",  RestartCommand(),
+    "copy",     CopyCommand()
 )
 
