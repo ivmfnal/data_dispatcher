@@ -254,7 +254,7 @@ ProjectCLI = CLI(
     "show",     ShowCommand(),
     "list",     ListCommand(),
     "cancel",   CancelCommand(),
-    "delete",   DeleteCommand()
+    "delete",   DeleteCommand(),
     "restart",  RestartCommand()
 )
 
