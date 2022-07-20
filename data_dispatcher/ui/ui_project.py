@@ -101,12 +101,12 @@ class CreateCommand(CLICommand):
 class CopyCommand(CLICommand):
     MinArgs = 1
     Opts = "A:a:"
-    Usage = """[options] <project id>              -- copy project
+    Usage = """[options] <project id>               -- copy project
 
         -A @<file.json>                                 - JSON file with project attributes to override
-        -A "name=value name=value ..."                  - project attributes to verride
-        -a @<file.json>                                 - JSON file with file attributes to verride
-        -a "name=value name=value ..."                  - file attributes to verride
+        -A "name=value name=value ..."                  - project attributes to override
+        -a @<file.json>                                 - JSON file with file attributes to override
+        -a "name=value name=value ..."                  - file attributes to override
 
         -p (json|pprint|id)                             - print created project info as JSON, 
                                                           pprint or just project id (default)
@@ -145,7 +145,7 @@ class CopyCommand(CLICommand):
 class RestartCommand(CLICommand):
     
     Opts = "aF"
-    Usage = """[-a[-F]] <project_id>                 -- restart project
+    Usage = """[-a [-F]] <project_id>               -- restart project
         -a                                              - restart all files, otherwise - failed only
         -F                                              - restart reserved handles too
     """
