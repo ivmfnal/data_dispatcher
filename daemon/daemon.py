@@ -328,9 +328,9 @@ class RSEConfig(Logged):
 
 class ProjectMonitor(Primitive, Logged):
     
-    Interval = 30               # regular check interval
+    UpdateInterval = 30         # replica availability update interval
     NewRequestInterval = 5      # interval to check on new pin request
-    SyncReplicasInterval = 600  # interval to re-sync replicas with Rucio
+    SyncInterval = 600          # interval to re-sync replicas with Rucio
     
     def __init__(self, master, scheduler, project_id, db, rse_config, pollers, rucio_client):
         Logged.__init__(self, f"ProjectMonitor({project_id})")
@@ -409,7 +409,6 @@ class ProjectMonitor(Primitive, Logged):
             traceback.print_exc()
             self.error("exception in init:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
-        return self.SyncReplicasInterval
  
     def create_pin_request(self, rse, replicas):
         try:
@@ -438,7 +437,7 @@ class ProjectMonitor(Primitive, Logged):
 
         tape_replicas_by_rse = self.tape_replicas_by_rse(active_handles)               # {rse -> {did -> path}}
         
-        next_run = self.Interval
+        next_run = self.UpdateInterval
 
         self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
 
@@ -507,7 +506,11 @@ class ProjectMaster(PyThread, Logged):
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.files())
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.RucioClient)
-                self.Scheduler.add(monitor.sync_replicas, id=project_id)
+                self.Scheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", interval=ProjectMonitor.SyncInterval)
+                self.Scheduler.add(monitor.update_replicas_availability, id=f"update_{project_id}", 
+                    t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
+                    interval=ProjectMonitor.UpdateInterval)
+                
             self.log("project added:", project_id)
 
     @synchronized
