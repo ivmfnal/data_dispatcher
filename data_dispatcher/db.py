@@ -524,6 +524,11 @@ class DBProject(DBObject, HasLogRecord):
         for h in self.handles(reload=True, state="failed" if failed_only else None):
             if force or h.State != "reserved":
                 h.set_state("initial")
+        self.State = "active"
+        self.EndTimestamp = None
+        self.save()
+        self.add_log("event", event="restart", force=force, failed_only=failed_only)
+        self.add_log("state", state="active")
 
     def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:
@@ -1408,7 +1413,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                 self.State = self.ReservedState
                 self.Attempts = attempts
                 c.execute("commit")
-                self.add_log("event", state="reserved", worker=worker_id)
+                self.add_log("event", event="reserved", worker=worker_id)
                 self.add_log("state", state="reserved")
                 return True
             else:
