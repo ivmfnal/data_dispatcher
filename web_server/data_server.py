@@ -120,14 +120,13 @@ class Handler(BaseHandler):
         original_project = DBProject.get(db, project_id)
         if original_project is None:
             return 404, "Project not found"
-        files = original_project.files()
         files_updated = []
-        for f in files:
-            attrs = f["attributes"].copy()
+        for h in original_project.handles():
+            attrs = h.Attributes.copy()
             attrs.update(file_attributes)
             files_updated.append(dict(
-                namespace=f["namespace"],
-                name=f["name"],
+                namespace=h.Namespace,
+                name=h.Name,
                 attributes=attrs
             ))
         project_attrs = original_project.Attributes.copy()
