@@ -131,8 +131,11 @@ class Handler(BaseHandler):
             ))
         project_attrs = original_project.Attributes.copy()
         project_attrs.update(project_attributes)
-        project = DBProject.create(db, user.Username, attributes=project_attrs)
+        project = DBProject.create(db, user.Username, attributes=project_attrs, query=original_project.Query)
         project.add_files(files_updated)
+        project.add_log("event", event="copied", from=project_id, override=dict(
+            project=project_attrs, file=file_attributes
+        ))
         self.App.project_created(project.ID)
         return json.dumps(project.as_jsonable(with_handles=True)), "text/json"
 
