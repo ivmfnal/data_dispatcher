@@ -1,14 +1,19 @@
 #!/bin/bash
 
-# Usage: checksums.sh <MQL query>
+# Usage: checksums.sh <project_id>
+
+if [ $1 == "" ]; then
+        echo Usage: checksums.sh <project_id>
+        exit 2
+fi
+
+project_id=$1
 
 cert=${HOME}/certs/ivm@fnal.gov_cert.pem
 key=${HOME}/certs/ivm@fnal.gov_key.pem
 
 my_id=`dd worker id checksums_$$`
 echo My id: $my_id
-project_id=`dd project create $@`
-echo Project created: $project_id
 
 cat << _EOF_ > /tmp/checksum.py
 import zlib, sys
@@ -19,9 +24,6 @@ while data:
     data=sys.stdin.buffer.read(10000)
 print("%x" % (a & 0xffffffff,))
 _EOF_
-
-
-
 
 done="false"
 while [ $done == "false" ]; do
