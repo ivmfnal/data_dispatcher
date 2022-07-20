@@ -130,7 +130,14 @@
     #}
     <tr>    
             <th>Files</th>
-            <td>
+            <td class="nopadding">
+                <table class="placement dense">
+                    <tr>
+                    {% for state in states -%}
+                        <td class="{{state}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</td>
+                    {% endfor %}
+                    </tr>
+                </table>
                 <table class="data replicas">
                     <tr>
                         {#
