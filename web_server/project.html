@@ -82,7 +82,8 @@
             }, svgns);
         
             var xnext = CanvasW;
-            var scale = (CanvasW-Margin)/(end_timestamp-created_timestamp);        
+            var tend = end_timestamp == null ? now_timestamp : end_timestamp;
+            var scale = (CanvasW-Margin)/(tend-created_timestamp);        
             var tnext_utc = "";
 
             for( j in handle_timeline )
