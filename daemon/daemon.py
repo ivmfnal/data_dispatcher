@@ -326,14 +326,15 @@ class RSEConfig(Logged):
         return self.get(rse).get("max_poll_burst", 100)
 
 
-class ProjectMonitor(Logged):
+class ProjectMonitor(Primitive, Logged):
     
-    Interval = 30             # regular check interval
-    NewRequestInterval = 5    # interval to check on new pin request
+    Interval = 30               # regular check interval
+    NewRequestInterval = 5      # interval to check on new pin request
+    SyncReplicasInterval = 600  # interval to re-sync replicas with Rucio
     
     def __init__(self, master, scheduler, project_id, db, rse_config, pollers, rucio_client):
         Logged.__init__(self, f"ProjectMonitor({project_id})")
-        #Primitive.__init__(self, name=f"ProjectMonitor({project_id})")
+        Primitive.__init__(self, name=f"ProjectMonitor({project_id})")
         self.ProjectID = project_id
         self.DB = db
         self.RSEConfig = rse_config
@@ -363,15 +364,20 @@ class ProjectMonitor(Logged):
                     #print("tape_replicas_by_rse(): Tape RSE:", rse)
                     tape_replicas_by_rse.setdefault(rse, {})[replica.did()] = replica.Path
         return tape_replicas_by_rse
-        
-    def init(self):
+    
+    @synchronized
+    def sync_replicas(self):
+        active_handles = self.active_handles()
+        if active_handles is None:
+            self.remove_me("deleted")
+            return "stop"
+        elif not active_handles:
+            self.remove_me("done")
+            return "stop"
+            
         try:
-            active_handles = self.active_handles()
-            if active_handles is None:
-                self.remove_me("deleted")
-                return "stop"
             dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
-            self.log("init(): active replicas:", len(dids))
+            self.log("sync_replicas(): active replicas:", len(dids))
             
             existing_replicas_by_rse = {}           # { rse -> set( did, ...) }
             for r in DBReplica.list_many_files(self.DB, [h.did() for h in active_handles]):
@@ -398,15 +404,12 @@ class ProjectMonitor(Logged):
                     else:
                         pass
             DBReplica.sync_replicas(self.DB, by_namespace_name_rse)
-
-            self.log(f"project loading done")
-            self.Scheduler.add(self.run)
-            self.debug("initialized")
+            self.log(f"replicas synced")
         except Exception as e:
             traceback.print_exc()
             self.error("exception in init:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
-            raise
+        return self.SyncReplicasInterval
  
     def create_pin_request(self, rse, replicas):
         try:
@@ -422,16 +425,11 @@ class ProjectMonitor(Logged):
             self.error("Error in create_pin_request:", traceback.format_exc())
             raise
 
-    def run(self):
-        self.debug("run...")
-        
-        active_handles = self.active_handles()
-        if active_handles is None:
-            self.remove_me("deleted")
-            return "stop"
+    @synchronized
+    def update_replicas_availability(self):
 
-        elif not active_handles:
-            self.remove_me("done")
+        active_handles = self.active_handles()
+        if not active_handles:
             return "stop"
 
         #
@@ -462,7 +460,6 @@ class ProjectMonitor(Logged):
                 n = len(dids_paths)
                 self.log("sending", len(dids_paths), "dids/paths to poller for RSE", rse)
                 poller.submit(dids_paths)
-                
         return next_run
 
 
@@ -510,7 +507,7 @@ class ProjectMaster(PyThread, Logged):
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.files())
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.RucioClient)
-                self.Scheduler.add(monitor.init, id=project_id)
+                self.Scheduler.add(monitor.sync_replicas, id=project_id)
             self.log("project added:", project_id)
 
     @synchronized

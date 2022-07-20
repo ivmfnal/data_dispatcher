@@ -5,6 +5,7 @@ from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
 import urllib, os, yaml
 from urllib.parse import quote, unquote, unquote_plus
 from wsdbtools import ConnectionPool
+from datetime import timezone
 
 class ___UsersHandler(BaseHandler):
 
@@ -301,8 +302,10 @@ def pretty_time_delta(t):
 def as_dt_utc(t):
     from datetime import datetime
     if t is None:   return ""
+    if isinstance(t, datetime):
+        t = t.timestamp()
     if isinstance(t, (int, float)):
-        t = datetime.utcfromtimestamp(t)
+        t = datetime.fromtimestamp(t, timezone.utc)
     return t.strftime("%D&nbsp;%H:%M:%S")
 
 class App(BaseApp):
@@ -317,7 +320,7 @@ class App(BaseApp):
         return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses)
 
     def init(self):
-        print("App.init... prefix:", self.Prefix)
+        #print("App.init... prefix:", self.Prefix)
         templdir = self.ScriptHome
         self.initJinjaEnvironment(
             tempdirs=[templdir, "."],

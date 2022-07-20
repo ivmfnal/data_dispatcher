@@ -17,7 +17,7 @@
     <tr>    <th>Created</th>            <td>{{project.CreatedTimestamp|as_dt_utc}}</td> </tr>
     <tr>    <th>Ended</th>              
             <td>{% if not project.EndTimestamp is none %}
-                    {{project.EndTimestamp|as_dt_utc}}
+                    {{project.EndTimestamp}}
                 {% endif %}
             </td> 
     </tr>
@@ -53,9 +53,6 @@
         console.log("hello");
         
         var svgns = "http://www.w3.org/2000/svg";
-        var created_timestamp = {{ project.CreatedTimestamp.timestamp() }};
-        var now_timestamp = (new Date()).valueOf()/1000;
-        var end_timestamp = {{ project.EndTimestamp.timestamp() if not project.EndTimestamp is none else 'null' }};
     
         function element_under(parent, type, attributes, ns)
         {
@@ -72,24 +69,34 @@
             return element;
         }
         
-        function show_timeline(parent, handle_timeline)
+        function format_time(t)
         {
-            const Margin = 10;
+            var dt = new Date(t*1000);
+            var year = dt.getUTCFullYear();
+            var month = dt.getUTCMonth();
+            var day = dt.getUTCDate();
+            var hour = dt.getUTCHour();
+            var hour = dt.getUTCHour();
+        }
+    
+        function show_timeline(parent, now, handle_timeline, file_timeline)
+        {
             var svg = element_under(parent, "svg", {
                 "height":  ""+CanvasH,
                 "width":   ""+CanvasW,
                 class: "timeline"
             }, svgns);
         
-            var xnext = CanvasW;
-            var scale = (CanvasW-Margin)/(end_timestamp-created_timestamp);        
+            var scale = CanvasW/now;
+        
+            var tnext = now;
             var tnext_utc = "";
 
             for( j in handle_timeline )
             {
                 var i = handle_timeline.length - 1 - j;
                 var event = handle_timeline[i];
-                var t = event.t;            // relative to the creation timestamp
+                var t = event.t;
                 var e = event.state;
                 var t_utc = event.t_utc;
                 var color = StateColors[e];
@@ -98,43 +105,39 @@
                     var segment_g = element_under(svg, "g", {
                         class: "segment"
                     }, svgns);
-                    var x = t*scale;
+                
                     var the_rect = element_under(segment_g, "rect", {
-                        x: x,
+                        x: t*scale,
                         y: 0,
-                        width: xnext - x,
+                        width: (tnext-t)*scale,
                         height:  CanvasH,
                     }, svgns);
                     the_rect.style.fill = color;
 
                     var hover_text = element_under(segment_g, "text", {
                         class: "tooltip",
-                        x:x + 3,
+                        x:t*scale + 3,
                         y:CanvasH - 3
                     }, svgns);
                     hover_text.innerHTML = `${e}:${t_utc}`+tnext_utc;
                     tnext = t;
-                    xnext = x;
                     tnext_utc = "-"+t_utc;
                 }
             }
         }
     </script>
     
-    {#
-        <script>
+    <script>
         const closed_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-right.gif";
         const open_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-down.gif";
-        </script>
-    #}
+    </script>
+
     <tr>    
             <th>Files</th>
             <td>
                 <table class="data replicas">
                     <tr>
-                        {#
-                            <th style="border-bottom: 0"></th>
-                        #}
+                        <th style="border-bottom: 0"></th>
                         <th>File</th>
                         <th>File<br/>Status</th>
                         <th>Replicas<br/>(available)</th>
@@ -146,7 +149,6 @@
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
-                            {#
                             <td rowspan=1 id="log_toggle_td:{{did}}">
                                 <a href="javascript:toggle_handle_log('{{did}}')" style="vertical-align: middle">
                                     <img id="log_toggle_img:{{did}}" width=10 height=10 style="vertical-align: middle"/>
@@ -155,7 +157,6 @@
                                     </script>
                                 </a>
                             </td>
-                            #}
                             <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set wf_state = handle.State %}
                             {% set file_state = handle.file_state() %}
@@ -186,11 +187,10 @@
                                         {% endfor %}
                                     ];
                                 #}
-                                var tend = {{project.time_since_created(project.EndTimestamp)}};
-                                show_timeline(document.getElementById("timeline:{{did}}"), handle_timeline);           //, file_timeline);
+                                var now = {{project.time_since_created()}};
+                                show_timeline(document.getElementById("timeline:{{did}}"), now, handle_timeline);           //, file_timeline);
                             </script>
                         </tr>
-                        {#
                         <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
                             <td colspan=6>
                                 <table class="data">
@@ -210,7 +210,6 @@
                                 </table>
                             </td>
                         </tr>
-                        #}
                     {% endfor %}
                     <script>
                         function toggle_handle_log(did)

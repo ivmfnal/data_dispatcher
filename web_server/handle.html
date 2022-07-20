@@ -45,7 +45,7 @@
                     <tr><th>Time</th><th>Event</th><th>Data</th></tr>
                     {% for log_record in handle_log %}
                         <tr>
-                            <td>{{log_record.T}}</td>
+                            <td>{{log_record.T|as_dt_utc}}</td>
                             <td class="{{log_record.Type}}">{{log_record.Type}}</td>
                             <td>{% for n, v in log_record.Data.items() %}
                                     {{n}} = {{v}}{% if not loop.last %}<br/>{% endif %}

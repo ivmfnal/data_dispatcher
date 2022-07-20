@@ -396,7 +396,7 @@ class DBProject(DBObject, HasLogRecord):
             #
             
             available_by_project = {}
-            c.execute(f"""
+            saved = f"""
                 with 
                     found_files as  
                     (
@@ -416,6 +416,40 @@ class DBProject(DBObject, HasLogRecord):
                                 and ff.name = r.name
                                 and r.available
                                 and s.name = r.rse and s.is_available
+                    ),
+                    handle_states as
+                    (
+                        select h.project_id, h.namespace, h.name, 
+                                case
+                                    when af.available = true then 'available'
+                                    when ff.found = true then 'found'
+                                    else h.state
+                                end as state
+                            from {table} p, {h_table} h
+                                left outer join found_files ff on ff.namespace = h.namespace and ff.name = h.name
+                                left outer join available_files af on af.namespace = h.namespace and af.name = h.name
+                            where p.id = h.project_id
+                    )
+                    
+                select {columns}, hs.state, count(*)
+                    from handle_states hs, projects p
+                        where p.id = hs.project_id
+                        and {p_wheres}
+                    group by p.id, hs.state
+                    order by p.id, hs.state
+            """
+            c.execute(f"""
+                with 
+                    found_files as  
+                    (
+                        select distinct r.namespace, r.name, true as found
+                            from {rep_table} r
+                    ),
+                    available_files as 
+                    (
+                        select distinct r.namespace, r.name, true as available
+                            from {rep_table} r, {rse_table} s
+                            where r.available and r.rse = s.name and s.is_available
                     ),
                     handle_states as
                     (
