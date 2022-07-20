@@ -523,7 +523,7 @@ class DBProject(DBObject, HasLogRecord):
     def restart(self, failed_only=False, force=False):
         for h in self.handles(reload=True, state="failed" if failed_only else None):
             if force or h.State != "reserved":
-                h.set_state("initial")
+                h.reset()
         self.State = "active"
         self.EndTimestamp = None
         self.save()

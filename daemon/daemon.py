@@ -482,6 +482,7 @@ class ProjectMaster(PyThread, Logged):
         self.Scheduler.add(self.clean, id="cleaner")
 
     def clean(self):
+        self.debug("cleaner...")
         nprojects = DBProject.purge(self.DB)
         nfiles = DBFile.purge(self.DB)
         self.log("purged projects:", nprojects, ", files:", nfiles)
