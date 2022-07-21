@@ -1567,9 +1567,10 @@ class DBProximityMap(DBObject):
     PK = ["cpu", "rse"]
     Table = "proximity_map"
     
-    def __init__(self, db, tuples=None, defaults = {}, default=None, rses=None):
+    def __init__(self, db, tuples=None, defaults = {}, overrides={}, default=None, rses=None):
         self.DB = db
         self.Defaults = defaults
+        self.Overrides = overrides
         self.Default = default
         self.Map = {}
         if tuples is not None:
@@ -1623,7 +1624,8 @@ class DBProximityMap(DBObject):
             default = self.Default
         if cpu is None: cpu = "DEFAULT"
         cpu_map = self.Map.get(cpu,  self.Map.get("DEFAULT", self.Defaults.get(cpu, {})))
-        return cpu_map.get(rse, cpu_map.get("DEFAULT", default))
+        overrides = self.Overrides.get(cpu, {})
+        return overrides.get(rse, cpu_map.get(rse, cpu_map.get("DEFAULT", default)))
         
     def raw(self, cpu, rse, default=None):
         return self.Map.get(cpu, {}).get(rse, default)

@@ -392,13 +392,15 @@ class App(BaseApp, Logged):
         Logged.__init__(self, "DataServer")
         BaseApp.__init__(self, config, Handler, prefix=prefix)
         self.DaemonURL = config.get("daemon_server", {}).get("url")
-        self.ProximityMapDefaults = config.get("proximity_map_defaults", {})
+        proximity_map_cfg = config.get("proximity_map", {})
+        self.ProximityMapDefaults = proximity_map_cfg.get("defaults", {})
+        self.ProximityMapOverrides = proximity_map_cfg.get("overrides", {})
         log_out = config.get("web_server",{}).get("log","-")
         init_logger(log_out, debug_enabled=True)
     
     def proximity_map(self):
         db = self.db()
-        return DBProximityMap(db, defaults=self.ProximityMapDefaults)
+        return DBProximityMap(db, defaults=self.ProximityMapDefaults, overrides=self.ProximityMapOverrides)
 
     def project_created(self, project_id):
         if self.DaemonURL:

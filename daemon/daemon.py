@@ -682,7 +682,7 @@ def main():
             poller.start()
 
     proximity_map_loader = None
-    proximity_map_url = config.get("proximity_map_url")
+    proximity_map_url = config.get("proximity_map", {}).get("url")
     if proximity_map_url:
         proximity_map_loader_interval = int(config.get("proximity_map_loader_interval", 60))
         proximity_map_loader = ProximityMapDownloader(
