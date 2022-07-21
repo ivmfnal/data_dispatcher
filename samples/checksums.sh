@@ -3,7 +3,7 @@
 # Usage: checksums.sh <project_id>
 
 if [ $1 == "" ]; then
-        echo Usage: checksums.sh <project_id>
+        echo Usage: checksums.sh \<project_id\>
         exit 2
 fi
 

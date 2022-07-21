@@ -375,8 +375,12 @@ class ProjectMonitor(Primitive, Logged):
     
     @synchronized
     def sync_replicas(self):
+
+        self.debug("sync_replicas...")
+
         active_handles = self.active_handles()
         self.debug("sync_replicas(): active_handles:", None if active_handles is None else len(active_handles))
+
         if active_handles is None:
             self.remove_me("deleted")
             return "stop"
@@ -386,7 +390,7 @@ class ProjectMonitor(Primitive, Logged):
             
         try:
             dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
-            self.log("sync_replicas(): active replicas:", len(dids))
+            ndids = len(dids)
             
             existing_replicas_by_rse = {}           # { rse -> set( did, ...) }
             for r in DBReplica.list_many_files(self.DB, [h.did() for h in active_handles]):
@@ -395,9 +399,10 @@ class ProjectMonitor(Primitive, Logged):
             with self.Master:
                 # locked, in case the client needs to refresh the token
                 rucio_replicas = self.RucioClient.list_replicas(dids, all_states=False, ignore_availability=False)
-                rucio_replicas = list(rucio_replicas)
-                n = len(rucio_replicas)
-                self.log("init() replicas found in Rucio:", n)
+
+            rucio_replicas = list(rucio_replicas)
+            n = len(rucio_replicas)
+            self.log(f"sync_replicas(): replicas found in Rucio/all active handles: {n}/{ndids}")
 
             by_namespace_name_rse = {}
             for r in rucio_replicas:
@@ -416,7 +421,7 @@ class ProjectMonitor(Primitive, Logged):
             self.log(f"replicas synced")
         except Exception as e:
             traceback.print_exc()
-            self.error("exception in init:", e)
+            self.error("exception in sync_replicas:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
  
     def create_pin_request(self, rse, replicas):
@@ -517,7 +522,7 @@ class ProjectMaster(PyThread, Logged):
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.files())
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.RucioClient)
-                self.Scheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", interval=ProjectMonitor.SyncInterval)
+                self.Scheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", t0=time.time(), interval=ProjectMonitor.SyncInterval)
                 self.Scheduler.add(monitor.update_replicas_availability, id=f"update_{project_id}", 
                     t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
                     interval=ProjectMonitor.UpdateInterval)

@@ -3,7 +3,7 @@
 # Usage: create_project.sh <MQL query>
 
 if [ $1 == "" ]; then
-        echo Usage: create_project.sh <MQL query>
+        echo Usage: create_project.sh \<MQL query\>
         exit 2
 fi
 

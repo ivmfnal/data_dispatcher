@@ -84,7 +84,7 @@ class CreateCommand(CLICommand):
             for line in inp:
                 line = line.strip()
                 if line:
-                    did, rest = (tuple(line.split(None, 1)) + (None,))[:2]
+                    did, rest = (tuple(line.split(None, 1)) + ("",))[:2]
                     namespace, name = did.split(":", 1)
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
 
