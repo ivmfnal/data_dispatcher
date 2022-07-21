@@ -1438,6 +1438,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             self.save()
             
     def done(self):
+        self.State = "done"
         self.add_log("state", event=self.State, worker=self.WorkerID, state=self.State)
         self.WorkerID = None
         self.save()
