@@ -328,9 +328,9 @@ class RSEConfig(Logged):
 
 class ProjectMonitor(Primitive, Logged):
     
-    Interval = 30               # regular check interval
+    UpdateInterval = 30         # replica availability update interval
     NewRequestInterval = 5      # interval to check on new pin request
-    SyncReplicasInterval = 600  # interval to re-sync replicas with Rucio
+    SyncInterval = 600          # interval to re-sync replicas with Rucio
     
     def __init__(self, master, scheduler, project_id, db, rse_config, pollers, rucio_client):
         Logged.__init__(self, f"ProjectMonitor({project_id})")
@@ -347,6 +347,7 @@ class ProjectMonitor(Primitive, Logged):
     def remove_me(self, reason):
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
+        self.log("removed:", reason)
 
     def active_handles(self, as_dids = True):
         # returns {did -> handle} for all active handles, or None if the project is not found
@@ -368,6 +369,7 @@ class ProjectMonitor(Primitive, Logged):
     @synchronized
     def sync_replicas(self):
         active_handles = self.active_handles()
+        self.debug("sync_replicas(): active_handles:", None if active_handles is None else len(active_handles))
         if active_handles is None:
             self.remove_me("deleted")
             return "stop"
@@ -409,7 +411,6 @@ class ProjectMonitor(Primitive, Logged):
             traceback.print_exc()
             self.error("exception in init:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
-        return self.SyncReplicasInterval
  
     def create_pin_request(self, rse, replicas):
         try:
@@ -427,8 +428,8 @@ class ProjectMonitor(Primitive, Logged):
 
     @synchronized
     def update_replicas_availability(self):
-
         active_handles = self.active_handles()
+        self.debug("update_replicas_availability(): active_handles:", None if active_handles is None else len(active_handles))
         if not active_handles:
             return "stop"
 
@@ -438,7 +439,7 @@ class ProjectMonitor(Primitive, Logged):
 
         tape_replicas_by_rse = self.tape_replicas_by_rse(active_handles)               # {rse -> {did -> path}}
         
-        next_run = self.Interval
+        next_run = self.UpdateInterval
 
         self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
 
@@ -481,6 +482,7 @@ class ProjectMaster(PyThread, Logged):
         self.Scheduler.add(self.clean, id="cleaner")
 
     def clean(self):
+        self.debug("cleaner...")
         nprojects = DBProject.purge(self.DB)
         nfiles = DBFile.purge(self.DB)
         self.log("purged projects:", nprojects, ", files:", nfiles)
@@ -507,7 +509,11 @@ class ProjectMaster(PyThread, Logged):
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.files())
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.RucioClient)
-                self.Scheduler.add(monitor.sync_replicas, id=project_id)
+                self.Scheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", interval=ProjectMonitor.SyncInterval)
+                self.Scheduler.add(monitor.update_replicas_availability, id=f"update_{project_id}", 
+                    t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
+                    interval=ProjectMonitor.UpdateInterval)
+                
             self.log("project added:", project_id)
 
     @synchronized

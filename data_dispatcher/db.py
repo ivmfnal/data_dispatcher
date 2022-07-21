@@ -455,8 +455,13 @@ class DBProject(DBObject, HasLogRecord):
                     (
                         select h.project_id, h.namespace, h.name, 
                                 case
-                                    when af.available = true then 'available'
-                                    when ff.found = true then 'found'
+                                    when h.state = 'initial' then (
+                                        case
+                                            when af.available = true then 'available'
+                                            when ff.found = true then 'found'
+                                            else 'not found'
+                                        end
+                                    )
                                     else h.state
                                 end as state
                             from {table} p, {h_table} h
@@ -483,6 +488,7 @@ class DBProject(DBObject, HasLogRecord):
                         yield p
                     p = p1
                     p.HandleCounts = {}
+                #print(p.ID, h_state, count)
                 p.HandleCounts[h_state] = count
             if p is not None:
                 yield p
@@ -513,6 +519,16 @@ class DBProject(DBObject, HasLogRecord):
         self.EndTimestamp = datetime.now(timezone.utc)
         self.save()
         self.add_log("state", event="cancel", state="cancelled")
+        
+    def restart(self, failed_only=False, force=False):
+        for h in self.handles(reload=True, state="failed" if failed_only else None):
+            if force or h.State != "reserved":
+                h.reset()
+        self.State = "active"
+        self.EndTimestamp = None
+        self.save()
+        self.add_log("event", event="restart", force=force, failed_only=failed_only)
+        self.add_log("state", state="active")
 
     def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:
@@ -1136,7 +1152,7 @@ class DBFileHandle(DBObject, HasLogRecord):
     ReservedState = "reserved"
     States = ["initial", "reserved", "done", "failed"]
     DerivedStates = [
-            "initial",
+            "not found",
             "found",
             "available", 
             "reserved",

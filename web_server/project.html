@@ -24,7 +24,7 @@
 
     <tr>    <th>Status</th>             <td><span class="{{project.State}}" style="padding: 3px">{{project.State}}</span></td> </tr>
     <tr>    <th>Query</th>              <td><pre>{{project.Query or ""}}</pre></td> </tr>
-    <tr>    <th>Attributes</th>         <td class="nopadding">
+    <tr>    <th>Project attributes</th>         <td class="nopadding">
             {% if project.Attributes|length %}
                 <table class="placement attributes dense">
                     {% for name, value in project.Attributes.items() %}
@@ -34,6 +34,7 @@
             {% endif %}
             </td> 
     </tr>
+    {#
     <tr>    <th>Handles by state</th>
             <td class="nopadding">
                 <table class="placement dense">
@@ -45,7 +46,7 @@
                 </table>
             <td>
     </tr>
-    
+    #}
     <script type="text/javascript">
         var CanvasH = 15;
         var CanvasW = 400;
@@ -82,7 +83,8 @@
             }, svgns);
         
             var xnext = CanvasW;
-            var scale = (CanvasW-Margin)/(end_timestamp-created_timestamp);        
+            var tend = end_timestamp == null ? now_timestamp : end_timestamp;
+            var scale = (CanvasW-Margin)/(tend-created_timestamp);        
             var tnext_utc = "";
 
             for( j in handle_timeline )
@@ -129,7 +131,14 @@
     #}
     <tr>    
             <th>Files</th>
-            <td>
+            <td class="nopadding">
+                <table class="placement dense">
+                    <tr>
+                    {% for state in states -%}
+                        <td class="{{state}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</td>
+                    {% endfor %}
+                    </tr>
+                </table>
                 <table class="data replicas">
                     <tr>
                         {#

@@ -6,7 +6,7 @@ from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
 class CreateCommand(CLICommand):
     
-    Opts = "q:c:l:j:A:a:j"
+    Opts = "q:c:l:j:A:a:"
     Usage = """[options] [inline MQL query]         -- create project
 
         Use an inline query or one of the following to provide file list:
@@ -23,9 +23,6 @@ class CreateCommand(CLICommand):
 
         -p (json|pprint|id)                             - print created project info as JSON, 
                                                           pprint or just project id (default)
-
-        -r <project id>                                 - re-run existing project. Use -A, -a to override metadata
-                                                          -j, -l, -q are ignored
     """
     
     def __call__(self, command, client, opts, args):
@@ -54,62 +51,42 @@ class CreateCommand(CLICommand):
             else:
                 project_attrs = parse_attrs(attr_src)
                 
-        if "-r" in opts:
-            if query or "-q" in opts or "-l" in opts or "-j" in opts:
-                print("Warning: MQL query, -l, -j are ignored when re-running an existing project")
-            project_id = int(opts["-r"])
-
-            project_info = client.get_project(project_id)
-            attrs = project_info.get("attributes", {})
-            attrs.update(project_attrs) 
-            project_attrs = attrs
-
-            files = []
-            for h in project_info["handles"]:
-                h_attrs = h.get("attributes", {}).copy()
-                h_attrs.update(common_attrs)
-                files.append(dict(
-                    namespace = h["namespace"],
-                    name = h["name"],
-                    attributes = h_attrs
-                ))
-        else:
-            if query:
-                files = MetaCatClient().query(query, with_metadata = "-c" in opts)
+        if query:
+            files = MetaCatClient().query(query, with_metadata = "-c" in opts)
+            for info in files:
+                info["attributes"] = common_attrs.copy()
+            #
+            # copy file attributes from metacat
+            #
+    
+            if "-c" in opts:
+                fields = opts["-c"].split(",")
                 for info in files:
-                    info["attributes"] = common_attrs.copy()
-                #
-                # copy file attributes from metacat
-                #
-        
-                if "-c" in opts:
-                    fields = opts["-c"].split(",")
-                    for info in files:
-                        #print(info["metadata"])
-                        attrs = {k:info["metadata"].get(k) for k in fields}
-                        info["attributes"].update(attrs)    
-        
-            elif "-j" in opts:
-                inp = opts["-j"]
-                if inp == "-":
-                    inp = sys.stdin
-                else:
-                    inp = open(inp, "r")
-                files = json.load(inp)
+                    #print(info["metadata"])
+                    attrs = {k:info["metadata"].get(k) for k in fields}
+                    info["attributes"].update(attrs)    
+    
+        elif "-j" in opts:
+            inp = opts["-j"]
+            if inp == "-":
+                inp = sys.stdin
+            else:
+                inp = open(inp, "r")
+            files = json.load(inp)
 
-            elif "-l" in opts:
-                inp = opts["-l"]
-                if inp == "-":
-                    inp = sys.stdin
-                else:
-                    inp = open(inp, "r")
-                files = []
-                for line in inp:
-                    line = line.strip()
-                    if line:
-                        did, rest = (tuple(line.split(None, 1)) + (None,))[:2]
-                        namespace, name = did.split(":", 1)
-                        files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
+        elif "-l" in opts:
+            inp = opts["-l"]
+            if inp == "-":
+                inp = sys.stdin
+            else:
+                inp = open(inp, "r")
+            files = []
+            for line in inp:
+                line = line.strip()
+                if line:
+                    did, rest = (tuple(line.split(None, 1)) + (None,))[:2]
+                    namespace, name = did.split(":", 1)
+                    files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
 
         #print("files:", files)
         info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query)
@@ -120,7 +97,65 @@ class CreateCommand(CLICommand):
             pprint.pprint(info)
         else:
             print(info["project_id"])
+
+class CopyCommand(CLICommand):
+    MinArgs = 1
+    Opts = "A:a:"
+    Usage = """[options] <project id>               -- copy project
+
+        -A @<file.json>                                 - JSON file with project attributes to override
+        -A "name=value name=value ..."                  - project attributes to override
+        -a @<file.json>                                 - JSON file with file attributes to override
+        -a "name=value name=value ..."                  - file attributes to override
+
+        -p (json|pprint|id)                             - print created project info as JSON, 
+                                                          pprint or just project id (default)
+    """
+    
+    def __call__(self, command, client, opts, args):
+        project_id = int(args[0])
         
+        common_attrs = {}
+        if "-a" in opts:
+            attr_src = opts["-a"]
+            if attr_src[0] == '@':
+                common_attrs = json.load(open(attr_src[1:], "r"))
+            else:
+                common_attrs = parse_attrs(attr_src)
+ 
+        project_attrs = {}
+        if "-A" in opts:
+            attr_src = opts["-A"]
+            if attr_src[0] == '@':
+                project_attrs = json.load(open(attr_src[1:], "r"))
+            else:
+                project_attrs = parse_attrs(attr_src)
+
+        #print("files:", files)
+        info = client.copy_project(project_id, common_attributes=common_attrs, project_attributes=project_attrs)
+        printout = opts.get("-p", "id")
+        if printout == "json":
+            print(pretty_json(info))
+        elif printout == "pprint":
+            pprint.pprint(info)
+        else:
+            print(info["project_id"])
+
+
+class RestartCommand(CLICommand):
+    
+    Opts = "aF"
+    Usage = """[-a [-F]] <project_id>               -- restart project
+        -a                                              - restart all files, otherwise - failed only
+        -F                                              - restart reserved handles too
+    """
+    
+    def __call__(self, command, client, opts, args):
+        project_id = args[0]
+        client.restart_project
+        client.restart_project(project_id, failed_only="-a" not in opts, force = "-F" in opts)
+
+
 class ShowCommand(CLICommand):
     
     Opts = "arjf:"
@@ -242,6 +277,8 @@ ProjectCLI = CLI(
     "show",     ShowCommand(),
     "list",     ListCommand(),
     "cancel",   CancelCommand(),
-    "delete",   DeleteCommand()
+    "delete",   DeleteCommand(),
+    "restart",  RestartCommand(),
+    "copy",     CopyCommand()
 )
 

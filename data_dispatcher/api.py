@@ -180,6 +180,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Keyword Arguments:
             common_attributes (dict): attributes to attach to each file, will be overridden by the individual file attribute values with the same key
             project_attributes (dict): attriutes to attach to the new project
+            query (str): query used to create the file list, optional
 
         Returns:
             (dict) new project information
@@ -204,6 +205,49 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     "project_attributes":   project_attributes,
                     "query":        query
                 }
+            )
+        )
+        
+    def copy_project(self, project_id, common_attributes={}, project_attributes={}):
+        """Creates new project
+        
+        Args:
+            project_id (int): id of the project to copy
+        
+        Keyword Arguments:
+            common_attributes (dict): file attributes to override
+            project_attributes (dict): project attributes to override
+
+        Returns:
+            (dict) new project information
+        """
+        return self.post("copy_project", json.dumps(
+                {   
+                    "project_id":           project_id,
+                    "file_attributes":      common_attributes,
+                    "project_attributes":   project_attributes
+                }
+            )
+        )
+    
+        
+    def restart_project(self, project_id, failed_only=True, force=False):
+        """Restart a project
+        
+        Args:
+            project_id (int): id of the project to restart
+
+        Keyword Arguments:
+            failed_only (boolean): default=True, restart only failed files
+            force (boolean): default=False, restart even reserved files (force release them). Ignored of failed_only is True
+
+        Returns:
+            (dict) project information
+        """
+        return self.get("restart_project?project_id=%s&failed_only=%s&force=%s" % (
+                project_id,
+                "yes" if failed_only else "no",
+                "yes" if force else "no"
             )
         )
 

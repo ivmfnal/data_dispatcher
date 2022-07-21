@@ -37,10 +37,8 @@ class Handler(BaseHandler):
             return "OK"
     
     def create_project(self, request, relpath, **args):
-        print("create project...")
         user = self.authenticated_user()
         if user is None:
-            print("unauthenticated")
             return "Unauthenticated user", 403
         specs = json.loads(to_str(request.body))
         files = specs["files"]
@@ -49,7 +47,6 @@ class Handler(BaseHandler):
         #print(specs.get("files"))
         db = self.App.db()
         project = DBProject.create(db, user.Username, attributes=attributes, query=query)
-        print("project created")
         files_converted = []
         for f in files:
             if isinstance(f, str):
@@ -72,11 +69,10 @@ class Handler(BaseHandler):
             else:
                 return 400, f"Invalid file specification: {f} - unsupported type"
         project.add_files(files_converted)
-        print("files added")
         self.App.project_created(project.ID)
         return json.dumps(project.as_jsonable(with_handles=True)), "text/json"
         
-    def delete_project(self, equest, relpath, project_id=None, **args):
+    def delete_project(self, request, relpath, project_id=None, **args):
         if not project_id:
             return 400, "Project id must be specified"
         user = self.authenticated_user()
@@ -93,6 +89,56 @@ class Handler(BaseHandler):
         project.delete()
         return "null", "text/json"
         
+    def restart_project(self, request, relpath, project_id=None, force="no", failed_only="yes", **args):
+        force = force == "yes"
+        failed_only = failed_only == "yes"
+        if not project_id:
+            return 400, "Project id must be specified"
+        user = self.authenticated_user()
+        if user is None:
+            return "Unauthenticated user", 403        
+        project_id = int(project_id)
+        db = self.App.db()
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        if user.Username != project.Owner and not user.is_admin():
+            return 403, "Forbidden"
+        project.restart(force=force, failed_only=failed_only)
+        return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
+        
+    def copy_project(self, request, relpath, **args):
+        user = self.authenticated_user()
+        if user is None:
+            return "Unauthenticated user", 403
+        specs = json.loads(to_str(request.body))
+        project_attributes = specs.get("project_attributes", {})
+        file_attributes = specs.get("file_attributes", {})
+        project_id = specs["project_id"]
+        #print(specs.get("files"))
+        db = self.App.db()
+        original_project = DBProject.get(db, project_id)
+        if original_project is None:
+            return 404, "Project not found"
+        files_updated = []
+        for h in original_project.handles():
+            attrs = h.Attributes.copy()
+            attrs.update(file_attributes)
+            files_updated.append(dict(
+                namespace=h.Namespace,
+                name=h.Name,
+                attributes=attrs
+            ))
+        project_attrs = original_project.Attributes.copy()
+        project_attrs.update(project_attributes)
+        project = DBProject.create(db, user.Username, attributes=project_attrs, query=original_project.Query)
+        project.add_files(files_updated)
+        project.add_log("event", event="copied", source=project_id, override=dict(
+            project=project_attrs, file=file_attributes
+        ))
+        self.App.project_created(project.ID)
+        return json.dumps(project.as_jsonable(with_handles=True)), "text/json"
+
     def cancel_project(self, request, relpath, project_id=None, **args):
         if not project_id:
             return 400, "Project id must be specified"
