@@ -39,7 +39,7 @@ while [ $done == "false" ]; do
 		name=`python ui/json_extract.py info.json name`
 		did=${namespace}:${name}
 
-                tmpfile=/tmp/tmpdata
+                tmpfile=/tmp/tmpdata_$$
 
 		echo downloading $url
                 case $url in
@@ -57,7 +57,9 @@ while [ $done == "false" ]; do
 				exit 1
 				;;
 		esac
+                ls -l $tmpfile
 		checksum=`python /tmp/checksum.py < $tmpfile`
+                rm -f $tmpfile
 		echo $name : Adler32=$checksum
                 echo
 		dd worker done $project_id $did

@@ -182,7 +182,7 @@ class RSEHandler(BaseHandler):
         overrides = pmap.Overrides
         overrides_cpus = sorted(overrides.keys(), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
         overrides_rses = set()
-        for m in overrides_cpus.values():
+        for m in overrides.values():
             overrides_rses |= set(m.keys())
         overrides_rses = sorted(overrides_rses, key=lambda x: "-" if x.upper() == "DEFAULT" else x)
         return self.render_to_response("proximity_map.html", proximity_map = pmap, default_proximity=pmap.Default,
@@ -323,9 +323,9 @@ class App(BaseApp):
         BaseApp.__init__(self, config, TopHandler, prefix=prefix)
         self.Config = config
         proximity_cfg = config.get("proximity_map", {})
-        self.DefaultProximity = proximity_cfg.get("default_proximity", -1))
-        self.PMDefaults = proximity_cfg.get("defaults", {}))
-        self.PMOverrides = proximity_cfg.get("overrides", {}))
+        self.DefaultProximity = proximity_cfg.get("default_proximity", -1)
+        self.PMDefaults = proximity_cfg.get("defaults", {})
+        self.PMOverrides = proximity_cfg.get("overrides", {})
         self.SiteTitle = config.get("web_server", {}).get("site_title", "DEMO Data Dispatcher")
 
     def proximity_map(self, rses=None):

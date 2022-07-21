@@ -28,7 +28,7 @@
         <tr>
             {% set cpu_map = overrides.get(cpu,{}) %}
             <th class="no__">{{cpu}}</th>
-            {% for rse in proximity_map.rses() %}
+            {% for rse in overrides_rses %}
                 <td>{{cpu_map.get(rse,"")}}</td>
             {% endfor %}
         </tr>
