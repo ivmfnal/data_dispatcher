@@ -5,17 +5,19 @@ from data_dispatcher.api import NotFoundError
 
 class NextFileCommand(CLICommand):
     
-    Opts = "jt:c:"
+    Opts = "jt:c:w:"
     MinArgs = 1
-    Usage = """[-j] [-t <timeout>] [-c <cpu_site>] <project_id> -- get next available file
-             -c -- choose the file according to the CPU/RSE proximity map for the CPU site
-             -j -- as JSON
-             -t -- wait for next file until "timeout" seconds, 
-                  otherwise, wait until the project finishes
+    Usage = """[options] <project_id> -- get next available file
+             -w <worker id>     -- specify worker id
+             -c <cpu site>      -- choose the file according to the CPU/RSE proximity map for the CPU site
+             -j                 -- as JSON
+             -t <timeout>       -- wait for next file until "timeout" seconds, 
+                                   otherwise, wait until the project finishes
     """
 
     def __call__(self, command, client, opts, args):
         project_id = int(args[0])
+        worker_id = opts.get("-w")
         as_json = "-j" in opts
         timeout = opts.get("-t")
         if timeout is not None: timeout = int(timeout)
@@ -30,7 +32,7 @@ class NextFileCommand(CLICommand):
                 if not project_info["active"]:
                     print("done")
                     sys.exit(1)    # project finished
-                reply = client.next_file(project_id, cpu_site)
+                reply = client.next_file(project_id, cpu_site, worker_id=worker_id)
                 info = reply["handle"]
                 reason = reply["reason"]
                 retry = reply["retry"]
