@@ -196,9 +196,9 @@ class PinRequest(Logged):
         r.raise_for_status()
         self.URL = r.headers['request-url']
         self.Expiration = time.time() + self.PinLifetime
-        self.log("Pin request sent")
+        self.log("Pin request created. URL:", self.URL)
 
-    def status(self):
+    def query(self):
         assert self.URL is not None
         headers = { "accept" : "application/json",
                     "content-type" : "application/json"}
@@ -209,16 +209,18 @@ class PinRequest(Logged):
             self.ErrorText = r.text
             return "ERROR"
         r.raise_for_status()
-        self.debug("request status response:", r.text)
-        self.debug("my URL:", self.URL)
-        self.log("DCache pin request status returned:", r.json()["status"])
-        return r.json()["status"]
+        self.debug("query: my URL:", self.URL, "   response:", r.text)
+        return r.json()
+
+    def status(self):
+        return self.query()["status"]
 
     def error(self):
         return self.Error
 
     def complete(self):
-        self.Complete = self.Complete or self.status().upper() == "COMPLETED"
+        info = self.query()
+        self.Complete = info.get("status").upper() == "COMPLETED" and len(info.get("failures", {}).get("failures",{})) == 0
         return self.Complete
         
     def expired(self):
