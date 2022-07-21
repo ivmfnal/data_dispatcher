@@ -192,7 +192,7 @@ class PinRequest(Logged):
                 verify=False, cert = self.CertTuple)
 
         #print("send(): response:", r)
-        #print("send(): response text:", r.text)
+        self.debug("response text:", r.text)
         r.raise_for_status()
         self.URL = r.headers['request-url']
         self.Expiration = time.time() + self.PinLifetime
@@ -209,7 +209,7 @@ class PinRequest(Logged):
             self.ErrorText = r.text
             return "ERROR"
         r.raise_for_status()
-        #self.debug("request status response:", r.json())
+        self.debug("request status response:", r.text)
         self.debug("my URL:", self.URL)
         self.log("DCache pin request status returned:", r.json()["status"])
         return r.json()["status"]
