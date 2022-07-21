@@ -155,12 +155,13 @@ class PinRequest(Logged):
     PinLifetime = 3600
     SafetyInterval = 600            # if the expiration time is too close, consider the request expired
     
-    def __init__(self, project_id, url, ssl_config, replicas):
+    def __init__(self, project_id, url, pin_prefix, ssl_config, replicas):
         Logged.__init__(self, f"PinRequest({project_id})")
         self.BaseURL = url
         self.Replicas = replicas.copy()             # {did -> path}
         self.SSLConfig = ssl_config
         self.URL = None
+        self.PinPrefix = pin_prefix
         self.Cert = self.SSLConfig.get("cert")
         self.Key = self.SSLConfig.get("key")
         self.CertTuple = (self.Cert, self.Key) if self.Cert else None
@@ -169,7 +170,6 @@ class PinRequest(Logged):
         self.Complete = False
         self.Expiration = None
         self.debug("created with base url:", self.BaseURL)
-        
 
     def send(self):
         headers = { "accept" : "application/json",
@@ -185,6 +185,8 @@ class PinRequest(Logged):
                 "lifetime-unit": "SECONDS"
             }
         }
+        if self.PinPrefix:
+            data["target-prefix"] = self.PinPrefix
         self.debug("request data:", json.dumps(data, indent="  "))
         r = requests.post(self.BaseURL, data = json.dumps(data), headers=headers, 
                 verify=False, cert = self.CertTuple)
@@ -275,6 +277,9 @@ class RSEConfig(Logged):
     def pin_url(self, rse):
         url = self[rse]["pin_url"]
         return url
+        
+    def pin_prefix(self, rse):
+        return self[rse].get("pin_prefix", "")
         
     def poll_url(self, rse):
         return self[rse]["poll_url"]
@@ -416,8 +421,9 @@ class ProjectMonitor(Primitive, Logged):
         try:
             ssl_config = self.RSEConfig.ssl_config(rse)
             pin_url = self.RSEConfig.pin_url(rse)
+            pin_prefix = self.RSEConfig.pin_prefix(rse)
             self.debug("create_pin_request: rse:", rse, "   pin_url:", pin_url)
-            self.PinRequests[rse] = pin_request = PinRequest(self.ProjectID, self.RSEConfig.pin_url(rse), 
+            self.PinRequests[rse] = pin_request = PinRequest(self.ProjectID, pin_url, pin_prefix,
                 ssl_config, replicas
             )
             pin_request.send()
