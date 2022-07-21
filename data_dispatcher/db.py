@@ -512,7 +512,7 @@ class DBProject(DBObject, HasLogRecord):
         self.State = "cancelled"
         self.EndTimestamp = datetime.now(timezone.utc)
         self.save()
-        self.add_log("state", state="cancelled")
+        self.add_log("state", event="cancel", state="cancelled")
 
     def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:
@@ -551,7 +551,7 @@ class DBProject(DBObject, HasLogRecord):
                 state = "done"
                 data = {}
 
-            self.add_log("state", state=state)
+            self.add_log("state", event="release", state=state)
 
             self.State = state
             self.EndTimestamp = datetime.now(timezone.utc)
@@ -894,13 +894,13 @@ class DBReplica(DBObject, HasLogRecord):
             raise
         
         replica = DBReplica.get(db, namespace, name, rse)
-        replica.add_log("event", {
-            "event":    "created",
-            "url": url,
-            "path": path,
-            "available": available
+        replica.add_log("state", {
+            "event":        "create",
+            "url":          url,
+            "path":         path,
+            "available":    available,
+            "state":        "available" if available else "unavailable"
         })
-        replica.add_log("state", state="available" if available else "unavailable")
         return replica
 
     def save(self):
@@ -1069,26 +1069,17 @@ class DBReplica(DBObject, HasLogRecord):
         log_records = [
             (
                 namespace_name + (rse,),
-                "event",
+                "state",
                 {
-                    "event": "created",
+                    "event": "create",
                     "url":  replicas[namespace_name]["url"],
                     "path": replicas[namespace_name]["path"],
-                    "available":    available
+                    "available":    available,
+                    "state":    available_text
                 }
             )
             for namespace_name in new_replicas              # do not re-add "found" log records for existing replicas
-        ] + [
-            (
-                namespace_name + (rse,),
-                "state",
-                {
-                    "available": available_text
-                }
-            )
-            for namespace_name in new_replicas 
         ]
-
         if log_records:
             DBReplica.add_log_bulk(db, log_records)
         return len(new_replicas)
@@ -1128,7 +1119,7 @@ class DBReplica(DBObject, HasLogRecord):
             (
                 (namespace, name, rse),
                 "state",
-                { "available": available }
+                { "available": available, "event": "update", "state": available_text }
             )
             for (namespace, name) in updated
         ]
@@ -1262,7 +1253,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             c.execute("rollback")
             raise
         handle = DBFileHandle.get(db, project_id, namespace, name)
-        handle.add_log("state", state="initial")
+        handle.add_log("state", event="create", state="initial")
         return handle
 
     @staticmethod
@@ -1294,7 +1285,8 @@ class DBFileHandle(DBObject, HasLogRecord):
                 (project_id, f["namespace"], f["name"]),
                 "state",
                 {
-                    "state": "initial"
+                    "state": "initial",
+                    "event": "create"
                 }
             )
             for f in files 
@@ -1397,8 +1389,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                 self.State = self.ReservedState
                 self.Attempts = attempts
                 c.execute("commit")
-                self.add_log("event", state="reserved", worker=worker_id)
-                self.add_log("state", state="reserved")
+                self.add_log("state", event="reserve", state="reserved", worker=worker_id)
                 return True
             else:
                 c.execute("rollback")
@@ -1420,32 +1411,30 @@ class DBFileHandle(DBObject, HasLogRecord):
     def is_reserved(self):
         return self.State == self.ReservedState
 
-    def set_state(self, new_state):
+    def set_state(self, new_state, event=None):
         assert new_state in self.States, "Unknown file handle state: "+new_state
         if self.State != new_state:
             self.State = state
-            self.add_log("state", state=state)
+            data = {"state":state}
+            if event:
+                data["event"] = event
+            self.add_log("state", data)
             self.save()
             
     def done(self):
-        self.State = "done"
-        self.add_log("event", event=self.State, worker=self.WorkerID)
-        self.add_log("state", state=self.State)
+        self.add_log("state", event=self.State, worker=self.WorkerID, state=self.State)
         self.WorkerID = None
         self.save()
 
     def failed(self, retry=True):
         self.State = self.ReadyState if retry else "failed"
-        self.add_log("event", event="failed", worker=self.WorkerID, final=not retry)
-        self.add_log("state", state=self.State)
+        self.add_log("state", event="failed", worker=self.WorkerID, final=not retry, state=self.State)
         self.WorkerID = None
         self.save()
         
     def reset(self):
         self.State = self.ReadyState
-        self.add_log("event", event="reset")
-        self.add_log("state", state=self.State)
-        self.add_log(self.ReadyState)
+        self.add_log("state", event="reset", state=self.State)
         self.WorkerID = None
         self.save()
 
