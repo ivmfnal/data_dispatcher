@@ -1458,12 +1458,12 @@ class DBFileHandle(DBObject, HasLogRecord):
 
 class DBRSE(DBObject):
     
-    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "preference"]
+    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference"]
     PK = ["name"]
     Table = "rses"
 
     def __init__(self, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
-                remove_prefix=None, add_prefix=None, preference=0):
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
         self.DB = db
         self.Name = name
         self.Description = description
@@ -1474,6 +1474,7 @@ class DBRSE(DBObject):
         self.PollURL = poll_url
         self.RemovePrefix = remove_prefix
         self.AddPrefix = add_prefix
+        self.PinPrefix = pin_prefix
         self.Preference = preference
 
     def as_dict(self):
@@ -1486,6 +1487,7 @@ class DBRSE(DBObject):
             poll_url        =   self.PollURL,
             remove_prefix   =   self.RemovePrefix,
             add_prefix      =   self.AddPrefix,
+            pin_prefix      =   self.PinPrefix,
             preference      =   self.Preference,
             is_enabled      =   self.Enabled
         )
@@ -1494,7 +1496,7 @@ class DBRSE(DBObject):
 
     @classmethod
     def create(cls, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
-                remove_prefix=None, add_prefix=None, preference=0):
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
         c = db.cursor()
         table = cls.Table
         columns = cls.columns(as_text=True)
@@ -1503,9 +1505,9 @@ class DBRSE(DBObject):
             c.execute(f"""
                 begin;
                 insert into {table}({columns})
-                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     on conflict(name) do nothing;
-                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, preference)
+                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, pin_prefix, preference)
             )
             c.execute("commit")
         except:
@@ -1533,9 +1535,10 @@ class DBRSE(DBObject):
             c.execute("""
                 begin;
                 update rses 
-                    set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, preference=%s
+                    set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, pin_prefix=%s, preference=%s
                     where name=%s
-                """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, self.AddPrefix, self.Preference,
+                """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
+                    self.AddPrefix, self.PinPrefix, self.Preference,
                     self.Name)
             )
             c.execute("commit")

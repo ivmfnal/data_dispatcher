@@ -57,27 +57,6 @@
     </tr>
     
     <tr>
-        <th>Pin URL</th>
-        <td>{% if mode == "create" or mode == "edit" %}
-                <input name="pin_url" type="text" size=50 {% if mode=="edit" %}value="{{rse.PinURL or ''}}"{% endif %}/>
-                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
-            {% else %}
-                {{rse.PinURL or ''}}
-            {% endif %}
-        </td>
-    </tr>
-    <tr>
-        <th>Poll URL</th>
-        <td>{% if mode == "create" or mode == "edit" %}
-                <input name="poll_url" type="text" size=50 {% if mode=="edit" %}value="{{rse.PollURL or ''}}"{% endif %}/>
-                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
-            {% else %}
-                {{rse.PollURL or ''}}
-            {% endif %}
-        </td>
-    </tr>
-    
-    <tr>
         <th>Preference</th>
         <td>{% if mode == "create" or mode == "edit" %}
                 <input name="preference" type="number" size="6" value="{% if mode=='edit' %}{{rse.Preference}}{% else %}0{% endif %}"/>
@@ -113,6 +92,39 @@
                 <input name="add_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.AddPrefix or ''}}"{% endif %}/>
             {% else %}
                 {{rse.AddPrefix or ''}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <td colspan=2>dCache RSEs only</td>
+    </tr>
+    <tr>
+        <th>Pin URL</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="pin_url" type="text" size=50 {% if mode=="edit" %}value="{{rse.PinURL or ''}}"{% endif %}/>
+                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
+            {% else %}
+                {{rse.PinURL or ''}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Pin prefix</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="pin_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.PinPrefix or ''}}"{% endif %}/>
+                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
+            {% else %}
+                {{rse.PinPrefix or ''}}
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <th>Poll URL</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <input name="poll_url" type="text" size=50 {% if mode=="edit" %}value="{{rse.PollURL or ''}}"{% endif %}/>
+                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
+            {% else %}
+                {{rse.PollURL or ''}}
             {% endif %}
         </td>
     </tr>

@@ -279,7 +279,7 @@ class RSEConfig(Logged):
         return url
         
     def pin_prefix(self, rse):
-        return self[rse].get("pin_prefix", "")
+        return self[rse].get("pin_prefix") or ""
         
     def poll_url(self, rse):
         return self[rse]["poll_url"]

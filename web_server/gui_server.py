@@ -248,6 +248,7 @@ class RSEHandler(BaseHandler):
         rse.AddPrefix = request.POST.get("add_pefix", "")
         rse.PollURL = request.POST.get("poll_url") or None
         rse.PinURL = request.POST.get("pin_url") or None
+        rse.PinPrefix = request.POST.get("pin_prefix") or None
         rse.Description = request.POST.get("description", "")
         rse.Preference = int(request.POST.get("preference", 0))
         rse.Enabled = request.POST.get("is_enabled", "no") != "no"

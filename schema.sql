@@ -36,6 +36,7 @@ create table rses
     poll_url        text,
     remove_prefix   text    default '',
     add_prefix      text    default '',
+    pin_prefix      text    default '',
     preference      int     default 0
 );
 
