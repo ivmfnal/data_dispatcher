@@ -179,7 +179,15 @@ class RSEHandler(BaseHandler):
     def proximity_map(self, request, relpath, message="", **args):
         enabled_rses = set(r.Name for r in DBRSE.list(self.App.db(), include_disabled=False))
         pmap = self.App.proximity_map(rses=enabled_rses)
-        return self.render_to_response("proximity_map.html", proximity_map = pmap, default_proximity=pmap.Default)
+        overrides = pmap.Overrides
+        overrides_cpus = sorted(overrides.keys(), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
+        overrides_rses = set()
+        for m in overrides_cpus.values():
+            overrides_rses |= set(m.keys())
+        overrides_rses = sorted(overrides_rses, key=lambda x: "-" if x.upper() == "DEFAULT" else x)
+        return self.render_to_response("proximity_map.html", proximity_map = pmap, default_proximity=pmap.Default,
+            overrides = overrides, overrides_cpus=overrides_cpus, overrides_rses=overrides_rses
+        )
 
     def rses(self, request, relpath, **args):
         user = self.authenticated_user()
@@ -314,11 +322,14 @@ class App(BaseApp):
     def __init__(self, config, prefix):
         BaseApp.__init__(self, config, TopHandler, prefix=prefix)
         self.Config = config
-        self.DefaultProximity = int(config.get("default_proximity", -1))
+        proximity_cfg = config.get("proximity_map", {})
+        self.DefaultProximity = proximity_cfg.get("default_proximity", -1))
+        self.PMDefaults = proximity_cfg.get("defaults", {}))
+        self.PMOverrides = proximity_cfg.get("overrides", {}))
         self.SiteTitle = config.get("web_server", {}).get("site_title", "DEMO Data Dispatcher")
 
     def proximity_map(self, rses=None):
-        return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses)
+        return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses, defaults=self.PMDefaults, overrides=self.PMOverrides)
 
     def init(self):
         #print("App.init... prefix:", self.Prefix)

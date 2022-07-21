@@ -13,6 +13,30 @@
 </table>
 #}
 
+<h2>Overrides</h2>
+
+<table class="data">
+    <tr>
+        <th rowspan=2>CPU Site</th><th colspan="{{overrides_rses|length}}" class="combined">RSEs</th>
+    </tr>
+    <tr>
+        {% for rse in overrides_rses %}
+            <th>{{rse}}</th>
+        {% endfor %}
+    </tr>
+    {% for cpu in overrides_cpus %}
+        <tr>
+            {% set cpu_map = overrides.get(cpu,{}) %}
+            <th class="no__">{{cpu}}</th>
+            {% for rse in proximity_map.rses() %}
+                <td>{{cpu_map.get(rse,"")}}</td>
+            {% endfor %}
+        </tr>
+    {% endfor %}
+</table>
+
+<h2>Downloaded map</h2>    
+
 <table class="data">
     <tr>
         <th rowspan=2>CPU Site</th><th colspan="{{proximity_map.rses()|length}}" class="combined">RSEs</th>
