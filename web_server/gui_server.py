@@ -327,6 +327,7 @@ class App(BaseApp):
         self.PMDefaults = proximity_cfg.get("defaults", {})
         self.PMOverrides = proximity_cfg.get("overrides", {})
         self.SiteTitle = config.get("web_server", {}).get("site_title", "DEMO Data Dispatcher")
+        self.MetaCatURL = config.get("metacat_url")
 
     def proximity_map(self, rses=None):
         return DBProximityMap(self.db(), default=self.DefaultProximity, rses=rses, defaults=self.PMDefaults, overrides=self.PMOverrides)
@@ -338,7 +339,8 @@ class App(BaseApp):
             tempdirs=[templdir, "."],
             globals={
                 "GLOBAL_Version": Version, 
-                "GLOBAL_SiteTitle": self.SiteTitle
+                "GLOBAL_SiteTitle": self.SiteTitle,
+                "GLOBAL_MetaCatURL": self.MetaCatURL
             },
             filters = {
                 "pretty_time_delta": pretty_time_delta,
