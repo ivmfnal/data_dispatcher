@@ -200,8 +200,7 @@ class PinRequest(Logged):
 
     def query(self):
         assert self.URL is not None
-        headers = { "accept" : "application/json",
-                    "content-type" : "application/json"}
+        headers = { "accept" : "application/json" }
         r = requests.get(self.URL, headers=headers, verify=False, cert = self.CertTuple)
         #self.debug("status(): response:", r)
         if r.status_code // 100 == 4:
@@ -210,6 +209,19 @@ class PinRequest(Logged):
             return "ERROR"
         r.raise_for_status()
         self.debug("query: my URL:", self.URL, "   response:", r.text)
+        return r.json()
+
+    def delete(self):
+        assert self.URL is not None
+        headers = { "accept" : "application/json" }
+        r = requests.delete(self.URL, headers=headers, verify=False, cert = self.CertTuple)
+        #self.debug("status(): response:", r)
+        if r.status_code // 100 == 4:
+            self.Error = True
+            self.ErrorText = r.text
+            return "ERROR"
+        r.raise_for_status()
+        self.debug("delete: my URL:", self.URL, "   response:", r.text)
         return r.json()
 
     def status(self):
@@ -352,6 +364,10 @@ class ProjectMonitor(Primitive, Logged):
         self.RucioClient = rucio_client
 
     def remove_me(self, reason):
+        self.log("remove me:", reason)
+        for rse, pin_request in self.PinRequests.items():
+            pin_request.delete()
+            self.log("pin request for", rse, "deleted")
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
         self.log("removed:", reason)
@@ -426,6 +442,7 @@ class ProjectMonitor(Primitive, Logged):
  
     def create_pin_request(self, rse, replicas):
         try:
+            old_pin_request = self.PinRequests.get(rse)
             ssl_config = self.RSEConfig.ssl_config(rse)
             pin_url = self.RSEConfig.pin_url(rse)
             pin_prefix = self.RSEConfig.pin_prefix(rse)
@@ -434,6 +451,9 @@ class ProjectMonitor(Primitive, Logged):
                 ssl_config, replicas
             )
             pin_request.send()
+            if old_pin_request is not None:
+                old_pin_request.delete()
+                self.log("old pin request deleted")
             return pin_request
         except Exception as e:
             self.error("Error in create_pin_request:", traceback.format_exc())
