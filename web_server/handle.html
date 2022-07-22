@@ -6,7 +6,17 @@
 
 <table class="form">
     <tr>    <th>Project ID</th> <td><a href="./project?project_id={{handle.ProjectID}}">{{handle.ProjectID}}</a></td> </tr>
-    <tr>    <th>File namespace</th> <td>{{handle.Namespace}}</td></tr>
+    <tr>    <th>File</th> 
+            <td>
+                    {% if not GLOBAL_MetaCatURL is none %}
+                            <a href="{{GLOBAL_MetaCatURL}}/gui/show_file?namespace={{handle.Namespace}}&name={{handle.Name}}">
+                                    {{handle.Namespace}}:{{handle.Name}}
+                            </a>
+                    {% else %}
+                            {{handle.Namespace}}:{{handle.Name}}
+                    {% endif %}
+            </td>
+    </tr>
     <tr>    <th>File name</th> <td>{{handle.Name}}</td></tr>
     <tr>    <th>State</th> <td>{{handle.State}}</td></tr>
     <tr>    <th>Worker</th> <td>{{handle.WorkerID or ""}}</td></tr>
