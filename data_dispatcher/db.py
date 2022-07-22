@@ -1,4 +1,4 @@
-import json, time, io, traceback
+import json, time, io, traceback, urllib.parse
 from datetime import datetime, timedelta, timezone
 from metacat.auth import BaseDBUser as DBUser
 
@@ -318,6 +318,12 @@ class DBProject(DBObject, HasLogRecord):
         
     def pk(self):
         return (self.ID,)
+        
+    def quoted_query(self):
+        query = self.Query
+        if query:
+            query = urllib.parse.quote_plus(query)
+        return query
         
     def time_since_created(self, t=None):
         if self.CreatedTimestamp is None:
