@@ -13,17 +13,7 @@ cert=${HOME}/certs/ivm@fnal.gov_cert.pem
 key=${HOME}/certs/ivm@fnal.gov_key.pem
 
 my_id=`dd worker id checksums_$$`
-echo My id: $my_id
-
-cat << _EOF_ > /tmp/checksum.py
-import zlib, sys
-a = zlib.adler32(b"")
-data=sys.stdin.buffer.read(10000)
-while data:
-    a = zlib.adler32(data, a)
-    data=sys.stdin.buffer.read(10000)
-print("%x" % (a & 0xffffffff,))
-_EOF_
+echo My worker id: $my_id
 
 done="false"
 while [ $done == "false" ]; do
@@ -34,9 +24,11 @@ while [ $done == "false" ]; do
 		done="true"
                 cat info.json
         else
-		url=`python ui/json_extract.py info.json replicas.0.url`
+		url=`python ui/json_extract.py info.json replicas/0/url`
 		namespace=`python ui/json_extract.py info.json namespace`
 		name=`python ui/json_extract.py info.json name`
+		type=`python ui/json_extract.py info.json project_attributes/checksum_type`
+                run_number=`python ui/json_extract.py info.json attributes/core.runs/0`
 		did=${namespace}:${name}
 
                 tmpfile=/tmp/tmpdata_$$
@@ -57,10 +49,9 @@ while [ $done == "false" ]; do
 				exit 1
 				;;
 		esac
-                ls -l $tmpfile
-		checksum=`python /tmp/checksum.py < $tmpfile`
+		checksum=`python checksum.py $type $tmpfile`
                 rm -f $tmpfile
-		echo $name : Adler32=$checksum
+		echo $name : $type=$checksum $run=$run_number
                 echo
 		dd worker done $project_id $did
 	fi

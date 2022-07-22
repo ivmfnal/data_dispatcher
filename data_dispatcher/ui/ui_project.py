@@ -13,8 +13,8 @@ class CreateCommand(CLICommand):
         -l (-|<flat file with file list>)               - read "namespace:name [attr=value ...]" lines from the file 
         -j (-|<JSON file with file list>)               - read JSON file with file list {"namespace":...,"name"..., "attributes":{...}}
         -q <file with MQL query>                        - read MQL query from file instead
-            -c <name>[,<name>...]                       - copy metadata attributes from the query results, 
-                                                          use with -q or inline query
+        -c <name>[,<name>...]                           - copy metadata attributes from the query results, 
+                                                          use only with -q or inline query. Otherwise ignored
 
         -A @<file.json>                                 - JSON file with project attributes
         -A "name=value name=value ..."                  - project attributes
