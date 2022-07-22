@@ -147,6 +147,80 @@ class DCachePoller(PyThread, Logged):
                 time.sleep(self.STAGGER)
             self.sleep(10)
 
+class ____DCachePollTask(Task, Logged):
+
+    def __init__(self, files, base_url, ssl_config):
+        Task.__init__(self)
+        Logged.__init__(self)
+        self.BaseURL = base_url
+        self.Files = files              # [(did, path), ...]
+        self.CertKey = None if not ssl_config else (ssl_config.get("cert"), ssl_config.get("key"))
+        #self.CA_Bundle = ssl_config.get("ca_bundle")
+        
+    def run(self):
+        headers = { "accept" : "application/json",
+                "content-type" : "application/json"}
+        available_dids = []
+        unavailable_dids = []
+        remove_dids = []
+        for did, path in self.Files:
+            url = self.BaseURL + path + "?locality=true"
+            response = requests.get(url, headers=headers, cert=self.CertKey, verify=False)
+            #self.debug("response:", response.status_code, response.text)
+            if response.status_code == 404:
+                #self.debug(f"file not found (status 404): {did} - removing")
+                self.log("Replica not found:", path)
+                remove_dids.append(did)
+            elif response.status_code//100 != 2:
+                continue
+            else:
+                data = response.json()
+                available = "ONLINE" in data.get("fileLocality", "").upper()
+                if available:
+                    self.log("Replica available:", did, path)
+                    available_dids.append(did)
+                else:
+                    unavailable_dids.append(did)
+                    self.log("Replica unavailable:", did, path)
+        return available_dids, unavailable_dids, remove_dids
+
+class ____DCachePoller(Primitive, Logged):
+    
+    STAGGER = 0.5
+    
+    def __init__(self, rse, db, base_url, chunk_size, ssl_config):
+        Primitive.__init__(self, name=f"DCachePoller({rse})")
+        Logged.__init__(self, f"DCachePoller({rse})")
+        self.ChunkSize = chunk_size
+        self.DB = db
+        self.RSE = rse
+        self.BaseURL = base_url
+        self.SSLConfig = ssl_config or {}
+        self.Queue = TaskQueue(3, stagger=self.STAGGER, delegate = self)
+        
+    @synchronized
+    def submit(self, dids_paths):
+        # dids_paths = [(did, path), ...]
+        dids_paths = list(dict(dids_paths).items())      # remove duplicates
+        while dids_paths:
+            chunk, dids_paths = dids_paths[:self.ChunkSize], dids_paths[self.ChunkSize:]
+            self.Queue.add(DCachePollTask(chunk, self.BaseURL, self.SSLConfig))
+        self.wakeup()
+        
+    @synchronized
+    def taskEnded(self, queue, task, results):
+        available_dids, unavailable_dids, remove_dids = results
+        self.debug("DCachePollTask ended: available/unavailable/remove:", len(available_dids), len(unavailable_dids), len(remove_dids))
+        if available_dids:
+            DBReplica.update_availability_bulk(self.DB, True, self.RSE, available_dids)
+        if unavailable_dids:
+            DBReplica.update_availability_bulk(self.DB, False, self.RSE, unavailable_dids)
+        if remove_dids:
+            DBReplica.remove_bulk(self.DB, self.RSE, remove_dids)
+
+    def taskFailed(self, queue, task, exc_type, exc_value, tb):
+        self.error("DCachePollTask exception:", "".join(traceback.format_exception(exc_type, exc_value, tb)))
+
 class PinRequest(Logged):
     
     # dCache version
