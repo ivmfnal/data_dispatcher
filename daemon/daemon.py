@@ -527,8 +527,8 @@ class ProjectMaster(PyThread, Logged):
             #self.debug("run: active projects:", len(active_projects),"   known projects:", len(monitor_projects))
             with self:
                 monitor_projects = set(self.Monitors.keys())
-                for project_id in monitor_projects - active_projects:
-                    self.remove_project(project_id, "inactive")
+                #for project_id in monitor_projects - active_projects:
+                #    self.remove_project(project_id, "inactive")
                 for project_id in active_projects - monitor_projects:
                     self.add_project(project_id)
             self.sleep(self.RunInterval)
