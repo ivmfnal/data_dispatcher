@@ -463,7 +463,12 @@ class ProjectMonitor(Primitive, Logged):
     def update_replicas_availability(self):
         active_handles = self.active_handles()
         self.debug("update_replicas_availability(): active_handles:", None if active_handles is None else len(active_handles))
-        if not active_handles:
+
+        if active_handles is None:
+            self.remove_me("deleted")
+            return "stop"
+        elif not active_handles:
+            self.remove_me("done")
             return "stop"
 
         #
@@ -552,7 +557,8 @@ class ProjectMaster(PyThread, Logged):
     @synchronized
     def remove_project(self, project_id, reason):
         monitor = self.Monitors.pop(project_id, None)
-        self.Scheduler.remove(project_id)
+        self.Scheduler.remove(f"sync_{project_id}")
+        self.Scheduler.remove(f"update_{project_id}")
         self.log("project removed:", project_id, "  reason:", reason)
         
 
