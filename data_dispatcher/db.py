@@ -65,9 +65,6 @@ class DBObject(object):
         cursor = cursor or self.DB.cursor()
         where_clause = " and ".join(f"{column} = '{value}'" for column, value in pk_values.items())
         try:
-            print("delete: sql:", f"""
-                delete from {self.Table} where {where_clause}
-            """)
             cursor.execute(f"""
                 delete from {self.Table} where {where_clause}
             """)

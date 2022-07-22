@@ -1,7 +1,7 @@
 import json, sys, getopt
 
 Usage="""
-python json_extract.py [-n (null|omit|error|default:<value>)] <file.json> [<path item>.<path item>...]
+python json_extract.py [-n (null|omit|error|default:<value>)] <file.json> [<path item>/<path item>...]
 """
 
 not_found_mode = "omit"
@@ -106,7 +106,7 @@ if file_path == '-':
 else:
     data = json.load(open(file_path, "r"))
 
-try:    extracted = extract(data, path.split('.'))
+try:    extracted = extract(data, path.split('/'))
 except NotFound as e:
     if not quiet:   print("Index", e.Index, "not found in:", json.dumps(e.Data, indent=4, sort_keys=True))
     sys.exit(1)
