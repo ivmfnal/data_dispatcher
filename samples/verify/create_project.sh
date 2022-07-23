@@ -10,5 +10,5 @@ fi
 checksum_type=$1
 shift
 
-project_id=`dd project create -A checksum_type=$checksum_type -c core.runs $@`
+project_id=`dd project create -A checksum_type=$checksum_type -c size,checksums $@`
 echo Project created: $project_id
