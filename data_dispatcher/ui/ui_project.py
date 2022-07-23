@@ -1,5 +1,6 @@
 import getopt, json, time, pprint, textwrap
 from metacat.webapi import MetaCatClient
+from metacat.db import DBFile
 from .ui_lib import pretty_json, parse_attrs, print_handles
 
 from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
@@ -63,7 +64,11 @@ class CreateCommand(CLICommand):
                 fields = opts["-c"].split(",")
                 for info in files:
                     #print(info["metadata"])
-                    attrs = {k:info["metadata"].get(k) for k in fields}
+                    for name in fields:
+                        if '.' not in name and k in DBFile.Properties:
+                            attrs[k] = info.get(k)
+                        else:
+                            attrs[k] = info["metadata"].get(k)
                     info["attributes"].update(attrs)    
     
         elif "-j" in opts:
