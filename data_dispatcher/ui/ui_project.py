@@ -64,8 +64,9 @@ class CreateCommand(CLICommand):
                 fields = opts["-c"].split(",")
                 for info in files:
                     #print(info["metadata"])
-                    for name in fields:
-                        if '.' not in name and k in DBFile.Properties:
+                    attrs = {}
+                    for k in fields:
+                        if '.' not in k and k in DBFile.Properties:
                             attrs[k] = info.get(k)
                         else:
                             attrs[k] = info["metadata"].get(k)

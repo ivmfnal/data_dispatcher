@@ -1,0 +1,63 @@
+/* ------------ custom_reveal1.css -----------------*/
+
+:root {
+    --jp-ui-font-size1: 20px;       /* instead of 14px */
+    --jp-content-font-size1: 16px;  /* instead of 14px */
+    --jp-code-font-size: 18px;      /* instead of 13px */
+    --jp-cell-prompt-width: 110px;  /* instead of 64px */
+    --jp-cell-editor-background: white;
+    --jp-layout-color2: #e0f0ff;
+}
+
+.reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+    text-transform: none;
+} 
+.reveal pre {
+    margin: 0px;
+    width: 100%;
+    box-shadow: 0px 5px 5px rgb(0 0 0 / 15%);
+    font-size: 13px;
+}
+.reveal code, .reveal pre {
+    background-color: #f5f5f5;
+}
+
+.highlight {
+    background: 
+    margin: 0px;
+}
+.jp-InputPrompt, .jp-InputArea-prompt {
+    display: none;
+}
+
+.jp-InputArea-editor {
+    border: 0;
+}
+
+.jp-InputAreaEditor {
+    padding-left: var(--jp-code-padding);
+}
+
+.highlight .c1 {
+    color: gray;
+}
+
+.highlight .k {
+    color: #484;
+}
+
+.highlight .mi {
+    color: #a86;
+}
+
+.highlight .nc {
+    color: #05a;
+}
+
+.highlight .bp {
+    color: #00a;
+}
+
+/* ------------ end of custom_reveal1.css -----------------*/
+
+
