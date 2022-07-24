@@ -39,7 +39,9 @@ while [ $done == "false" ]; do
 
             did=${namespace}:${name}
 
-            echo downloading $namespace:$name ...
+            echo
+            echo ------ $did
+            echo downloading...
             case $url in
                 root\:*|xroot:*)
                     xrdcp --force $url $tmpfile
@@ -55,23 +57,23 @@ while [ $done == "false" ]; do
                     exit 1
                     ;;
             esac
-                    ls -l $tmpfile
-            checksum=`python samples/checksum.py $type $tmpfile`
+            checksum=`python checksum.py $checksum_type $tmpfile`
             size=`stat -c %s $tmpfile`
             ok=ok
-            if [ $size != $meta_size ]; then
+            if [ "$size" != $meta_size ]; then
                 echo File size mismatch for $did: metadata: $meta_size, downloaded: $size
                 ok=""
             fi
-            if [ checksum != $meta_checksum ]; then
-                echo Checksum mismatch for $did: metadata: $meta_checksum, downloaded: checksum
+            if [ "$checksum" != $meta_checksum ]; then
+                echo Checksum mismatch for $did: metadata: $meta_checksum, downloaded: $checksum
                 ok=""
             fi
-            if[ $ok == "ok" ]; then
-                echo $did:  OK: $type=$checksum run=$run_number
+            if [ "$ok" == "ok" ]; then
+                echo $did:  OK: size=$size $checksum_type=$checksum
             fi
             rm -f $tmpfile
             dd worker done $project_id $did
+            echo
     	fi
 done
 	
