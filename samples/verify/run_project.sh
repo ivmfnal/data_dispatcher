@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Usage: checksums.sh <project_id>
+# Usage: run_project.sh <project_id>
 
 if [ $1 == "" ]; then
-        echo Usage: checksums.sh \<project_id\>
+        echo Usage: run_project.sh \<project_id\>
         exit 2
 fi
 
@@ -55,7 +55,6 @@ while [ $done == "false" ]; do
                     exit 1
                     ;;
             esac
-                    ls -l $tmpfile
             checksum=`python samples/checksum.py $type $tmpfile`
             size=`stat -c %s $tmpfile`
             ok=ok
