@@ -20,10 +20,8 @@ tmpfile=/tmp/${my_id}.data
 done="false"
 while [ $done == "false" ]; do
 	dd worker next -w $my_id -j $project_id > $info_file
-        #cat $info_file
-        sts=$?
-        #echo "dd worker next status:" $sts
-        if [ "$sts" != "0" ]; then
+        if [ "$?" != "0" ]; then
+            # likely the project is done
             done="true"
             cat $info_file
             rm -f $info_file
@@ -31,17 +29,19 @@ while [ $done == "false" ]; do
             url=`python json_extract.py $info_file replicas/0/url`
             namespace=`python json_extract.py $info_file namespace`
             name=`python json_extract.py $info_file name`
+            did=${namespace}:${name}
+            
+            # checksum type from project attributes
             checksum_type=`python json_extract.py $info_file project_attributes/checksum_type`
 
-            # size and checksum from MetaCat
+            # size and checksum from MetaCat via file attributes
             meta_checksum=`python json_extract.py $info_file attributes/checksums/$checksum_type`
             meta_size=`python json_extract.py $info_file attributes/size`
 
-            did=${namespace}:${name}
-
             echo
-            echo ------ $did
-            echo downloading...
+            echo ------ $did ...
+
+            # download the replica using the URL from the DD
             case $url in
                 root\:*|xroot:*)
                     xrdcp --force $url $tmpfile
@@ -57,8 +57,12 @@ while [ $done == "false" ]; do
                     exit 1
                     ;;
             esac
+            
+            # calculate the checksum and stat the file size
             checksum=`python checksum.py $checksum_type $tmpfile`
             size=`stat -c %s $tmpfile`
+            
+            # compare and print results
             ok=ok
             if [ "$size" != $meta_size ]; then
                 echo File size mismatch for $did: metadata: $meta_size, downloaded: $size
@@ -76,6 +80,3 @@ while [ $done == "false" ]; do
             echo
     	fi
 done
-	
-
-

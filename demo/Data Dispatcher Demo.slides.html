@@ -14903,30 +14903,32 @@ $ python json_extract.py info.json params/size
 <span class="nb">echo</span> My worker id: <span class="nv">$my_id</span>
 <span class="nv">info_file</span><span class="o">=</span>/tmp/<span class="si">${</span><span class="nv">my_id</span><span class="si">}</span>.json
 <span class="nv">tmpfile</span><span class="o">=</span>/tmp/<span class="si">${</span><span class="nv">my_id</span><span class="si">}</span>.data
+
 <span class="k">done</span><span class="o">=</span><span class="s2">&quot;false&quot;</span>
 <span class="k">while</span> <span class="o">[</span> <span class="nv">$done</span> <span class="o">==</span> <span class="s2">&quot;false&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">do</span>
     dd worker next -w <span class="nv">$my_id</span> -j <span class="nv">$project_id</span> &gt; <span class="nv">$info_file</span>
-        <span class="nv">sts</span><span class="o">=</span><span class="nv">$?</span>
-        <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$sts</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-            <span class="c1"># project is done</span>
+        <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$?</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+            <span class="c1"># likely the project is done</span>
             <span class="k">done</span><span class="o">=</span><span class="s2">&quot;true&quot;</span>
             cat <span class="nv">$info_file</span>
             rm -f <span class="nv">$info_file</span>
         <span class="k">else</span>
-            <span class="c1"># exract file/replica info</span>
-            <span class="nv">url</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> replicas/0/url<span class="sb">`</span>   <span class="c1"># 0 for &quot;best&quot; replica</span>
+            <span class="nv">url</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> replicas/0/url<span class="sb">`</span>
             <span class="nv">namespace</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> namespace<span class="sb">`</span>
             <span class="nv">name</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> name<span class="sb">`</span>
+            <span class="nv">did</span><span class="o">=</span><span class="si">${</span><span class="nv">namespace</span><span class="si">}</span>:<span class="si">${</span><span class="nv">name</span><span class="si">}</span>
+
+            <span class="c1"># checksum type from project attributes</span>
             <span class="nv">checksum_type</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> project_attributes/checksum_type<span class="sb">`</span>
 
-            <span class="c1"># size and checksum as file attributes copied from MetaCat</span>
+            <span class="c1"># size and checksum from MetaCat via file attributes</span>
             <span class="nv">meta_checksum</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> attributes/checksums/<span class="nv">$checksum_type</span><span class="sb">`</span>
             <span class="nv">meta_size</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> attributes/size<span class="sb">`</span>
 
-            <span class="nv">did</span><span class="o">=</span><span class="si">${</span><span class="nv">namespace</span><span class="si">}</span>:<span class="si">${</span><span class="nv">name</span><span class="si">}</span>
+            <span class="nb">echo</span>
+            <span class="nb">echo</span> ------ <span class="nv">$did</span> ...
 
-            <span class="c1"># download the file using the replica URL</span>
-            <span class="nb">echo</span> downloading <span class="nv">$namespace</span>:<span class="nv">$name</span> ...
+            <span class="c1"># download the replica using the URL from the DD</span>
             <span class="k">case</span> <span class="nv">$url</span> <span class="k">in</span>
                 root<span class="se">\:</span>*<span class="p">|</span>xroot:*<span class="o">)</span>
                     xrdcp --force <span class="nv">$url</span> <span class="nv">$tmpfile</span>
@@ -14943,29 +14945,41 @@ $ python json_extract.py info.json params/size
                     <span class="p">;;</span>
             <span class="k">esac</span>
 
-            <span class="c1"># calculate checksum and stat the downloaded file size</span>
-            <span class="nv">checksum</span><span class="o">=</span><span class="sb">`</span>python samples/checksum.py <span class="nv">$type</span> <span class="nv">$tmpfile</span><span class="sb">`</span>
+            <span class="c1"># calculate the checksum and stat the file size</span>
+            <span class="nv">checksum</span><span class="o">=</span><span class="sb">`</span>python checksum.py <span class="nv">$checksum_type</span> <span class="nv">$tmpfile</span><span class="sb">`</span>
             <span class="nv">size</span><span class="o">=</span><span class="sb">`</span>stat -c %s <span class="nv">$tmpfile</span><span class="sb">`</span>
 
             <span class="c1"># compare and print results</span>
             <span class="nv">ok</span><span class="o">=</span>ok
-            <span class="k">if</span> <span class="o">[</span> <span class="nv">$size</span> !<span class="o">=</span> <span class="nv">$meta_size</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+            <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$size</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="nv">$meta_size</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
                 <span class="nb">echo</span> File size mismatch <span class="k">for</span> <span class="nv">$did</span>: metadata: <span class="nv">$meta_size</span>, downloaded: <span class="nv">$size</span>
                 <span class="nv">ok</span><span class="o">=</span><span class="s2">&quot;&quot;</span>
             <span class="k">fi</span>
-            <span class="k">if</span> <span class="o">[</span> checksum !<span class="o">=</span> <span class="nv">$meta_checksum</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-                <span class="nb">echo</span> Checksum mismatch <span class="k">for</span> <span class="nv">$did</span>: metadata: <span class="nv">$meta_checksum</span>, downloaded: checksum
+            <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$checksum</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="nv">$meta_checksum</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+                <span class="nb">echo</span> Checksum mismatch <span class="k">for</span> <span class="nv">$did</span>: metadata: <span class="nv">$meta_checksum</span>, downloaded: <span class="nv">$checksum</span>
                 <span class="nv">ok</span><span class="o">=</span><span class="s2">&quot;&quot;</span>
             <span class="k">fi</span>
-            <span class="k">if</span><span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$ok</span><span class="s2">&quot;</span> <span class="o">==</span> <span class="s2">&quot;ok&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-                <span class="nb">echo</span> <span class="nv">$did</span>:  OK: <span class="nv">$type</span><span class="o">=</span><span class="nv">$checksum</span> <span class="nv">run</span><span class="o">=</span><span class="nv">$run_number</span>
+            <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$ok</span><span class="s2">&quot;</span> <span class="o">==</span> <span class="s2">&quot;ok&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+                <span class="nb">echo</span> <span class="nv">$did</span>:  OK: <span class="nv">size</span><span class="o">=</span><span class="nv">$size</span> <span class="nv">$checksum_type</span><span class="o">=</span><span class="nv">$checksum</span>
             <span class="k">fi</span>
             rm -f <span class="nv">$tmpfile</span>
             dd worker <span class="k">done</span> <span class="nv">$project_id</span> <span class="nv">$did</span>
+            <span class="nb">echo</span>
         <span class="k">fi</span>
 <span class="k">done</span>
 </pre></div>
 
+</div>
+</div>
+</div>
+</div></section></section><section><section>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<h1 id="DEMO">DEMO<a class="anchor-link" href="#DEMO">&#182;</a></h1>
 </div>
 </div>
 </div>
