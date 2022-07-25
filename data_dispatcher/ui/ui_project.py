@@ -1,4 +1,5 @@
 import getopt, json, time, pprint, textwrap
+from datetime import datetime
 from metacat.webapi import MetaCatClient
 from metacat.db import DBFile
 from .ui_lib import pretty_json, parse_attrs, print_handles
