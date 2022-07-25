@@ -206,7 +206,14 @@ class ShowCommand(CLICommand):
                                 filter_state == "active" and not state in ("done", "failed"):
                         print(did)
             else:
+                created_timestamp = datetime.utcfromtimestamp(info["created_timestamp"]).strftime("%Y/%m/%d %H:%M:%S UTC")
+                ended_timestamp = info.get("ended_timestamp") or ""
+                if ended_timestamp:
+                    ended_timestamp = datetime.utcfromtimestamp(ended_timestamp).strftime("%Y/%m/%d %H:%M:%S UTC")
                 print("Project ID:         ", project_id)
+                print("Owner:              ", info["owner"])
+                print("Created:            ", created_timestamp)
+                print("Ended:              ", ended_timestamp)
                 print("Query:              ", textwrap.indent(info.get("query") or "", " "*10).lstrip())
                 print("Status:             ", info["state"])
                 print("Project Attributes: ")
