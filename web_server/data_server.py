@@ -276,7 +276,7 @@ class Handler(BaseHandler):
             return 404, "Project not found"
 
         if not user.is_admin() and user.Username != project.Owner:
-            return 403 "Not authorized"
+            return 403, "Not authorized"
             
         force = force == "yes"
 
