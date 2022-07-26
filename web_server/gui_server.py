@@ -10,7 +10,7 @@ from datetime import timezone
 class ___UsersHandler(BaseHandler):
 
     def users(self, request, relpath, error="", **args):
-        me = self.authenticated_user()
+        me, auth_error = self.authenticated_user()
         if not me:
             self.redirect("../A/login?redirect=" + self.scriptUri() + "/U/users")
         db = self.App.db()
@@ -32,7 +32,7 @@ class ___UsersHandler(BaseHandler):
     def user(self, request, relpath, username=None, error="", message="", **args):
         db = self.App.connect()
         user = DBUser.get(db, username)
-        me = self.authenticated_user()
+        me, auth_error = self.authenticated_user()
         ldap_config = self.App.auth_config("ldap")
         ldap_url = ldap_config and ldap_config["server_url"]
         return self.render_to_response("user.html", user=user, 
@@ -44,7 +44,7 @@ class ___UsersHandler(BaseHandler):
             
     def create_user(self, request, relpath, error="", **args):
         db = self.App.db()
-        me = self.authenticated_user()
+        me, auth_error = self.authenticated_user()
         if not me.is_admin():
             self.redirect("./users?error=%s" % (quote_plus("Not authorized to create users")))
         return self.render_to_response("user.html", error=unquote_plus(error), mode="create")
@@ -52,7 +52,7 @@ class ___UsersHandler(BaseHandler):
     def save_user(self, request, relpath, **args):
         db = self.App.db()
         username = request.POST["username"]
-        me = self.authenticated_user()
+        me, auth_error = self.authenticated_user()
         
         new_user = request.POST["new_user"] == "yes"
         
@@ -190,7 +190,7 @@ class RSEHandler(BaseHandler):
         )
 
     def rses(self, request, relpath, **args):
-        user = self.authenticated_user()
+        user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
         rses = list(DBRSE.list(self.App.db(), include_disabled=True))
         rses = sorted(rses, key=lambda r: (0 if r.Enabled else 1, r.Name))
@@ -203,13 +203,13 @@ class RSEHandler(BaseHandler):
         rse = DBRSE.get(self.App.db(), name)
         if rse is None:
             self.redirect("./rses")
-        user = self.authenticated_user()
+        user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
         mode = "edit" if is_admin else "view"
         return self.render_to_response("rse.html", rse=rse, mode=mode)
 
     def create(self, request, relpath, **args):
-        user = self.authenticated_user()
+        user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
         if not is_admin:
             self.redirect("./rses")
@@ -226,7 +226,7 @@ class RSEHandler(BaseHandler):
                 pmap.append([site, proximity])
 
     def do_create(self, request, relpath, **args):
-        user = self.authenticated_user()
+        user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
         if not is_admin:
             self.redirect("./rses")
@@ -237,7 +237,7 @@ class RSEHandler(BaseHandler):
         self.redirect(f"./rses")
         
     def do_update(self, request, relpath, **args):
-        user = self.authenticated_user()
+        user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
         if not is_admin:
             self.redirect("./rses")

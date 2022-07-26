@@ -37,9 +37,9 @@ class Handler(BaseHandler):
             return "OK"
     
     def create_project(self, request, relpath, **args):
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
         specs = json.loads(to_str(request.body))
         files = specs["files"]
         query = specs.get("query")
@@ -75,9 +75,9 @@ class Handler(BaseHandler):
     def delete_project(self, request, relpath, project_id=None, **args):
         if not project_id:
             return 400, "Project id must be specified"
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
         
         project_id = int(project_id)
         db = self.App.db()
@@ -94,9 +94,10 @@ class Handler(BaseHandler):
         failed_only = failed_only == "yes"
         if not project_id:
             return 400, "Project id must be specified"
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403        
+            return 401, error
+           
         project_id = int(project_id)
         db = self.App.db()
         project = DBProject.get(db, project_id)
@@ -108,9 +109,9 @@ class Handler(BaseHandler):
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
     def copy_project(self, request, relpath, **args):
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
         specs = json.loads(to_str(request.body))
         project_attributes = specs.get("project_attributes", {})
         file_attributes = specs.get("file_attributes", {})
@@ -142,9 +143,9 @@ class Handler(BaseHandler):
     def cancel_project(self, request, relpath, project_id=None, **args):
         if not project_id:
             return 400, "Project id must be specified"
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
         
         project_id = int(project_id)
         db = self.App.db()
@@ -157,9 +158,9 @@ class Handler(BaseHandler):
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
     def replica_available(self, request, relpath, namespace=None, name=None, rse=None, **args):
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
         data = request.json
         db = self.App.db()
         if rse is None:             return 400, "RSE must be specified"
@@ -174,9 +175,9 @@ class Handler(BaseHandler):
         return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
             
     def replica_unavailable(self, request, relpath, namespace=None, name=None, rse=None, **args):
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
         db = self.App.db()
         if rse is None:             return 400, "RSE must be specified"
         if None in (namespace, name):       return 400, "File namespace and name must be specified"
@@ -201,9 +202,9 @@ class Handler(BaseHandler):
 
     def next_file(self, request, relpath, project_id=None, worker_id=None, cpu_site=None, **args):
         #print("next_file...")
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
         if worker_id is None or project_id is None:
             return 400, "Project ID and Worker ID must be specified"
         db = self.App.db()
@@ -212,7 +213,7 @@ class Handler(BaseHandler):
         if not project:
             return 404, "Project not found"
         if not user.is_admin() and user.Username != project.Owner:
-            return 403
+            return 403, "Not authorized"
         handle, reason, retry = project.reserve_handle(worker_id, self.App.proximity_map(), cpu_site)
         if handle is None:
             out = {
@@ -234,9 +235,9 @@ class Handler(BaseHandler):
     def release(self, request, relpath, handle_id=None, failed="no", retry="yes", **args):
         if handle_id is None:
             return 400, "File Handle ID (<project_id>:<namespace>:<name>) must be specified"
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
 
         db = self.App.db()
 
@@ -247,7 +248,7 @@ class Handler(BaseHandler):
             return 404, "Project not found"
 
         if not user.is_admin() and user.Username != project.Owner:
-            return 403
+            return 403, "Not authorized"
             
         failed = failed == "yes"
         retry = retry == "yes"
@@ -262,9 +263,9 @@ class Handler(BaseHandler):
         # not fully implemented. need to be careful with the project status update - possible race condition
         if handle_id is None:
             return 400, "File Handle ID (<project_id>:<namespace>:<name>) must be specified"
-        user = self.authenticated_user()
+        user, error = self.authenticated_user()
         if user is None:
-            return "Unauthenticated user", 403
+            return 401, error
 
         db = self.App.db()
 
@@ -275,7 +276,7 @@ class Handler(BaseHandler):
             return 404, "Project not found"
 
         if not user.is_admin() and user.Username != project.Owner:
-            return 403
+            return 403 "Not authorized"
             
         force = force == "yes"
 
@@ -295,7 +296,7 @@ class Handler(BaseHandler):
         db = self.App.db()
         project_id = int(project_id)
         project = DBProject.get(db, project_id)
-        if not project: return 403
+        if not project: return 404, "Project not found"
         handles = project.files(state=state, ready_only=ready_only)
         return json.dumps([h.as_jsonable(with_replicas=ready_only) for h in handles]), "text/json"
 
@@ -306,7 +307,7 @@ class Handler(BaseHandler):
         project_id = int(project_id)
         project = DBProject.get(db, project_id)
         if not project:
-            return 403
+            return 404, "Project not found"
         #print("project(): with handles/replicas: ", with_files, with_replicas)
         jsonable = project.as_jsonable(with_handles=with_files, with_replicas=with_replicas)
         return json.dumps(jsonable), "text/json"
@@ -315,7 +316,7 @@ class Handler(BaseHandler):
         project_id = int(project_id)
         project = DBProject.get(db, project_id)
         if not project:
-            return 403
+            return 404, "Project not found"
         project_log = (x.as_jsonable() for x in project.handles_log())
         return json.dumps(project_log), "text/json"
 
@@ -368,8 +369,10 @@ class Handler(BaseHandler):
         return json.dumps(rse.as_jsonable()), "text/json"
     
     def set_rse_availability(self, request, relpath, name=None, available=None, **args):
-        user = self.authenticated_user()
-        if user is None or not user.is_admin():
+        user, error = self.authenticated_user()
+        if user is None:
+            return 401, error
+        if not user.is_admin():
             return "Not authorized", 403
 
         if available not in ("yes", "no"):
