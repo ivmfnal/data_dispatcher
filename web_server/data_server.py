@@ -108,6 +108,31 @@ class Handler(BaseHandler):
         project.restart(force=force, failed_only=failed_only)
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
+    def restart_handles(self, request, relpath, **args):
+
+        params = json.loads(to_str(request.body))
+        project_id = params.get("project_id")
+        if not project_id:
+            return 400, "Project id must be specified"
+        project_id = int(project_id)
+            
+        user, error = self.authenticated_user()
+        if user is None:
+            return 401, error
+
+        db = self.App.db()
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        if user.Username != project.Owner and not user.is_admin():
+            return 403, "Forbidden"
+
+        dids = set(params.get("handles", set()))
+        states = set(s for s in DBFileHandle.States if params.get(s))
+        project.restart_handles(states=states, dids=dids)
+
+        return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
+        
     def copy_project(self, request, relpath, **args):
         user, error = self.authenticated_user()
         if user is None:

@@ -247,8 +247,12 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Returns:
             (dict) project information
         """
-        if all: done = failed = reserved = True
-        selection = dict(project_id=project_id, done=done, failed=failed, reserved=reserved, handles=handles)
+        if not handles:
+            if all: done = failed = reserved = True
+            selection = dict(project_id=project_id, done=done, failed=failed, reserved=reserved)
+        else:
+            selection = dict(project_id=project_id, handles=handles)
+            
         return self.post("restart_handles", json.dumps(selection))
 
     def delete_project(self, project_id):

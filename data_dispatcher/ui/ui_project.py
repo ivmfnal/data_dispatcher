@@ -159,12 +159,27 @@ class RestartCommand(CLICommand):
         -r                                              - unreserve reserved files
         -a                                              - restart all files (same as -f -d -r)
         
-    restart <project_id> <namespace>:<name> ...     -- restart specific files
+    restart <project_id> <namespace>:<name> ...     -- restart specific files, options above are ignored
     """
-    
+
     def __call__(self, command, client, opts, args):
         project_id = args[0]
-        client.restart_project(project_id, failed_only="-a" not in opts, force = "-F" in opts)
+        if args[1:]:
+            client.restart_handles(project_id, handles=args[1:])
+        else:
+            handle_states = []
+            if "-a" in opts:    
+                handle_states = ["all"]
+            else:
+                if "-f" in opts:    handle_states.append("failed")
+                if "-d" in opts:    handle_states.append("done")
+                if "-r" in opts:    handle_states.append("reserved")
+            
+            if not handle_states:
+                raise InvalidOptions("One or more handle states need to be selected")
+            
+            handle_states = {s:True for s in handle_states}
+            client.restart_handles(project_id, **handle_states)
 
 class ShowCommand(CLICommand):
     

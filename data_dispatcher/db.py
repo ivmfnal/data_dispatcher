@@ -523,7 +523,22 @@ class DBProject(DBObject, HasLogRecord):
         self.save()
         self.add_log("state", event="cancel", state="cancelled")
         
-    def restart(self, failed_only=False, force=False):
+    def restart_handles(self, states=None, dids=None):
+        if states:
+            states = set(states)
+        if dids:
+            dids = set(dids)
+        for h in self.handles(reload=True):
+            if dids and h.did() in dids or \
+                    states and h.State in states:
+                h.reset()
+        self.State = "active"
+        self.EndTimestamp = None
+        self.save()
+        self.add_log("event", event="restart", force=force, failed_only=failed_only)
+        self.add_log("state", state="active")
+
+    def ____restart(self, failed_only=False, force=False):
         for h in self.handles(reload=True, state="failed" if failed_only else None):
             if force or h.State != "reserved":
                 h.reset()
