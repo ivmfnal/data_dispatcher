@@ -32,10 +32,12 @@ while [ $done == "false" ]; do
             did=${namespace}:${name}
             
             # checksum type from project attributes
-            checksum_type=`python json_extract.py $info_file project_attributes/checksum_type`
+            checksum_type=`python json_extract.py \
+                $info_file project_attributes/checksum_type`
 
             # size and checksum from MetaCat via file attributes
-            meta_checksum=`python json_extract.py $info_file attributes/checksums/$checksum_type`
+            meta_checksum=`python json_extract.py \
+                $info_file attributes/checksums/$checksum_type`
             meta_size=`python json_extract.py $info_file attributes/size`
 
             echo
@@ -73,9 +75,11 @@ while [ $done == "false" ]; do
                 ok=""
             fi
             if [ "$ok" == "ok" ]; then
-                echo $did:  OK: size=$size $checksum_type=$checksum
+                echo OK: $did 
+                echo "  size:    " $size 
+                echo "  checksum:" $checksum "($checksum_type)" 
             fi
-            rm -f $tmpfile
+            rm -f $tmpfile $info_file
             dd worker done $project_id $did
             echo
     	fi

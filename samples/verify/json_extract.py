@@ -7,7 +7,9 @@ python json_extract.py [-n (null|omit|error|default:<value>)] <file.json> [<path
 not_found_mode = "omit"
 defaut_value = None
 
-class Omit: pass
+class Omit: 
+    def __str__(self):
+        return "notfound"
 
 O = Omit()
 
