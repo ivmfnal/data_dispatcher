@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
 
-<title>Data Dispatcher Demo slides</title><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"></script>
+<title>DataDispatcherDemo slides</title><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"></script>
 
 <!-- General and theme style sheets -->
 <link rel="stylesheet" href="reveal.my/dist/reveal.css">
@@ -14919,10 +14919,12 @@ $ python json_extract.py info.json params/size
             <span class="nv">did</span><span class="o">=</span><span class="si">${</span><span class="nv">namespace</span><span class="si">}</span>:<span class="si">${</span><span class="nv">name</span><span class="si">}</span>
 
             <span class="c1"># checksum type from project attributes</span>
-            <span class="nv">checksum_type</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> project_attributes/checksum_type<span class="sb">`</span>
+            <span class="nv">checksum_type</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="se">\</span>
+                <span class="nv">$info_file</span> project_attributes/checksum_type<span class="sb">`</span>
 
             <span class="c1"># size and checksum from MetaCat via file attributes</span>
-            <span class="nv">meta_checksum</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> attributes/checksums/<span class="nv">$checksum_type</span><span class="sb">`</span>
+            <span class="nv">meta_checksum</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="se">\</span>
+                <span class="nv">$info_file</span> attributes/checksums/<span class="nv">$checksum_type</span><span class="sb">`</span>
             <span class="nv">meta_size</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> attributes/size<span class="sb">`</span>
 
             <span class="nb">echo</span>
@@ -14952,17 +14954,23 @@ $ python json_extract.py info.json params/size
             <span class="c1"># compare and print results</span>
             <span class="nv">ok</span><span class="o">=</span>ok
             <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$size</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="nv">$meta_size</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-                <span class="nb">echo</span> File size mismatch <span class="k">for</span> <span class="nv">$did</span>: metadata: <span class="nv">$meta_size</span>, downloaded: <span class="nv">$size</span>
+                <span class="nb">echo</span> File size mismatch <span class="k">for</span> <span class="nv">$did</span>
+                <span class="nb">echo</span> <span class="s2">&quot;  metadata:  &quot;</span> <span class="nv">$meta_size</span>
+                <span class="nb">echo</span> <span class="s2">&quot;  downloaded:&quot;</span> <span class="nv">$size</span>
                 <span class="nv">ok</span><span class="o">=</span><span class="s2">&quot;&quot;</span>
             <span class="k">fi</span>
             <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$checksum</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="nv">$meta_checksum</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-                <span class="nb">echo</span> Checksum mismatch <span class="k">for</span> <span class="nv">$did</span>: metadata: <span class="nv">$meta_checksum</span>, downloaded: <span class="nv">$checksum</span>
+                <span class="nb">echo</span> Checksum mismatch <span class="k">for</span> <span class="nv">$did</span>
+                <span class="nb">echo</span> <span class="s2">&quot;  metadata:  &quot;</span> <span class="nv">$meta_checksum</span>
+                <span class="nb">echo</span> <span class="s2">&quot;  downloaded:&quot;</span> <span class="nv">$checksum</span>
                 <span class="nv">ok</span><span class="o">=</span><span class="s2">&quot;&quot;</span>
             <span class="k">fi</span>
             <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$ok</span><span class="s2">&quot;</span> <span class="o">==</span> <span class="s2">&quot;ok&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-                <span class="nb">echo</span> <span class="nv">$did</span>:  OK: <span class="nv">size</span><span class="o">=</span><span class="nv">$size</span> <span class="nv">$checksum_type</span><span class="o">=</span><span class="nv">$checksum</span>
+                <span class="nb">echo</span> OK: <span class="nv">$did</span> 
+                <span class="nb">echo</span> <span class="s2">&quot;  size:    &quot;</span> <span class="nv">$size</span> 
+                <span class="nb">echo</span> <span class="s2">&quot;  checksum:&quot;</span> <span class="nv">$checksum</span> <span class="s2">&quot;(</span><span class="nv">$checksum_type</span><span class="s2">)&quot;</span> 
             <span class="k">fi</span>
-            rm -f <span class="nv">$tmpfile</span>
+            rm -f <span class="nv">$tmpfile</span> <span class="nv">$info_file</span>
             dd worker <span class="k">done</span> <span class="nv">$project_id</span> <span class="nv">$did</span>
             <span class="nb">echo</span>
         <span class="k">fi</span>

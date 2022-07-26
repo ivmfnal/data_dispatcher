@@ -67,11 +67,15 @@ while [ $done == "false" ]; do
             # compare and print results
             ok=ok
             if [ "$size" != $meta_size ]; then
-                echo File size mismatch for $did: metadata: $meta_size, downloaded: $size
+                echo File size mismatch for $did
+                echo "  metadata:  " $meta_size
+                echo "  downloaded:" $size
                 ok=""
             fi
             if [ "$checksum" != $meta_checksum ]; then
-                echo Checksum mismatch for $did: metadata: $meta_checksum, downloaded: $checksum
+                echo Checksum mismatch for $did
+                echo "  metadata:  " $meta_checksum
+                echo "  downloaded:" $checksum
                 ok=""
             fi
             if [ "$ok" == "ok" ]; then
