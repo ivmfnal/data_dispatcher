@@ -14661,10 +14661,10 @@ div.jp-OutputPrompt {
 <h1 id="Data-Dispatcher-Demo">Data Dispatcher Demo<a class="anchor-link" href="#Data-Dispatcher-Demo">&#182;</a></h1><ul>
 <li>Create project</li>
 <li>Project parametrization</li>
-<li>Copying metadata</li>
+<li>Copying metadata from MetaCat</li>
 <li>Run worker</li>
 <li>Run multiple workers</li>
-<li>Restart project</li>
+<li>GUI monitoring</li>
 </ul>
 
 </div>
@@ -14836,10 +14836,10 @@ $ python json_extract.py info.json params/size
   <span class="nt">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;dc4-hd-protodune&quot;</span><span class="p">,</span>
   <span class="nt">&quot;replicas&quot;</span><span class="p">:</span> <span class="p">[</span>
     <span class="p">{</span>
-      <span class="nt">&quot;rse&quot;</span><span class="p">:</span> <span class="s2">&quot;DUNE_CERN_EOS&quot;</span><span class="p">,</span>
-      <span class="nt">&quot;url&quot;</span><span class="p">:</span> <span class="s2">&quot;root://eospublic.cern.ch//eos/experiment/neutplatform/protodune/dune/dc4-hd-protodune/dc/86/file.root&quot;</span><span class="p">,</span>
-      <span class="nt">&quot;path&quot;</span><span class="p">:</span> <span class="s2">&quot;/eos/experiment/neutplatform/protodune/dune/dc4-hd-protodune/dc/86/file.root&quot;</span><span class="p">,</span>
       <span class="nt">&quot;preference&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+      <span class="nt">&quot;url&quot;</span><span class="p">:</span> <span class="s2">&quot;root://eospublic.cern.ch//eos/...&quot;</span><span class="p">,</span>
+      <span class="nt">&quot;rse&quot;</span><span class="p">:</span> <span class="s2">&quot;DUNE_CERN_EOS&quot;</span><span class="p">,</span>
+      <span class="nt">&quot;path&quot;</span><span class="p">:</span> <span class="s2">&quot;/eos/...&quot;</span><span class="p">,</span>
       <span class="err">...</span>
     <span class="p">}</span>
   <span class="p">],</span>
@@ -14860,16 +14860,22 @@ $ python json_extract.py info.json params/size
 <h1 id="Worker-algorithm">Worker algorithm<a class="anchor-link" href="#Worker-algorithm">&#182;</a></h1><ul>
 <li>while the project is active (not all files are <em>done</em> or <em>failed permanently</em>)<ol>
 <li>get next file from DD<ul>
-<li>wait for a file to become available<ul>
+<li>wait for a file replica to become available<ul>
 <li>copied/staged into a known RSE</li>
-<li>another worker failed non-permanently</li>
+<li>another worker failed it, non-permanently</li>
 </ul>
 </li>
 </ul>
 </li>
-<li>download the file using the URL received from DD</li>
+<li>download the file using the URL received from DD<ul>
+<li>use http or xrootd transport protocol</li>
+</ul>
+</li>
 <li>calculate the checksum of the requested type -- <em>use checksum.py</em></li>
-<li>compare calculated checksum and file size to the file metadata received from DD</li>
+<li>compare actual checksum and file size to the metadata received from DD<ul>
+<li>actually from MetaCat via DD</li>
+</ul>
+</li>
 <li>print results</li>
 </ol>
 </li>
@@ -14906,11 +14912,11 @@ $ python json_extract.py info.json params/size
 
 <span class="k">done</span><span class="o">=</span><span class="s2">&quot;false&quot;</span>
 <span class="k">while</span> <span class="o">[</span> <span class="nv">$done</span> <span class="o">==</span> <span class="s2">&quot;false&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">do</span>
-    dd worker next -w <span class="nv">$my_id</span> -j <span class="nv">$project_id</span> &gt; <span class="nv">$info_file</span>
+    dd worker next -j -w <span class="nv">$my_id</span> <span class="nv">$project_id</span> &gt; <span class="nv">$info_file</span>     <span class="c1"># -j = JSON info</span>
         <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="nv">$?</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
             <span class="c1"># likely the project is done</span>
             <span class="k">done</span><span class="o">=</span><span class="s2">&quot;true&quot;</span>
-            cat <span class="nv">$info_file</span>
+            cat <span class="nv">$info_file</span>                   <span class="c1"># this will show the actual reason</span>
             rm -f <span class="nv">$info_file</span>
         <span class="k">else</span>
             <span class="nv">url</span><span class="o">=</span><span class="sb">`</span>python json_extract.py <span class="nv">$info_file</span> replicas/0/url<span class="sb">`</span>
