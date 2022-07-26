@@ -151,17 +151,20 @@ class CopyCommand(CLICommand):
 
 class RestartCommand(CLICommand):
     
-    Opts = "aF"
-    Usage = """[-a [-F]] <project_id>               -- restart project
-        -a                                              - restart all files, otherwise - failed only
-        -F                                              - restart reserved handles too
+    Opts = "adfr"
+    Usage = """
+    restart [options] <project_id>                  -- restart project files by status
+        -f                                              - restart failed files
+        -d                                              - restart done files
+        -r                                              - unreserve reserved files
+        -a                                              - restart all files (same as -f -d -r)
+        
+    restart <project_id> <namespace>:<name> ...     -- restart specific files
     """
     
     def __call__(self, command, client, opts, args):
         project_id = args[0]
-        client.restart_project
         client.restart_project(project_id, failed_only="-a" not in opts, force = "-F" in opts)
-
 
 class ShowCommand(CLICommand):
     

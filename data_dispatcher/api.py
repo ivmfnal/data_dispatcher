@@ -231,25 +231,25 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         )
     
         
-    def restart_project(self, project_id, failed_only=True, force=False):
-        """Restart a project
+    def restart_handles(self, project_id, done=False, failed=False, reserved=False, all=False, handles=[]):
+        """Restart processing of project file handles
         
         Args:
             project_id (int): id of the project to restart
 
         Keyword Arguments:
-            failed_only (boolean): default=True, restart only failed files
-            force (boolean): default=False, restart even reserved files (force release them). Ignored of failed_only is True
-
+            done (boolean): default=False, restart done handles
+            reserved (boolean): default=False, restart reserved handles
+            failed (boolean): default=False, restart failed handles
+            all (boolean): default=False, restart all handles
+            handles (list of DIDs): default=[], restart specific handles
+        
         Returns:
             (dict) project information
         """
-        return self.get("restart_project?project_id=%s&failed_only=%s&force=%s" % (
-                project_id,
-                "yes" if failed_only else "no",
-                "yes" if force else "no"
-            )
-        )
+        if all: done = failed = reserved = True
+        selection = dict(project_id=project_id, done=done, failed=failed, reserved=reserved, handles=handles)
+        return self.post("restart_handles", json.dumps(selection))
 
     def delete_project(self, project_id):
         """Deletes a project by id
