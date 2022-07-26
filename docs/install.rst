@@ -34,7 +34,7 @@ To configure the client, you need to define the following environment variables:
 
 For DUNE, the values are:
 
-    * DATA_DISPATCHER_URL = https://metacat.fnal.gov:9443/dune_dd/data
+    * DATA_DISPATCHER_URL = https://metacat.fnal.gov:9443/dune/dd/data
     * DATA_DISPATCHER_AUTH_URL - https://metacat.fnal.gov:8143/auth/dune
     * METACAT_SERVER_URL - https://metacat.fnal.gov:9443/dune_meta_demo/app
     
