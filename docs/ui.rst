@@ -240,6 +240,47 @@ Viewing projects
                    failed    - failed files only
                    done      - done files only
 
+Copying project
+...............
+
+    .. code-block:: shell
+
+        dd project copy [options] <project id>               -- copy project
+  
+          -A @<file.json>                                 - JSON file with project attributes to override
+          -A "name=value name=value ..."                  - project attributes to override
+          -a @<file.json>                                 - JSON file with file attributes to override
+          -a "name=value name=value ..."                  - file attributes to override
+  
+          -p (json|pprint|id)                             - print created project info as JSON, 
+                                                            pprint or just project id (default)
+
+This command allows the user to create a new project with the same files as an existing one. The project and file attributes
+can be copied to the new project or overriden.
+
+Restarting files in a project
+.............................
+
+There are 2 ways to reset some files of the project to the initial state, making them available for re-processing within the same
+project.
+
+    .. code-block:: shell
+
+        $ dd project restart <project_id> <did> ...
+        
+This command will reset the state of the files specified with their DIDs regardless of their current state.
+
+    .. code-block:: shell
+        $ dd restart [options] <project_id>
+              -f                                              - restart failed files
+              -d                                              - restart done files
+              -r                                              - unreserve reserved files
+              -a                                              - restart all files
+  
+This command will reset all the files in the project in given set or states. Options ``-f``, ``-r``, ``-d`` can be combined. 
+``-a`` will reset all files in the project.
+
+
 Cancelling project
 ..................
 
@@ -249,6 +290,13 @@ Cancelling project
         
 ``-j`` will print the project information in JSON format
     
+Deleting project
+................
+
+    .. code-block:: shell
+    
+        $ dd project delete <project id>
+
 
 Workflow
 ~~~~~~~~

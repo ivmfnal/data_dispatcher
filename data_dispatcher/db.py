@@ -528,15 +528,28 @@ class DBProject(DBObject, HasLogRecord):
             states = set(states)
         if dids:
             dids = set(dids)
+        handles_reset = []
         for h in self.handles(reload=True):
             if dids and h.did() in dids or \
                     states and h.State in states:
                 h.reset()
-        self.State = "active"
-        self.EndTimestamp = None
-        self.save()
-        self.add_log("event", event="restart", force=force, failed_only=failed_only)
-        self.add_log("state", state="active")
+                handles_reset.append(dict(did=h.did()))
+
+        log_data = dict(event="restart",
+            handles_reset=handles_reset
+        )
+        
+        if states is not None:
+            log_data["states"] = list(states)
+        if dids is not None:
+            log_data["dids"] = list(dids)
+        
+        if self.State != "active" and self.is_active():
+            log_data["state"] = self.State = "active"
+            self.EndTimestamp = None
+            self.save()
+            
+        self.add_log("event", log_data)
 
     def ____restart(self, failed_only=False, force=False):
         for h in self.handles(reload=True, state="failed" if failed_only else None):

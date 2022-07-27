@@ -57,6 +57,7 @@ class CreateCommand(CLICommand):
             files = MetaCatClient().query(query, with_metadata = "-c" in opts)
             for info in files:
                 info["attributes"] = common_attrs.copy()
+            
             #
             # copy file attributes from metacat
             #
@@ -96,6 +97,7 @@ class CreateCommand(CLICommand):
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
 
         #print("files:", files)
+        print("calling API.client.create_project...")
         info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query)
         printout = opts.get("-p", "id")
         if printout == "json":
@@ -150,10 +152,11 @@ class CopyCommand(CLICommand):
 
 
 class RestartCommand(CLICommand):
-    
+
+    MinArgs = 1
     Opts = "adfr"
-    Usage = """
-    restart [options] <project_id>                  -- restart project files by status
+    Usage = """[options] <project_id> [<did> ...]   -- restart project handles
+    restart [options] <project_id>                  -- restart project files by handle state
         -f                                              - restart failed files
         -d                                              - restart done files
         -r                                              - unreserve reserved files
@@ -306,11 +309,11 @@ class DeleteCommand(CLICommand):
 
 ProjectCLI = CLI(
     "create",   CreateCommand(),
+    "copy",     CopyCommand(),
     "show",     ShowCommand(),
     "list",     ListCommand(),
     "cancel",   CancelCommand(),
     "delete",   DeleteCommand(),
-    "restart",  RestartCommand(),
-    "copy",     CopyCommand()
+    "restart",  RestartCommand()
 )
 
