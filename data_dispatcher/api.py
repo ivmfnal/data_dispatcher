@@ -180,7 +180,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Keyword Arguments:
             common_attributes (dict): attributes to attach to each file, will be overridden by the individual file attribute values with the same key
             project_attributes (dict): attriutes to attach to the new project
-            query (str): query used to create the file list, optional
+            query (str): query used to create the file list, optional. If specified, the query string will be added to the project as the attribute.
 
         Returns:
             (dict) new project information
