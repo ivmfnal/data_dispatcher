@@ -97,7 +97,7 @@ class CreateCommand(CLICommand):
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
 
         #print("files:", files)
-        print("calling API.client.create_project...")
+        #print("calling API.client.create_project...")
         info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query)
         printout = opts.get("-p", "id")
         if printout == "json":
