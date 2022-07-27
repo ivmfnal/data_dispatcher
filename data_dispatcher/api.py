@@ -180,7 +180,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Keyword Arguments:
             common_attributes (dict): attributes to attach to each file, will be overridden by the individual file attribute values with the same key
             project_attributes (dict): attriutes to attach to the new project
-            query (str): query used to create the file list, optional
+            query (str): query used to create the file list, optional. If specified, the query string will be added to the project as the attribute.
 
         Returns:
             (dict) new project information
@@ -231,25 +231,29 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         )
     
         
-    def restart_project(self, project_id, failed_only=True, force=False):
-        """Restart a project
+    def restart_handles(self, project_id, done=False, failed=False, reserved=False, all=False, handles=[]):
+        """Restart processing of project file handles
         
         Args:
             project_id (int): id of the project to restart
 
         Keyword Arguments:
-            failed_only (boolean): default=True, restart only failed files
-            force (boolean): default=False, restart even reserved files (force release them). Ignored of failed_only is True
-
+            done (boolean): default=False, restart done handles
+            reserved (boolean): default=False, restart reserved handles
+            failed (boolean): default=False, restart failed handles
+            all (boolean): default=False, restart all handles
+            handles (list of DIDs): default=[], restart specific handles
+        
         Returns:
             (dict) project information
         """
-        return self.get("restart_project?project_id=%s&failed_only=%s&force=%s" % (
-                project_id,
-                "yes" if failed_only else "no",
-                "yes" if force else "no"
-            )
-        )
+        if not handles:
+            if all: done = failed = reserved = True
+            selection = dict(project_id=project_id, done=done, failed=failed, reserved=reserved)
+        else:
+            selection = dict(project_id=project_id, handles=handles)
+            
+        return self.post("restart_handles", json.dumps(selection))
 
     def delete_project(self, project_id):
         """Deletes a project by id
@@ -450,22 +454,4 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         retry = "yes" if retry else "no"
         return self.get(f"release?handle_id={handle_id}&failed=yes&retry={retry}")
 
-    def _____reset_file(self, project_id, did, force=False):
-        ""
-
-        # not fully implemented. need to be careful with updating the project status
-
-        """Re-submit the file for processing
-        
-        Args:
-            project_id (str):   Project id
-            did (str):          File DID (namespace:name)
-            force (boolean):    Re-submit the file even if it is reserved by a worker
-        
-        Returns:
-            dictionary with file handle information
-        """
-        handle_id = f"{project_id}:{did}"
-        force = "yes" if force else "no"
-        return self.get(f"reset_file?handle_id={handle_id}&force={force}")
 

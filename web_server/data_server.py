@@ -37,15 +37,18 @@ class Handler(BaseHandler):
             return "OK"
     
     def create_project(self, request, relpath, **args):
+        #print("create_project()...")
         user, error = self.authenticated_user()
         if user is None:
             return 401, error
+        #print("authenticated user:", user)
         specs = json.loads(to_str(request.body))
         files = specs["files"]
         query = specs.get("query")
         attributes = specs.get("project_attributes", {})
         #print(specs.get("files"))
         db = self.App.db()
+        #print("calling DBProject.create()...")
         project = DBProject.create(db, user.Username, attributes=attributes, query=query)
         files_converted = []
         for f in files:
@@ -106,6 +109,34 @@ class Handler(BaseHandler):
         if user.Username != project.Owner and not user.is_admin():
             return 403, "Forbidden"
         project.restart(force=force, failed_only=failed_only)
+        return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
+        
+    def restart_handles(self, request, relpath, **args):
+
+        params = json.loads(to_str(request.body))
+        project_id = params.get("project_id")
+        if not project_id:
+            return 400, "Project id must be specified"
+        project_id = int(project_id)
+            
+        user, error = self.authenticated_user()
+        if user is None:
+            return 401, error
+
+        db = self.App.db()
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        if user.Username != project.Owner and not user.is_admin():
+            return 403, "Forbidden"
+
+        dids = params.get("handles")
+        if dids is not None:
+            project.restart_handles(dids=dids)
+        else:
+            states = [s for s in DBFileHandle.States if params.get(s)]
+            project.restart_handles(states=states)
+
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
     def copy_project(self, request, relpath, **args):
@@ -430,6 +461,7 @@ if __name__ == "__main__":
     server_config = config.get("web_server", {})
     app = create_application(config)
     port = server_config.get("data_port", 8088)
+    print(f"Starting at port {port}...")
     app.run_server(port, logging=True)
     
     

@@ -57,6 +57,7 @@ class CreateCommand(CLICommand):
             files = MetaCatClient().query(query, with_metadata = "-c" in opts)
             for info in files:
                 info["attributes"] = common_attrs.copy()
+            
             #
             # copy file attributes from metacat
             #
@@ -96,6 +97,7 @@ class CreateCommand(CLICommand):
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
 
         #print("files:", files)
+        print("calling API.client.create_project...")
         info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query)
         printout = opts.get("-p", "id")
         if printout == "json":
@@ -150,18 +152,37 @@ class CopyCommand(CLICommand):
 
 
 class RestartCommand(CLICommand):
-    
-    Opts = "aF"
-    Usage = """[-a [-F]] <project_id>               -- restart project
-        -a                                              - restart all files, otherwise - failed only
-        -F                                              - restart reserved handles too
+
+    MinArgs = 1
+    Opts = "adfr"
+    Usage = """[options] <project_id> [<did> ...]   -- restart project handles
+    restart [options] <project_id>                  -- restart project files by handle state
+        -f                                              - restart failed files
+        -d                                              - restart done files
+        -r                                              - unreserve reserved files
+        -a                                              - restart all files (same as -f -d -r)
+        
+    restart <project_id> <namespace>:<name> ...     -- restart specific files, options above are ignored
     """
-    
+
     def __call__(self, command, client, opts, args):
         project_id = args[0]
-        client.restart_project
-        client.restart_project(project_id, failed_only="-a" not in opts, force = "-F" in opts)
-
+        if args[1:]:
+            client.restart_handles(project_id, handles=args[1:])
+        else:
+            handle_states = []
+            if "-a" in opts:    
+                handle_states = ["all"]
+            else:
+                if "-f" in opts:    handle_states.append("failed")
+                if "-d" in opts:    handle_states.append("done")
+                if "-r" in opts:    handle_states.append("reserved")
+            
+            if not handle_states:
+                raise InvalidOptions("One or more handle states need to be selected")
+            
+            handle_states = {s:True for s in handle_states}
+            client.restart_handles(project_id, **handle_states)
 
 class ShowCommand(CLICommand):
     
@@ -288,11 +309,11 @@ class DeleteCommand(CLICommand):
 
 ProjectCLI = CLI(
     "create",   CreateCommand(),
+    "copy",     CopyCommand(),
     "show",     ShowCommand(),
     "list",     ListCommand(),
     "cancel",   CancelCommand(),
     "delete",   DeleteCommand(),
-    "restart",  RestartCommand(),
-    "copy",     CopyCommand()
+    "restart",  RestartCommand()
 )
 
