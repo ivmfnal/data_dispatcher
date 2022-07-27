@@ -271,6 +271,7 @@ project.
 This command will reset the state of the files specified with their DIDs regardless of their current state.
 
     .. code-block:: shell
+    
         $ dd restart [options] <project_id>
               -f                                              - restart failed files
               -d                                              - restart done files
