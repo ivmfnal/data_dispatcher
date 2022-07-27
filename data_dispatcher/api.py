@@ -454,22 +454,4 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         retry = "yes" if retry else "no"
         return self.get(f"release?handle_id={handle_id}&failed=yes&retry={retry}")
 
-    def _____reset_file(self, project_id, did, force=False):
-        ""
-
-        # not fully implemented. need to be careful with updating the project status
-
-        """Re-submit the file for processing
-        
-        Args:
-            project_id (str):   Project id
-            did (str):          File DID (namespace:name)
-            force (boolean):    Re-submit the file even if it is reserved by a worker
-        
-        Returns:
-            dictionary with file handle information
-        """
-        handle_id = f"{project_id}:{did}"
-        force = "yes" if force else "no"
-        return self.get(f"reset_file?handle_id={handle_id}&force={force}")
 
