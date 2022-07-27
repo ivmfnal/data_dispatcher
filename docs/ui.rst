@@ -28,6 +28,19 @@ Currently, Data Dispatcher supports 2 modes of authentication:
         
         $ dd login x509 <username> <cert_file.pem> <key_file.pem>       # login using X.509 authentication
         $ dd login x509 <username> <proxy_file>
+        
+Software versions
+~~~~~~~~~~~~~~~~~
+
+To print client and server versions, use the version command:
+
+    .. code-block:: shell
+
+        $ dd version
+        Server URL:     http://host.domain:8080/dd/data
+        Server version: 1.3.2
+        Client version: 1.3.1
+
 
 Projects
 ~~~~~~~~

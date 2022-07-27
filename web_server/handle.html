@@ -52,15 +52,12 @@
     <tr>    <th>Handle log</th>
             <td class="nopadding">
                 <table class="data">
-                    <tr><th>Time</th><th>Event</th><th>Data</th></tr>
+                    <tr><th>Time</th><th>Type</th><th>Data</th></tr>
                     {% for log_record in handle_log %}
                         <tr>
                             <td>{{log_record.T|as_dt_utc}}</td>
                             <td class="{{log_record.Type}}">{{log_record.Type}}</td>
-                            <td>{% for n, v in log_record.Data.items() %}
-                                    {{n}} = {{v}}{% if not loop.last %}<br/>{% endif %}
-                                {% endfor %}
-                            </td>
+                            <td style="text-align:left">{{ log_record.Data|format_log_data }}
                         </tr>
                     {% endfor %}
                 </table>

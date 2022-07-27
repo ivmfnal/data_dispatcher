@@ -167,6 +167,9 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         open(worker_id_file, "w").write(worker_id)
         self.WorkerID = worker_id
         return worker_id
+        
+    def version(self):
+        return self.get("version")
 
     #
     # projects

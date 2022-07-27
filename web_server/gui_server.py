@@ -316,6 +316,24 @@ def as_dt_utc(t):
     if isinstance(t, (int, float)):
         t = datetime.fromtimestamp(t, timezone.utc)
     return t.strftime("%D&nbsp;%H:%M:%S")
+    
+def pprint_data(data):
+    import pprint
+    return pprint.pformat(data, indent=2)
+    
+def format_log_data(data):
+    import pprint
+    parts = []
+    need_break = False
+    first_line = True
+    for k, v in sorted(data.items()):
+        formatted = '%s=<span style="white-space:pre">%s</span>&nbsp; ' % (k, pprint.pformat(v))
+        if not first_line and (isinstance(v, (dict, list)) or need_break):
+            parts.append("<br/>")
+        parts.append(formatted)
+        need_break = isinstance(v, (dict, list))
+        first_line = False
+    return "".join(parts)
 
 class App(BaseApp):
     
@@ -344,6 +362,7 @@ class App(BaseApp):
             },
             filters = {
                 "pretty_time_delta": pretty_time_delta,
+                "format_log_data": format_log_data,
                 "as_dt_utc": as_dt_utc
             }
         )

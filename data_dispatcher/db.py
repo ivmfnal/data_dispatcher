@@ -540,7 +540,7 @@ class DBProject(DBObject, HasLogRecord):
         )
         
         if states is not None:
-            log_data["states"] = list(states)
+            log_data["handle_states"] = list(states)
         if dids is not None:
             log_data["dids"] = list(dids)
         
@@ -548,8 +548,9 @@ class DBProject(DBObject, HasLogRecord):
             log_data["state"] = self.State = "active"
             self.EndTimestamp = None
             self.save()
-            
-        self.add_log("event", log_data)
+            self.add_log("state", log_data)
+        else:
+            self.add_log("event", log_data)
 
     def ____restart(self, failed_only=False, force=False):
         for h in self.handles(reload=True, state="failed" if failed_only else None):

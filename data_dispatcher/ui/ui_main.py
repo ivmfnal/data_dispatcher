@@ -35,7 +35,14 @@ class LoginCommand(CLICommand):
 
         print ("User:   ", user)
         print ("Expires:", time.ctime(expiration))
+        
 
+class VersionCommand(CLICommand):
+    
+    def __call__(self, command, client, opts, args):
+        print("Server URL:    ", client.ServerURL)
+        print("Server version:", client.version())
+        print("Client version:", Version)
 
 class DDCLI(CLI):
     
@@ -49,6 +56,7 @@ class DDCLI(CLI):
         
         CLI.__init__(self,
             "login",    LoginCommand(),
+            "version",  VersionCommand(),
             "project",  ProjectCLI,
             "file",     FileCLI,
             "worker",   WorkerCLI,

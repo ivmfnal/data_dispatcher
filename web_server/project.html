@@ -38,19 +38,6 @@
             {% endif %}
             </td> 
     </tr>
-    {#
-    <tr>    <th>Handles by state</th>
-            <td class="nopadding">
-                <table class="placement dense">
-                    <tr>
-                    {% for state in states -%}
-                        <td class="{{state}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</td>
-                    {% endfor %}
-                    </tr>
-                </table>
-            <td>
-    </tr>
-    #}
     <script type="text/javascript">
         var CanvasH = 15;
         var CanvasW = 400;
@@ -127,12 +114,6 @@
         }
     </script>
     
-    {#
-        <script>
-        const closed_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-right.gif";
-        const open_log_arrow = "{{GLOBAL_PathPrefix}}/static/arrow-down.gif";
-        </script>
-    #}
     <tr>    
             <th>Files</th>
             <td class="nopadding">
@@ -203,27 +184,6 @@
                                 show_timeline(document.getElementById("timeline:{{did}}"), handle_timeline);           //, file_timeline);
                             </script>
                         </tr>
-                        {#
-                        <tr id="handle_log:{{did}}" style="visibility:hidden; display:none">
-                            <td colspan=6>
-                                <table class="data">
-                                    <tr>
-                                        <th>Time</th><th>Event</th><th>Data</th>
-                                    </tr>
-                                    {% for record in combined_log[did] %}
-                                        <tr>
-                                            <td>{{record.T|as_dt_utc}}</td>
-                                            <td class="{{record.Type}}">{{record.Type}}</td>
-                                            <td>{% for name, value in record.Data.items()|sort -%}
-                                                    {{name}}={{value}}&nbsp;
-                                                {%- endfor %}
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                </table>
-                            </td>
-                        </tr>
-                        #}
                     {% endfor %}
                     <script>
                         function toggle_handle_log(did)
@@ -253,6 +213,22 @@
                     </script>
                 </table>
             </td>
+    </tr>
+    <tr>
+        <th>Project log</th>
+        <td class="nopadding">
+            <table class="data">
+                <tr><th>Time</th><th>Type</th><th>Data</th></tr>
+                {% for log_record in project.get_log() %}
+                    <tr>
+                        <td>{{log_record.T|as_dt_utc}}</td>
+                        <td class="{{log_record.Type}}">{{log_record.Type}}</td>
+                        <td style="text-align:left">{{ log_record.Data|format_log_data }}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </td>
     </tr>
 </table>
 
