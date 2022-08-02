@@ -169,6 +169,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         return worker_id
         
     def version(self):
+        """Returns the server version as a string
+        """
         return self.get("version")
 
     #
