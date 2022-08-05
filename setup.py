@@ -24,8 +24,6 @@ setup(
     keywords = "workflow management, data management, web service",
     url = "https://github.com/ivmfnal/data_dispatcher",
     packages=['data_dispatcher', 'data_dispatcher.logs', 'data_dispatcher.ui', 'data_dispatcher.ui.cli'],
-    #long_description=read('README.rst'),
-    #install_requires=["pythreader>=2.6", "pyjwt", "pyyaml", "metacat>=3.4.1"],
     install_requires=["metacat>=3.9.3", "requests"],
     zip_safe = False,
     classifiers=[

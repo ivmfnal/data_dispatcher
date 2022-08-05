@@ -292,8 +292,7 @@
 <!--  Globals 
     APP_URL: "{{APP_URL}}"
     MY_PATH: "{{MY_PATH}}"
-    GLOBAL_PathPrefix: "{{GLOBAL_PathPrefix}}"
-    GLOBAL_AppTopPath: "{{GLOBAL_AppTopPath}}"
+    GLOBAL_AppRootPath: "{{GLOBAL_AppRootPath}}"
     GLOBAL_AppDirPath: "{{GLOBAL_AppDirPath}}"
     GLOBAL_ImagesPath: "{{GLOBAL_ImagesPath}}"
     GLOBAL_AppVersion: "{{GLOBAL_AppVersion}}"
@@ -308,16 +307,16 @@
 <div id="main_menu">
 	<table class="placement link_menu" width="100%">
     	<tr>
-    	    <td><a class=button href="{{GLOBAL_PathPrefix}}/P/projects">Projects</a></td>
-    	    <td><a class=button href="{{GLOBAL_PathPrefix}}/R/index">RSEs</a></td>
-    	    <td><a class=button href="{{GLOBAL_PathPrefix}}/R/proximity_map">CPU/RSE proximity map</a></td>
+    	    <td><a class=button href="{{GLOBAL_AppRootPath}}/P/projects">Projects</a></td>
+    	    <td><a class=button href="{{GLOBAL_AppRootPath}}/R/index">RSEs</a></td>
+    	    <td><a class=button href="{{GLOBAL_AppRootPath}}/R/proximity_map">CPU/RSE proximity map</a></td>
             <td><span style="color:#AAA; padding-right: 10px"><i>All times in UTC</i></span></td>
             <td style="width:100%"></td>
     		<td>
                         {% if GLOBAL_User %}
-                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;{{GLOBAL_User.Username}}&nbsp;</span><a class=button  href="{{GLOBAL_PathPrefix}}/A/logout?redirect={{GLOBAL_PathPrefix}}/index">log out</a>
+                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;{{GLOBAL_User.Username}}&nbsp;</span><a class=button  href="{{GLOBAL_AppRootPath}}/A/logout?redirect={{GLOBAL_AppRootPath}}/index">log out</a>
                         {% else %}
-                            <a class=button href="{{GLOBAL_PathPrefix}}/A/login?redirect={{GLOBAL_PathPrefix}}/index">log in</a>
+                            <a class=button href="{{GLOBAL_AppRootPath}}/A/login?redirect={{GLOBAL_AppRootPath}}/index">log in</a>
                         {% endif %}
     		</td>
     	</tr>
