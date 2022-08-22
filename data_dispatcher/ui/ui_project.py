@@ -155,19 +155,22 @@ class RestartCommand(CLICommand):
 
     MinArgs = 1
     Opts = "adfr"
-    Usage = """[options] <project_id> [<did> ...]   -- restart project handles
-    restart [options] <project_id>                  -- restart project files by handle state
-        -f                                              - restart failed files
-        -d                                              - restart done files
-        -r                                              - unreserve reserved files
-        -a                                              - restart all files (same as -f -d -r)
-        
-    restart <project_id> <namespace>:<name> ...     -- restart specific files, options above are ignored
+    Usage = """                                     -- restart project handles
+    restart <project_id> <DID> [...]                  -- restart specific handles by DIDs
+
+    restart [selection] <project_id>                  -- restart handles by state:
+        -f                                              - restart failed handles
+        -d                                              - restart done handles
+        -r                                              - unreserve reserved handles
+        -a                                              - same as -f -d -r
     """
 
     def __call__(self, command, client, opts, args):
         project_id = args[0]
         if args[1:]:
+            for did in args[1:]:
+                if len(did.split(':', 1)) != 2:
+                    raise InvalidArguments("Invalid DID format: %s" % (did,))
             client.restart_handles(project_id, handles=args[1:])
         else:
             handle_states = []
