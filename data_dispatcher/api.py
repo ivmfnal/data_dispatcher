@@ -368,8 +368,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Returns:
             Dictionary or boolean.
             If dictionary, the dictionary contains the reserved file information.
-            If True: the request timed out, but can be retried
-            If False: the project has ended
+            If ``True``: the request timed out, but can be retried.
+            If ``False``: the project has ended.
         """
         worker_id = worker_id or self.WorkerID
         cpu_site = cpu_site or self.CPUSite
