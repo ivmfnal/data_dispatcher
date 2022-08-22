@@ -29,8 +29,9 @@ setup(
     classifiers=[
     ],
     entry_points = {
-            "console_scripts": [
-                "ddisp = data_dispatcher.ui.ui_main:main",
-            ]
-        }
+        "console_scripts": [
+            "ddisp = data_dispatcher.ui.ui_main:main",
+            "dd = data_dispatcher.ui.ui_main:main"
+        ]
+    }
 )
