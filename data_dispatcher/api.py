@@ -366,7 +366,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
 
         worker_id = worker_id or self.WorkerID
-        cpu_site = cpu_site or self.SPUSite
+        cpu_site = cpu_site or self.CPUSite
         if worker_id is None:
             raise ValueError("DataDispatcherClient must be initialized with Worker ID")
         url_tail = f"next_file?project_id={project_id}&worker_id={worker_id}"
