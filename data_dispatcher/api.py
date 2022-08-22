@@ -406,7 +406,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         worker_id = worker_id or self.WorkerID
         project = self.get_project(project_id)
         return [h for h in project["file_handles"]
-            if h["state"] == "reserved" and h["worker_id"] == client.WorkerID
+            if h["state"] == "reserved" and h["worker_id"] == worker_id
         ]
         
     def get_file(self, namespace, name):
