@@ -22,40 +22,22 @@ class NextFileCommand(CLICommand):
         timeout = opts.get("-t")
         if timeout is not None: timeout = int(timeout)
         cpu_site = opts.get("-c")
-        done = False
-        t0 = time.time()
-        t1 = None if timeout is None else t0 + timeout
-        retry = True
-        while retry:
-            try:    
-                project_info = client.get_project(project_id)
-                if not project_info["active"]:
-                    print("done")
-                    sys.exit(1)    # project finished
-                reply = client.next_file(project_id, cpu_site, worker_id=worker_id)
-                info = reply["handle"]
-                reason = reply["reason"]
-                retry = reply["retry"]
-            except NotFoundError:
-                print("project not found")
-                sys.exit(1)
-            if info:
-                if as_json:
-                    info["replicas"] = sorted(info["replicas"].values(), key=lambda r: -r["preference"])
-                    print(pretty_json(info))
-                else:
-                    print("%s:%s" % (info["namespace"], info["name"]))
-                sys.exit(0)
-            if retry:
-                if timeout is None or (timeout > 0 and time.time() < t1):
-                    dt = 5
-                    if t1 is not None:
-                        dt = min(5, t1-time.time())
-                    if dt > 0:
-                        time.sleep(dt)
-                else:
-                    print("timeout")
-                    sys.exit(1)        # timeout
+
+        try:
+            reply = client.next_file(project_id, cpu_site=cpu_site, worker_id=worker_id, timeout=timeout)
+        except NotFoundError:
+            print("project not found")
+            sys.exit(1)
+
+        if isinstance(reply, dict):
+            if as_json:
+                reply["replicas"] = sorted(reply["replicas"].values(), key=lambda r: -r["preference"])
+                print(pretty_json(reply))
+            else:
+                print("%s:%s" % (reply["namespace"], reply["name"]))
+        else:
+            print("timeout" if reply else "done")
+            sys.exit(1)        # timeout
            
 
 class DoneCommand(CLICommand):

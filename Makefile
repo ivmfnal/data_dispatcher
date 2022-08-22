@@ -2,27 +2,35 @@ PRODUCT=data_dispatcher
 BUILD_DIR=$(HOME)/build/$(PRODUCT)
 TARDIR=/tmp/$(USER)
 LIBDIR=$(BUILD_DIR)/data_dispatcher
+BINDIR=$(BUILD_DIR)/bin
 MODULE_DIR=$(LIBDIR)
-SERVER_DIR=$(BUILD_DIR)/server
-DAEMON_DIR=$(BUILD_DIR)/daemon
-TARFILE=$(TARDIR)/$(PRODUCT)_$(VERSION).tar
+SERVER_ROOT=$(BUILD_DIR)/server
+CLIENT_ROOT=$(BUILD_DIR)/client
+DAEMON_DIR=$(SERVER_ROOT)/daemon
+SERVER_TAR=$(TARDIR)/$(PRODUCT)_$(VERSION).tar
+CLIENT_TAR=$(TARDIR)/$(PRODUCT)_client_$(VERSION).tar
 
-all:	
+all:
 	make VERSION=`python data_dispatcher/version.py` all_with_version
 	
 all_with_version: tars
 	
 tars:   build $(TARDIR)
-	cd $(BUILD_DIR); tar cf $(TARFILE) data_dispatcher daemon server
+	cd $(SERVER_ROOT); tar cf $(SERVER_TAR) data_dispatcher daemon server
+	cd $(CLIENT_ROOT); tar cf $(CLIENT_TAR) data_dispatcher bin canned_client_setup.sh
 	@echo \|
-	@echo \| Tarfile is created: $(TARFILE)
+	@echo \| "Tarfiles created:"
+	@echo \| "    Server and daemon:" $(SERVER_TAR)
+	@echo \| "    Client:           " $(CLIENT_TAR)
 	@echo \|
-	
 
-build:  clean $(BUILD_DIR) 
-	cd data_dispatcher; make LIBDIR=$(LIBDIR) MODULE_DIR=$(MODULE_DIR) VERSION=$(VERSION) build
-	cd web_server; make SERVER_DIR=$(SERVER_DIR) VERSION=$(VERSION)  build
+build: clean $(BUILD_DIR)
+	cd data_dispatcher; make SERVER_ROOT=$(SERVER_ROOT) CLIENT_ROOT=$(CLIENT_ROOT) VERSION=$(VERSION) build
+	cd web_server; make SERVER_ROOT=$(SERVER_ROOT) VERSION=$(VERSION)  build
 	cd daemon; make DAEMON_DIR=$(DAEMON_DIR) VERSION=$(VERSION) build
+	cp canned_client_setup.sh $(CLIENT_ROOT)
+	find $(BUILD_DIR) -type d -name __pycache__ -print | xargs rm -rf
+	find $(BUILD_DIR) -type f -name \*.pyc -print -exec rm {} \;
 	
 clean:
 	rm -rf $(BUILD_DIR) $(TARFILE)
@@ -30,7 +38,5 @@ clean:
 $(TARDIR):
 	mkdir -p $@
 	
-
 $(BUILD_DIR):
 	mkdir -p $@
-	

@@ -421,8 +421,7 @@ class ProjectMonitor(Primitive, Logged):
             self.log(f"sync_replicas(): replicas found in Rucio/all active handles: {n}/{ndids}")
 
             by_namespace_name_rse = {}
-            for r in rucio_replicas:
-                namespace = r["scope"]
+            for r in rucio_replicas:",namespace = r["scope"]
                 name = r["name"]
                 for rse, urls in r["rses"].items():
                     if rse in self.RSEConfig:

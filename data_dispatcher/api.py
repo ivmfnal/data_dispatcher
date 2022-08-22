@@ -32,6 +32,9 @@ class NotFoundError(ServerError):
     def __init__(self, url, message):
         ServerError.__init__(self, url, 404, message, "")
 
+class TimeoutError(Exception):
+    pass
+
 def to_bytes(x):
     if not isinstance(x, bytes):
         x = x.encode("utf-8")
@@ -107,7 +110,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     
     DefaultWorkerIDFile = ".data_dispatcher_worker_id"
     
-    def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, token = None, token_file = None):
+    def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, token = None, token_file = None,
+            cpu_site=None):
         
         """Initializes the DataDispatcherClient object
 
@@ -117,6 +121,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             worker_id_file (str): File path to read/store the worker ID. 
                 Default: <cwd>/.data_dispatcher_worker_id
             worker_id (str): Worker ID to use when reserving next file. If unspecified, will be read from the worker ID file.
+            cpu_site (str): Name of the CPU site where the client is running, optional. Will be used when reserving project files.
         """
         
         server_url = server_url or os.environ.get("DATA_DISPATCHER_URL")
@@ -135,6 +140,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             if worker_id_file:
                 open(worker_id_file, "w").write(worker_id)
         self.WorkerID = worker_id
+        self.CPUSite = cpu_site
         
         HTTPClient.__init__(self, server_url, self.token())
             
@@ -348,20 +354,59 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         
         Args:
             project_id (int): project id to reserve a file from
+
+
+        Keyword Arguments:
             cpu_site (str): optional, if specified, the file will be reserved according to the CPU/RSE proximity map
         
         Returns:
             dictionary with file information, or None if no file was available to be reserved. The method does not block and always returns immediately.
-            Use `get_project()` to see if the project is done.
+            The dictionary contains "retry" boolean flag, which indicates whether the request can be retried. This flag will be set to False
+            if the project has ended.
         """
 
         worker_id = worker_id or self.WorkerID
+        cpu_site = cpu_site or self.SPUSite
         if worker_id is None:
             raise ValueError("DataDispatcherClient must be initialized with Worker ID")
         url_tail = f"next_file?project_id={project_id}&worker_id={worker_id}"
         if cpu_site:
             url_tail += f"&cpu_site={cpu_site}"
         return self.get(url_tail)
+
+    def next_file_wait(self, project_id, cpu_site=None, worker_id=None, timeout=None):
+        """Reserves next available file from the project
+        
+        Args:
+            project_id (int): project id to reserve a file from
+            cpu_site (str): optional, if specified, the file will be reserved according to the CPU/RSE proximity map
+            timeout (int or float): optional, if specified, time to wait for a file to become available. Otherwise, will wait indefinitely
+        
+        Returns:
+            Dictionary or boolean.
+            If dictionary, the dictionary contains the reserved file information.
+            If True: the request timed out, but can be retried
+            If False: the project has ended
+        """
+        t1 = None if timeout is None else time.time() + timeout
+        retry = True
+        while retry:
+            reply = self.next_file(project_id, cpu_site, worker_id)
+            info = reply.get("handle")
+            reason = reply.get("reason")
+            retry = reply["retry"]
+            if info:
+                return info         # allocated
+            if retry:
+                if timeout is None or (timeout > 0 and time.time() < t1):
+                    dt = 5
+                    if t1 is not None:
+                        dt = min(5, t1-time.time())
+                    if dt > 0:
+                        time.sleep(dt)
+                else:
+                    break
+        return retry
         
     def get_file(self, namespace, name):
         """Gets information about a file

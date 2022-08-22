@@ -1,14 +1,25 @@
-UI_DIR=$(MODULE_DIR)/ui
+CLIENT_BINDIR=$(CLIENT_ROOT)/bin
+CLIENT_LIBDIR=$(CLIENT_ROOT)/data_dispatcher
+SERVER_LIBDIR=$(SERVER_ROOT)/data_dispatcher
 
-FILES = api.py db.py __init__.py version.py
+SERVER_FILES = api.py db.py __init__.py version.py
+CLIENT_FILES = api.py __init__.py version.py
 
-build:	$(MODULE_DIR) $(UI_DIR)
-	cp $(FILES) $(MODULE_DIR)
-	cd ui; make UI_DIR=$(UI_DIR) build
-	cp -R logs $(MODULE_DIR)
+build:	server client
 	
-$(MODULE_DIR):
+server:	$(SERVER_LIBDIR)
+	cp $(SERVER_FILES) $(SERVER_LIBDIR)
+	cp -R logs $(SERVER_LIBDIR)
+
+client: $(CLIENT_BINDIR) $(CLIENT_LIBDIR)
+	cp $(CLIENT_FILES) $(CLIENT_LIBDIR)
+	cd ui; make CLIENT_LIBDIR=$(CLIENT_LIBDIR) CLIENT_BINDIR=$(CLIENT_BINDIR) build
+	
+$(CLIENT_BINDIR):
 	mkdir -p $@
-	
-$(UI_DIR):
+
+$(CLIENT_LIBDIR):
+	mkdir -p $@
+
+$(SERVER_LIBDIR):
 	mkdir -p $@
