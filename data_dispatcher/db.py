@@ -544,7 +544,9 @@ class DBProject(DBObject, HasLogRecord):
         if dids is not None:
             log_data["dids"] = list(dids)
         
-        if self.State != "active" and self.is_active():
+        if self.State != "active" \
+                and not all(h.State in ("done", "failed") for h in self.handles()):
+            self.State = "active"
             log_data["state"] = self.State = "active"
             self.EndTimestamp = None
             self.save()
