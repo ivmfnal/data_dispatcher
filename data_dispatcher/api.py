@@ -405,7 +405,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
         worker_id = worker_id or self.WorkerID
         project = client.get_project(project_id)
-        return [h in project["file_handles"]
+        return [h for h in project["file_handles"]
             if h["state"] == "resrved" and h["worker_id"] == client.WorkerID
         ]
         
