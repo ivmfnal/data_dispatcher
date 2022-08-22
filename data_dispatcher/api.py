@@ -349,7 +349,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         args = "?" + "&".join(args) if args else ""
         return self.get(f"projects{args}")
 
-    def __next_file(self, project_id, cpu_site worker_id):
+    def __next_file(self, project_id, cpu_site, worker_id):
         if worker_id is None:
             raise ValueError("DataDispatcherClient must be initialized with Worker ID")
         url_tail = f"next_file?project_id={project_id}&worker_id={worker_id}"
