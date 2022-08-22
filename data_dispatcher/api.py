@@ -404,7 +404,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             list of dictionaries with the file handle information
         """
         worker_id = worker_id or self.WorkerID
-        project = client.get_project(project_id)
+        project = self.get_project(project_id)
         return [h for h in project["file_handles"]
             if h["state"] == "resrved" and h["worker_id"] == client.WorkerID
         ]
