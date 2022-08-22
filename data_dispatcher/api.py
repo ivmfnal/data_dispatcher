@@ -349,24 +349,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         args = "?" + "&".join(args) if args else ""
         return self.get(f"projects{args}")
 
-    def next_file(self, project_id, cpu_site=None, worker_id=None):
-        """Reserves next available file from the project
-        
-        Args:
-            project_id (int): project id to reserve a file from
-
-
-        Keyword Arguments:
-            cpu_site (str): optional, if specified, the file will be reserved according to the CPU/RSE proximity map
-        
-        Returns:
-            dictionary with file information, or None if no file was available to be reserved. The method does not block and always returns immediately.
-            The dictionary contains "retry" boolean flag, which indicates whether the request can be retried. This flag will be set to False
-            if the project has ended.
-        """
-
-        worker_id = worker_id or self.WorkerID
-        cpu_site = cpu_site or self.CPUSite
+    def __next_file(self, project_id, cpu_site worker_id):
         if worker_id is None:
             raise ValueError("DataDispatcherClient must be initialized with Worker ID")
         url_tail = f"next_file?project_id={project_id}&worker_id={worker_id}"
@@ -374,7 +357,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             url_tail += f"&cpu_site={cpu_site}"
         return self.get(url_tail)
 
-    def next_file_wait(self, project_id, cpu_site=None, worker_id=None, timeout=None):
+    def next_file(self, project_id, cpu_site=None, worker_id=None, timeout=None):
         """Reserves next available file from the project
         
         Args:
@@ -388,10 +371,12 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             If True: the request timed out, but can be retried
             If False: the project has ended
         """
+        worker_id = worker_id or self.WorkerID
+        cpu_site = cpu_site or self.CPUSite
         t1 = None if timeout is None else time.time() + timeout
         retry = True
         while retry:
-            reply = self.next_file(project_id, cpu_site, worker_id)
+            reply = self.__next_file(project_id, cpu_site, worker_id)
             info = reply.get("handle")
             reason = reply.get("reason")
             retry = reply["retry"]

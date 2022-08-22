@@ -24,7 +24,7 @@ class NextFileCommand(CLICommand):
         cpu_site = opts.get("-c")
 
         try:
-            reply = client.next_file_wait(project_id, cpu_site=cpu_site, worker_id=worker_id, timeout=timeout)
+            reply = client.next_file(project_id, cpu_site=cpu_site, worker_id=worker_id, timeout=timeout)
         except NotFoundError:
             print("project not found")
             sys.exit(1)
