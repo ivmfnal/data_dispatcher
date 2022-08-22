@@ -67,7 +67,12 @@ class FailedCommand(CLICommand):
     
     def __call__(self, command, client, opts, args):
         project_id, did = args
-        client.file_failed(int(project_id), did, retry = not "-f" in opts)
+        if did == "all":
+            dids = [to_did(h["namespace"], h["name"]) for h in client.reserved_files(project_id)]
+        else:
+            dids = [did]
+        for did in dids:
+            client.file_failed(int(project_id), did, retry = not "-f" in opts)
 
 
 class IDCommand(CLICommand):
