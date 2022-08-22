@@ -393,6 +393,22 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     break
         return retry
         
+    def reserved_files(self, project_id, worker_id=None):
+        """Returns list of file handles reserved in the project by given worker
+        
+        Args:
+            project_id (int): Project id
+            worker_id (str or None): Worker id. If None, client's worker id will be used
+    
+        Returns:
+            list of dictionaries with the file handle information
+        """
+        worker_id = worker_id or self.WorkerID
+        project = client.get_project(project_id)
+        return [h in project["file_handles"]
+            if h["state"] == "resrved" and h["worker_id"] == client.WorkerID
+        ]
+        
     def get_file(self, namespace, name):
         """Gets information about a file
         

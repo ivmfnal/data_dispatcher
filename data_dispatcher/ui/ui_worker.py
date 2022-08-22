@@ -43,18 +43,26 @@ class NextFileCommand(CLICommand):
 class DoneCommand(CLICommand):
     
     MinArgs = 2
-    Usage = """<project id> <DID>                               -- mark the file as done"""
-    
+    Usage = """<project id> (<DID>|all)                          -- mark a file as done
+        "all" means mark all files reserved by the worker as done
+    """
+
     def __call__(self, command, client, opts, args):
         project_id, did = args
-        client.file_done(int(project_id), did)
+        if did == "all":
+            dids = [to_did(h["namespace"], h["name"]) for h in client.reserved_files(project_id)]
+        else:
+            dids = [did]
+        for did in dids:
+            client.file_done(int(project_id), did)
     
 class FailedCommand(CLICommand):
     
     Opts = "f"
     MinArgs = 2
-    Usage = """[-f] <project id> <DID>                          -- mark the file as failed
+    Usage = """[-f] <project id> (<DID>|all)                      -- mark a file as failed
         -f            -- final, do not retry the file
+        "all" means mark all files reserved by the worker as failed
     """
     
     def __call__(self, command, client, opts, args):
@@ -83,9 +91,36 @@ class IDCommand(CLICommand):
             print("worker id unknown")
             sys.exit(1)
         print(worker_id)
+        
+class ListReservedCommand(CLICommand):
+    
+    MinArgs = 1
+    Opts = "j"
+    Usage = """[-j] [-w <worker id>] <project id>              -- list files allocated to the worker
+        -j                      -- as JSON
+        -w <worker id>          -- specify worker id. Otherwise, use my worker id    
+    """
+
+    def __call__(self, command, client, opts, args):
+        project_id = int(args[0])
+        worker_id = opts.get("-w", client.WorkerID)
+        as_json = "-j" in opts
+        
+        try:    handles = client.reserved_files(project_id, worker_id)
+        except NotFoundError:
+            print("project not found", file=sys.stderr)
+            sys.exit(1)
+
+        if as_json:
+            print(pretty_json(handles))
+        else:
+            for h in handles:
+                print(h["namespace"] + ':' + h["name"])
+
 
 WorkerCLI = CLI(
     "id",       IDCommand(),
+    "list",     ListReservedCommand(),
     "next",     NextFileCommand(),
     "done",     DoneCommand(),
     "failed",   FailedCommand()
