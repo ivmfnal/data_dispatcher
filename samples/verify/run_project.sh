@@ -2,7 +2,7 @@
 
 # Usage: run_project.sh <project_id>
 
-if [ $1 == "" ]; then
+if [ "$1" == "" ]; then
         echo Usage: run_project.sh \<project_id\>
         exit 2
 fi

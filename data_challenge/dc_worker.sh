@@ -28,8 +28,7 @@ do
         if [ "$?" != "0" ]; then
             # likely the project is done
             done="true"
-            cat $info_file
-            rm -f $info_file
+            break
         else
             url=`python json_extract.py $info_file replicas/0/url`
             namespace=`python json_extract.py $info_file namespace`
@@ -61,10 +60,11 @@ do
 
             echo "   download status:" $status
             
-            if [ $status != 0 ]; do
+            if [ $status != 0 ]; then
                 dd worker failed $project_id $did
                 ((n_failures=n_failures+1))
-                if[ $n_failures -ge $max_failures ]; do
+                if [ $n_failures -ge $max_failures ]
+                then
                     break
                 fi
             else
