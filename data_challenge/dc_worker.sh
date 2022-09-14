@@ -2,7 +2,7 @@
 
 # Usage: worker.sh <nfiles> <project_id>
 
-if [ $1 == "" ]; then
+if [ "$1" == "" ]; then
         echo Usage: run_project.sh \<nfiles> \<project_id\>
         exit 2
 fi
@@ -37,7 +37,7 @@ do
             did=${namespace}:${name}
 
             echo
-            echo ------ $did ...
+            echo Downloading $url ...
 
             # download the replica using the URL from the DD
             case $url in
@@ -58,6 +58,8 @@ do
                     exit 1
                     ;;
             esac
+
+            echo "   download status:" $status
             
             if [ $status != 0 ]; do
                 dd worker failed $project_id $did

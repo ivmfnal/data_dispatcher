@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Usage: create_project.sh <checksum type> <MQL query>
+# Usage: create_project.sh <MQL query>
 
-if [ $1 == "" ]; then
+if [ "$1" == "" ]; then
         echo Usage: create_project.sh \<MQL query\>
         exit 2
 fi
