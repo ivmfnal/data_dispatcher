@@ -47,9 +47,37 @@ def to_str(x):
     
 class HTTPClient(object):
 
-    def __init__(self, server_url, token=None):
+    InitialRetry = 1.0
+    RetryExponent = 1.5
+    DefaultTimeout = 300.0
+
+    def __init__(self, server_url, timeout=None, token=None):
         self.ServerURL = server_url
         self.Token = token
+        self.Timeout = timeout or self.DefaultTimeout
+
+    def retry_request(self, method, url, timeout=None, **args):
+        """
+        Implements the functionality to retry on 503 response with random exponentially growing delay
+        """
+        if timeout is None:
+            timeout = self.Timeout
+        tend = time.time() + timeout
+        retry_interval = self.InitialRetry
+        response = None
+        while time.time() < tend:
+            if method == "get":
+                response = requests.get(url, timeout=self.Timeout, **args)
+            else:
+                response = requests.post(url, timeout=self.Timeout, **args)
+            #print("retry_request: response:", response)
+            if response.status_code != 503:
+                break
+            sleep_time = min(random.random() * retry_interval, tend-time.time())
+            retry_interval *= self.RetryExponent
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+        return response
 
     def get(self, uri_suffix, none_if_not_found=False):
         if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
@@ -58,7 +86,7 @@ class HTTPClient(object):
         headers = {}
         if self.Token is not None:
             headers["X-Authentication-Token"] = self.Token.encode()
-        response = requests.get(url, headers =headers)
+        response = self.retry_request("get", url, headers=headers)
         #print("response status code:", response.status_code)
         if response.status_code != 200:
             if none_if_not_found and response.status_code == 404:
@@ -73,7 +101,7 @@ class HTTPClient(object):
             data = response.text
         #print("   data:", data)
         return data
-        
+
     def post(self, uri_suffix, data):
         #print("post_json: data:", type(data), data)
         
@@ -90,10 +118,8 @@ class HTTPClient(object):
         headers = {}
         if self.Token is not None:
             headers["X-Authentication-Token"] = self.Token.encode()
-        #print("HTTPClient.post_json: url:", url)
-        #print("HTTPClient.post_json: data:", data)
-        
-        response = requests.post(url, data = data, headers = headers)
+
+        response = self.retry_request("post", url, data=data, headers=headers)
         if response.status_code != 200:
             if response.status_code == 404:
                 raise NotFoundError(url, response.text)
@@ -142,7 +168,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         self.WorkerID = worker_id
         self.CPUSite = cpu_site
         
-        HTTPClient.__init__(self, server_url, self.token())
+        HTTPClient.__init__(self, server_url, token=self.token())
             
         #print("DataDispatcherClient: token:", token, "  user:", token["user"])
         
