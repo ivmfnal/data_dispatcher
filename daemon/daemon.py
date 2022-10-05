@@ -365,7 +365,7 @@ class ListReplicasTask(Task):
         self.DIDs = dids
         
     def run(self):
-        self.Master.debug("ListReplicasTask started with", len(self.DIDs)", DIDs")
+        self.Master.debug("ListReplicasTask started with", len(self.DIDs), "DIDs")
         try:
             with self.Master:
                 return self.Client.list_replicas(self.DIDs, all_states=False, ignore_availability=False)
