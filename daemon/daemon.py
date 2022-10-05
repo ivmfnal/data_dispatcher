@@ -417,7 +417,7 @@ class ProjectMonitor(Primitive, Logged):
         return tape_replicas_by_rse
     
     @synchronized
-    def ___sync_replicas(self):
+    def sync_replicas(self):
 
         self.debug("sync_replicas...")
 
@@ -467,7 +467,7 @@ class ProjectMonitor(Primitive, Logged):
             self.error(textwrap.indent(traceback.format_exc()), "  ")
  
     @synchronized
-    def sync_replicas(self):
+    def ___async_version_of_sync_replicas(self):
         self.debug("sync_replicas...")
         active_handles = self.active_handles()
         self.debug("sync_replicas(): active_handles:", None if active_handles is None else len(active_handles))
