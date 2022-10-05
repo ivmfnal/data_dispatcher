@@ -356,7 +356,7 @@ class RSEConfig(Logged):
     def max_burst(self, rse):
         return self.get(rse).get("max_poll_burst", 100)
 
-class ReplicaSyncTask(Task):
+class ListReplicasTask(Task):
     
     def __init__(self, master, rucio_client, dids):
         Task.__init__(self)
