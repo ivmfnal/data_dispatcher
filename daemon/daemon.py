@@ -12,6 +12,18 @@ def to_did(namespace, name):
 
 def from_did(did):
     return tuple(did.split(":", 1))
+    
+def chunked(iterable, n):
+    if isinstance(iterable, list):
+        for i in range(0, len(iterable), n):
+            yield iterable[i:i + n]
+    else:
+        it = iter(iterable)
+        while True:
+            chunk = list(itertools.islice(it, n))
+            if not chunk:
+                return
+            yield chunk
 
 TaskScheduler = Scheduler()
 
@@ -408,32 +420,31 @@ class ProjectMonitor(Primitive, Logged):
             dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
             ndids = len(dids)
             
-            existing_replicas_by_rse = {}           # { rse -> set( did, ...) }
-            for r in DBReplica.list_many_files(self.DB, [h.did() for h in active_handles]):
-                existing_replicas_by_rse.setdefault(r.RSE, set()).add(r.did())
+            total_replicas = 0
+            for chunk in chunked(dids, 100):
+                nchunk = len(chunk)
+                with self.Master:
+                    # locked, in case the client needs to refresh the token
+                    rucio_replicas = self.RucioClient.list_replicas(chunk, all_states=False, ignore_availability=False)
+                n = len(rucio_replicas)
+                total_replicas += n
+                self.log(f"sync_replicas(): {n} replicas found for dids chunk {nchunk}")
 
-            with self.Master:
-                # locked, in case the client needs to refresh the token
-                rucio_replicas = self.RucioClient.list_replicas(dids, all_states=False, ignore_availability=False)
-
-            rucio_replicas = list(rucio_replicas)
-            n = len(rucio_replicas)
-            self.log(f"sync_replicas(): replicas found in Rucio/all active handles: {n}/{ndids}")
-
-            by_namespace_name_rse = {}
-            for r in rucio_replicas:",namespace = r["scope"]
-                name = r["name"]
-                for rse, urls in r["rses"].items():
-                    if rse in self.RSEConfig:
-                        preference = self.RSEConfig.preference(rse)
-                        available = not self.RSEConfig.is_tape(rse)
-                        url = self.RSEConfig.fix_url(rse, urls[0])           # assume there is only one
-                        path = self.RSEConfig.url_to_path(rse, url)          
-                        by_namespace_name_rse.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
-                    else:
-                        pass
-            DBReplica.sync_replicas(self.DB, by_namespace_name_rse)
-            self.log(f"replicas synced")
+                by_namespace_name_rse = {}
+                for r in rucio_replicas:
+                    namespace = r["scope"]
+                    name = r["name"]
+                    for rse, urls in r["rses"].items():
+                        if rse in self.RSEConfig:
+                            preference = self.RSEConfig.preference(rse)
+                            available = not self.RSEConfig.is_tape(rse)
+                            url = self.RSEConfig.fix_url(rse, urls[0])           # assume there is only one
+                            path = self.RSEConfig.url_to_path(rse, url)          
+                            by_namespace_name_rse.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
+                        else:
+                            pass
+                DBReplica.sync_replicas(self.DB, by_namespace_name_rse)
+            self.log(f"sync_replicas(): done: {total_replicas} replicas found for {ndids} dids")
         except Exception as e:
             traceback.print_exc()
             self.error("exception in sync_replicas:", e)
