@@ -14,7 +14,7 @@ def from_did(did):
     return tuple(did.split(":", 1))
     
 def chunked(iterable, n):
-    if isinstance(iterable, list):
+    if isinstance(iterable, (list, tuple)):
         for i in range(0, len(iterable), n):
             yield iterable[i:i + n]
     else:
@@ -426,6 +426,7 @@ class ProjectMonitor(Primitive, Logged):
                 with self.Master:
                     # locked, in case the client needs to refresh the token
                     rucio_replicas = self.RucioClient.list_replicas(chunk, all_states=False, ignore_availability=False)
+                rucio_replicas = list(rucio_replicas)
                 n = len(rucio_replicas)
                 total_replicas += n
                 self.log(f"sync_replicas(): {n} replicas found for dids chunk {nchunk}")
