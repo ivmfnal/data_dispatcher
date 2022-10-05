@@ -480,7 +480,7 @@ class ProjectMonitor(Primitive, Logged):
 
         dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
         ndids = len(dids)
-        self.log("syncing {ndids} DIDs...")
+        self.log(f"syncing {ndids} DIDs...")
 
         total_replicas = 0
         promises = []
