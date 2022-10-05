@@ -26,7 +26,7 @@ def chunked(iterable, n):
             yield chunk
 
 TaskScheduler = Scheduler()
-
+Queue = TaskQueue(10, stagger=0.1)
 
 class ProximityMapDownloader(PyThread, Logged):
 
@@ -488,7 +488,7 @@ class ProjectMonitor(Primitive, Logged):
         for chunk in chunked(dids, 100):
             nchunk = len(chunk)
             t = ListReplicasTask(self.Master, self.RucioClient, chunk)
-            promise = self.Master.add_task(t, promise_data=chunk)
+            promise = Queue.add(t, promise_data=chunk)
             promises.append(promise)
         
         total_replicas = 0
@@ -521,9 +521,6 @@ class ProjectMonitor(Primitive, Logged):
             DBReplica.sync_replicas(self.DB, by_namespace_name_rse)
         self.log(f"sync_replicas(): done: {total_replicas} replicas found for {ndids} dids")
                 
-                
-
-            
         try:
             dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
             ndids = len(dids)
@@ -637,10 +634,6 @@ class ProjectMaster(PyThread, Logged):
         self.Pollers = pollers
         self.RucioClient = rucio_client
         self.Scheduler.add(self.clean, id="cleaner")
-        self.Queue = TaskQueue(10, stagger=0.1)
-        
-    def add_task(self, task):
-        return self.Queue.add(task)
 
     def clean(self):
         self.debug("cleaner...")
