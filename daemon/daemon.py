@@ -1,6 +1,6 @@
 import stompy, pprint, urllib, requests, json, time, traceback
 from data_dispatcher.db import DBFile, DBProject, DBReplica, DBRSE, DBProximityMap
-from pythreader import PyThread, Primitive, Scheduler, synchronized, LogFile, LogStream
+from pythreader import PyThread, Primitive, Scheduler, synchronized, LogFile, LogStream, TaskQueue, Task
 from data_dispatcher.logs import Logged
 from daemon_web_server import DaemonWebServer
 
@@ -356,6 +356,20 @@ class RSEConfig(Logged):
     def max_burst(self, rse):
         return self.get(rse).get("max_poll_burst", 100)
 
+class ReplicaSyncTask(Task):
+    
+    def __init__(self, master, rucio_client, dids):
+        Task.__init__(self)
+        self.Master = master        # to synchronize access to the client
+        self.Client = rucio_client
+        self.DIDs = dids
+        
+    def run(self):
+        try:
+            with self.Master:
+                return self.Client.list_replicas(self.DIDs, all_states=False, ignore_availability=False)
+        finally:
+            self.Master = None      # unlink
 
 class ProjectMonitor(Primitive, Logged):
     
@@ -402,7 +416,7 @@ class ProjectMonitor(Primitive, Logged):
         return tape_replicas_by_rse
     
     @synchronized
-    def sync_replicas(self):
+    def ___sync_replicas(self):
 
         self.debug("sync_replicas...")
 
@@ -415,6 +429,99 @@ class ProjectMonitor(Primitive, Logged):
         elif not active_handles:
             self.remove_me("done")
             return "stop"
+            
+        try:
+            dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
+            ndids = len(dids)
+            
+            total_replicas = 0
+            for chunk in chunked(dids, 100):
+                nchunk = len(chunk)
+                with self.Master:
+                    # locked, in case the client needs to refresh the token
+                    rucio_replicas = self.RucioClient.list_replicas(chunk, all_states=False, ignore_availability=False)
+                rucio_replicas = list(rucio_replicas)
+                n = len(rucio_replicas)
+                total_replicas += n
+                self.log(f"sync_replicas(): {n} replicas found for dids chunk {nchunk}")
+
+                by_namespace_name_rse = {}
+                for r in rucio_replicas:
+                    namespace = r["scope"]
+                    name = r["name"]
+                    for rse, urls in r["rses"].items():
+                        if rse in self.RSEConfig:
+                            preference = self.RSEConfig.preference(rse)
+                            available = not self.RSEConfig.is_tape(rse)
+                            url = self.RSEConfig.fix_url(rse, urls[0])           # assume there is only one
+                            path = self.RSEConfig.url_to_path(rse, url)          
+                            by_namespace_name_rse.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
+                        else:
+                            pass
+                DBReplica.sync_replicas(self.DB, by_namespace_name_rse)
+            self.log(f"sync_replicas(): done: {total_replicas} replicas found for {ndids} dids")
+        except Exception as e:
+            traceback.print_exc()
+            self.error("exception in sync_replicas:", e)
+            self.error(textwrap.indent(traceback.format_exc()), "  ")
+ 
+    @synchronized
+    def sync_replicas(self):
+        self.debug("sync_replicas...")
+        active_handles = self.active_handles()
+        self.debug("sync_replicas(): active_handles:", None if active_handles is None else len(active_handles))
+
+        if active_handles is None:
+            self.remove_me("deleted")
+            return "stop"
+        elif not active_handles:
+            self.remove_me("done")
+            return "stop"
+
+        dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
+        ndids = len(dids)
+        self.log("syncing {ndids} DIDs...")
+
+        total_replicas = 0
+        promises = []
+        for chunk in chunked(dids, 100):
+            nchunk = len(chunk)
+            t = ListReplicasTask(self.Master, self.RucioClient, chunk)
+            promise = self.Master.add_task(t, promise_data=chunk)
+            promises.append(promise)
+        
+        total_replicas = 0
+        for promise in promises:
+            try:
+                rucio_replicas = promise.wait()
+            except Exception as e:
+                self.error("exception in ListReplicasTask:", e)
+                continue
+
+            rucio_replicas = list(rucio_replicas)
+            n = len(rucio_replicas)
+            total_replicas += n
+            nchunk = len(promise.Data)
+            self.log(f"sync_replicas(): {n} replicas found for chunk {nchunk}")
+
+            by_namespace_name_rse = {}
+            for r in rucio_replicas:
+                namespace = r["scope"]
+                name = r["name"]
+                for rse, urls in r["rses"].items():
+                    if rse in self.RSEConfig:
+                        preference = self.RSEConfig.preference(rse)
+                        available = not self.RSEConfig.is_tape(rse)
+                        url = self.RSEConfig.fix_url(rse, urls[0])           # assume there is only one
+                        path = self.RSEConfig.url_to_path(rse, url)          
+                        by_namespace_name_rse.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
+                    else:
+                        pass
+            DBReplica.sync_replicas(self.DB, by_namespace_name_rse)
+        self.log(f"sync_replicas(): done: {total_replicas} replicas found for {ndids} dids")
+                
+                
+
             
         try:
             dids = [{"scope":h.Namespace, "name":h.Name} for h in active_handles]
@@ -529,6 +636,10 @@ class ProjectMaster(PyThread, Logged):
         self.Pollers = pollers
         self.RucioClient = rucio_client
         self.Scheduler.add(self.clean, id="cleaner")
+        self.Queue = TaskQueue(10, stagger=0.1)
+        
+    def add_task(self, task):
+        return self.Queue.add(task)
 
     def clean(self):
         self.debug("cleaner...")
