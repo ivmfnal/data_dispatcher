@@ -1,4 +1,4 @@
-import getopt, json, time, pprint, textwrap
+import getopt, json, time, pprint, textwrap, sys
 from datetime import datetime
 from metacat.webapi import MetaCatClient
 from metacat.db import DBFile
@@ -208,6 +208,9 @@ class ShowCommand(CLICommand):
     def __call__(self, command, client, opts, args):
         project_id = args[0]
         info = client.get_project(project_id, with_files=True, with_replicas=True)
+        if info is None:
+            print("Project", project_id, "not found")
+            sys.exit(1)
         if "-a" in opts:
             attrs = info.get("attributes", {})
             if "-j" in opts:

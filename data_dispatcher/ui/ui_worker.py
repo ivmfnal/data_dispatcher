@@ -74,7 +74,6 @@ class FailedCommand(CLICommand):
         for did in dids:
             client.file_failed(int(project_id), did, retry = not "-f" in opts)
 
-
 class IDCommand(CLICommand):
     
     Opts = "n"

@@ -661,7 +661,7 @@ class DBProject(DBObject, HasLogRecord):
         return None, "retry", True
 
     def reserve_handle(self, worker_id, proximity_map, cpu_site):
-        handle = DBFileHande.reserve_for_worker(self.DB, self.ID, worker_id, proximity_map, cpu_site)
+        handle = DBFileHandle.reserve_for_worker(self.DB, self.ID, worker_id, proximity_map, cpu_site)
         if handle is not None:
             return handle, "ok", False
             
@@ -1433,7 +1433,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         return DBProject.get(self.DB, self.ProjectID)
 
     @staticmethod
-    def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
+    def ___reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
         h_table = DBFileHandle.Table
         rep_table = DBReplica.Table
         rse_table = DBRSE.Table
@@ -1471,6 +1471,53 @@ class DBFileHandle(DBObject, HasLogRecord):
                         if tup and tup == (DBFileHandle.ReservedState, worker_id):
                             reserved = (namespace, name)
                             done = True
+            c.execute("""
+                commit
+            """)
+        except:
+            c.execute("rollback")
+            raise
+
+        if reserved:
+            namespace, name = reserved
+            reserved = DBFileHandle.get(db, project_id, namespace, name)
+        return reserved
+        
+    @staticmethod
+    def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
+        h_table = DBFileHandle.Table
+        rep_table = DBReplica.Table
+        rse_table = DBRSE.Table
+        c = db.cursor()
+        c.execute("begin")
+        reserved = None
+        try:
+            sql = f"""
+                    select h.namespace, h.name
+                        from {h_table} h
+                        where 
+                            h.project_id = %s and h.state = %s
+                            and exists (
+                                select * from {rep_table} r, {rse_table} s
+                                    where h.namespace = r.namespace and h.name = r.name 
+                                        and r.rse = s.name
+                                        and s.is_enabled and s.is_available
+                            )
+                        order by attempts
+                        limit 1
+                        for update skip locked
+            """
+            print("sql:\n", sql)
+            c.execute(sql, (project_id, DBFileHandle.ReadyState))
+            tup = c.fetchone()
+            if tup:
+                namespace, name = tup
+                c.execute(f"""
+                    update {h_table}
+                        set state = %s, worker_id = %s, attempts = attempts + 1
+                        where project_id = %s and namespace = %s and name = %s
+                """, (DBFileHandle.ReservedState, worker_id, project_id, namespace, name))
+                reserved = (namespace, name)
             c.execute("""
                 commit
             """)
