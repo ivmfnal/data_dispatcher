@@ -87,7 +87,6 @@ class HTTPClient(object):
         if self.Token is not None:
             headers["X-Authentication-Token"] = self.Token.encode()
         response = self.retry_request("get", url, headers=headers)
-        #print("response status code:", response.status_code)
         if response.status_code != 200:
             if none_if_not_found and response.status_code == 404:
                 return None
@@ -137,7 +136,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     DefaultWorkerIDFile = ".data_dispatcher_worker_id"
     
     def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, token = None, token_file = None,
-            cpu_site=None):
+            cpu_site="DEFAULT"):
         
         """Initializes the DataDispatcherClient object
 

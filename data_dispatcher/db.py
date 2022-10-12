@@ -614,7 +614,7 @@ class DBProject(DBObject, HasLogRecord):
         if p is None:   return False
         return p.State == "active" and not all(h.State in ("done", "failed") for h in p.handles())
             
-    def reserve_handle(self, worker_id, proximity_map, cpu_site=None):
+    def ___reserve_handle(self, worker_id, proximity_map, cpu_site=None):
 
         if not self.is_active(reload=True):
             return None, "project inactive", False
@@ -659,6 +659,16 @@ class DBProject(DBObject, HasLogRecord):
                 return h, "ok", False
 
         return None, "retry", True
+
+    def reserve_handle(self, worker_id, proximity_map, cpu_site):
+        handle = DBFileHande.reserve_for_worker(self.DB, self.ID, worker_id, proximity_map, cpu_site)
+        if handle is not None:
+            return handle, "ok", False
+            
+        if not self.is_active(reload=True):
+            return None, "project inactive", False
+        else:
+            return None, "retry", True
 
     def file_state_counts(self):
         counts = {}
@@ -1421,6 +1431,57 @@ class DBFileHandle(DBObject, HasLogRecord):
     @property
     def project(self):
         return DBProject.get(self.DB, self.ProjectID)
+
+    @staticmethod
+    def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
+        h_table = DBFileHandle.Table
+        rep_table = DBReplica.Table
+        rse_table = DBRSE.Table
+        c = db.cursor()
+        c.execute("begin")
+        reserved = None
+        try:
+            c.execute(f"""
+                declare handles_cursor cursor for 
+                    select distinct h.namespace, h.name, h.state, h.attempts
+                        from {h_table} h, {rep_table} r, {rse_table} s
+                        where h.namespace = r.namespace and h.name = r.name 
+                            and h.project_id=%s and h.state=%s
+                            and r.available
+                            and s.name=r.rse and s.is_enabled and s.is_available
+                        order by h.attempts
+                        for update of file_handles
+            """, (project_id, DBFileHandle.ReadyState))
+            done = False
+            while not done:
+                c.execute("fetch next from handles_cursor")
+                tup = c.fetchone()
+                if not tup:
+                    done = True
+                else:
+                    namespace, name, state, attempts = tup
+                    if state == DBFileHandle.ReadyState:
+                        c.execute("""
+                            update {h_table}
+                                set state = %s, worker_id = %s
+                                where current of handles_cursor
+                                returning state, worker_id
+                        """, (DBFileHandle.ReservedState, worker_id))
+                        tup = c.fetchone()
+                        if tup and tup == (DBFileHandle.ReservedState, worker_id):
+                            reserved = (namespace, name)
+                            done = True
+            c.execute("""
+                commit
+            """)
+        except:
+            c.execute("rollback")
+            raise
+
+        if reserved:
+            namespace, name = reserved
+            reserved = DBFileHandle.get(db, project_id, namespace, name)
+        return reserved
         
     def reserve(self, worker_id):
         c = self.DB.cursor()

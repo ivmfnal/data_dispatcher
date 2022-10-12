@@ -262,7 +262,7 @@ class Handler(BaseHandler):
                 "retry": False
             }
         return json.dumps(out), "text/json"
-        
+
     def release(self, request, relpath, handle_id=None, failed="no", retry="yes", **args):
         if handle_id is None:
             return 400, "File Handle ID (<project_id>:<namespace>:<name>) must be specified"
