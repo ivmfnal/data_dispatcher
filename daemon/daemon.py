@@ -596,7 +596,6 @@ class ProjectMonitor(Primitive, Logged):
         next_run = self.UpdateInterval
 
         self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
-
         for rse, replicas in tape_replicas_by_rse.items():
             pin_request = self.PinRequests.get(rse)
             if pin_request is None or pin_request.expired() or not pin_request.same_files(replicas):
@@ -618,11 +617,12 @@ class ProjectMonitor(Primitive, Logged):
                 
         project = DBProject.get(self.DB, self.ProjectID)
         if project is not None and project.WorkerTimeout is not None:
+            self.debug("releasing timed-out handles, timeout=", project.WorkerTimeout)
             n = project.release_timed_out_handles()
             if n:
                 self.log("released {n} timed-out handles")
+        self.debug("update_replicas_availability(): done")
         return next_run
-
 
 class ProjectMaster(PyThread, Logged):
     

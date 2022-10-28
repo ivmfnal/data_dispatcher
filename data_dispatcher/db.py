@@ -726,7 +726,7 @@ class DBProject(DBObject, HasLogRecord):
         if self.WorkerTimeout is None:
             return 0
         t = datetime.now() - timedelta(seconds=self.WorkerTimeout)
-        return DBFileReplica.release_reserved_before(self.DB, self.ID, t)
+        return DBFileHandle.release_reserved_before(self.DB, self.ID, t)
 
 class DBFile(DBObject):
     
