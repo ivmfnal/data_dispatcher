@@ -106,6 +106,10 @@ Hyphen can be used as the value for ``-j`` and ``-l`` options to read the list f
         protodune-sp:np04_raw_run006833_0001_dl6.root
         _EOF_
 
+Optionally, use ``-t <timeout in seconds>`` to specify the worker timeout. If a worker allocates a file and does not release it
+for longer than the specified time interval, Data Dispatcher will automatically release the file and make it available for
+another worker to allocate. Make sure the specified interval is long enough to avoid processing of the same file by multiple
+workers.
 
 The "dd project create" command prints information about the created project in 3 different formats, depending on 
 the value of the ``-p`` option:

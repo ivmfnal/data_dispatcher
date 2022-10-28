@@ -116,13 +116,15 @@ class CreateCommand(CLICommand):
 
 class CopyCommand(CLICommand):
     MinArgs = 1
-    Opts = "A:a:"
+    Opts = "A:a:t:p:"
     Usage = """[options] <project id>               -- copy project
 
         -A @<file.json>                                 - JSON file with project attributes to override
         -A "name=value name=value ..."                  - project attributes to override
         -a @<file.json>                                 - JSON file with file attributes to override
         -a "name=value name=value ..."                  - file attributes to override
+
+        -t <worker timeout>|none                        - worker timeout to override
 
         -p (json|pprint|id)                             - print created project info as JSON, 
                                                           pprint or just project id (default)
@@ -147,8 +149,14 @@ class CopyCommand(CLICommand):
             else:
                 project_attrs = parse_attrs(attr_src)
 
+        worker_timeout = opts.get("-t")
+        if worker_timeout == "none":    
+            worker_timeout = None
+        if worker_timeout is not None:
+            worker_timeout = float(worker_timeout)
+
         #print("files:", files)
-        info = client.copy_project(project_id, common_attributes=common_attrs, project_attributes=project_attrs)
+        info = client.copy_project(project_id, common_attributes=common_attrs, project_attributes=project_attrs, worker_timeout=worker_timeout)
         printout = opts.get("-p", "id")
         if printout == "json":
             print(pretty_json(info))
@@ -251,6 +259,7 @@ class ShowCommand(CLICommand):
                 print("Ended:              ", ended_timestamp)
                 print("Query:              ", textwrap.indent(info.get("query") or "", " "*10).lstrip())
                 print("Status:             ", info["state"])
+                print("Worker timeout:     ", info.get("worker_timeout"))
                 print("Project Attributes: ")
                 for k, v in info.get("attributes", {}).items():
                     if not isinstance(v, (int, float, str, bool)):

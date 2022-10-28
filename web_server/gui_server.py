@@ -334,6 +334,10 @@ def format_log_data(data):
         need_break = isinstance(v, (dict, list))
         first_line = False
     return "".join(parts)
+    
+def none_as_blank(x):
+    if x is None:   return ''
+    else: return str(x)
 
 class App(BaseApp):
     
@@ -363,7 +367,8 @@ class App(BaseApp):
             filters = {
                 "pretty_time_delta": pretty_time_delta,
                 "format_log_data": format_log_data,
-                "as_dt_utc": as_dt_utc
+                "as_dt_utc": as_dt_utc,
+                "none_as_blank": none_as_blank
             }
         )
 

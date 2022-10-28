@@ -28,6 +28,7 @@
                 <td><a href="{{GLOBAL_MetaCatURL}}/gui/query?query={{project.quoted_query()}}&run=yes">run query</a></td>
             {% endif %}
     </tr>
+    <tr>    <th>Worker timeout</th>     <td>{{project.WorkerTimeout|none_as_blank}}</td></tr>
     <tr>    <th>Project attributes</th>         <td class="nopadding">
             {% if project.Attributes|length %}
                 <table class="placement attributes dense">
