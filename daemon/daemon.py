@@ -27,6 +27,10 @@ def chunked(iterable, n):
 
 TaskScheduler = Scheduler()
 SyncScheduler = Scheduler(5)
+
+TaskScheduler.start()
+SyncScheduler.start()
+
 Queue = TaskQueue(10, stagger=0.1)
 
 class ProximityMapDownloader(PyThread, Logged):
