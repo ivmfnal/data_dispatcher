@@ -25,8 +25,16 @@ def chunked(iterable, n):
                 return
             yield chunk
 
-TaskScheduler = Scheduler()
-SyncScheduler = Scheduler(5)
+class JobDelegate(object):
+    
+    def jobFailed(self, scheduler, job_id, exc_type, exc_value, tb):
+        print(f"{scheduler}: job failed:", job_id)
+        traceback.print_exception(exc_type, exc_value, tb)
+
+delegate = JobDelegate()
+
+TaskScheduler = Scheduler(name="TaskScheduler", delegate=delegate)
+SyncScheduler = Scheduler(5, name="SyncScheduler", delegate=delegate)
 
 TaskScheduler.start()
 SyncScheduler.start()
@@ -535,7 +543,7 @@ class ProjectMonitor(Primitive, Logged):
             self.debug("releasing timed-out handles, timeout=", project.WorkerTimeout)
             n = project.release_timed_out_handles()
             if n:
-                self.log("released {n} timed-out handles")
+                self.log(f"released {n} timed-out handles")
         self.debug("update_replicas_availability(): done")
         return next_run
 
