@@ -8,12 +8,15 @@ from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
 class CreateCommand(CLICommand):
     
-    Opts = "q:c:l:j:A:a:"
+    Opts = "q:c:l:j:A:a:t:"
     Usage = """[options] [inline MQL query]         -- create project
 
         Use an inline query or one of the following to provide file list:
         -l (-|<flat file with file list>)               - read "namespace:name [attr=value ...]" lines from the file 
         -j (-|<JSON file with file list>)               - read JSON file with file list {"namespace":...,"name"..., "attributes":{...}}
+
+        -t <worker timeout>                             - optional worker timeout in seconds
+
         -q <file with MQL query>                        - read MQL query from file instead
         -c <name>[,<name>...]                           - copy metadata attributes from the query results, 
                                                           use only with -q or inline query. Otherwise ignored
@@ -95,10 +98,14 @@ class CreateCommand(CLICommand):
                     did, rest = (tuple(line.split(None, 1)) + ("",))[:2]
                     namespace, name = did.split(":", 1)
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
+                    
+        worker_timeout = opts.get("-t")
+        if worker_timeout is not None:
+            worker_timeout = float(worker_timeout)
 
         #print("files:", files)
         #print("calling API.client.create_project...")
-        info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query)
+        info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query, worker_timeout=worker_timeout)
         printout = opts.get("-p", "id")
         if printout == "json":
             print(pretty_json(info))

@@ -45,11 +45,12 @@ class Handler(BaseHandler):
         specs = json.loads(to_str(request.body))
         files = specs["files"]
         query = specs.get("query")
+        worker_timeout = specs.get("worker_timeout")
         attributes = specs.get("project_attributes", {})
         #print(specs.get("files"))
         db = self.App.db()
         #print("calling DBProject.create()...")
-        project = DBProject.create(db, user.Username, attributes=attributes, query=query)
+        project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout)
         files_converted = []
         for f in files:
             if isinstance(f, str):
@@ -150,6 +151,7 @@ class Handler(BaseHandler):
         #print(specs.get("files"))
         db = self.App.db()
         original_project = DBProject.get(db, project_id)
+        worker_timeout = specs.get("worker_timeout", original_project.WorkerTimeout)
         if original_project is None:
             return 404, "Project not found"
         files_updated = []
@@ -163,7 +165,7 @@ class Handler(BaseHandler):
             ))
         project_attrs = original_project.Attributes.copy()
         project_attrs.update(project_attributes)
-        project = DBProject.create(db, user.Username, attributes=project_attrs, query=original_project.Query)
+        project = DBProject.create(db, user.Username, attributes=project_attrs, query=original_project.Query, worker_timeout=worker_timeout)
         project.add_files(files_updated)
         project.add_log("event", event="copied", source=project_id, override=dict(
             project=project_attrs, file=file_attributes

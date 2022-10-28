@@ -207,19 +207,26 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     #
     # projects
     #
-    def create_project(self, files, common_attributes={}, project_attributes={}, query=None):
+    def create_project(self, files, common_attributes={}, project_attributes={}, query=None, worker_timeout=None):
         """Creates new project
         
-        Args:
-            files (list): each item in the list is either a dictionary with keys: "namespace", "name", "attributes" (optional) or a string "namespace:name"
-
-        Keyword Arguments:
-            common_attributes (dict): attributes to attach to each file, will be overridden by the individual file attribute values with the same key
-            project_attributes (dict): attriutes to attach to the new project
-            query (str): query used to create the file list, optional. If specified, the query string will be added to the project as the attribute.
-
-        Returns:
-            (dict) new project information
+        Parameters
+        ----------
+        files : list
+            Each item in the list is either a dictionary with keys: "namespace", "name", "attributes" (optional) or a string "namespace:name"
+        common_attributes : dict
+            attributes to attach to each file, will be overridden by the individual file attribute values with the same key
+        project_attributes : dict
+            attriutes to attach to the new project
+        query : str 
+            query used to create the file list, optional. If specified, the query string will be added to the project as the attribute
+        worker_timeout : int or float
+            If not None, all file handles will be automatically released if allocated by same worker for longer than the ``worker_timeout`` seconds
+            
+        Returns
+        -------
+        dict
+            new project information
         """
         file_list = []
         for info in files:
@@ -237,14 +244,15 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             file_list.append({"name":name, "namespace":namespace, "attributes":attrs})
         return self.post("create_project", json.dumps(
                 {   
-                    "files":        file_list,
+                    "files":                file_list,
                     "project_attributes":   project_attributes,
-                    "query":        query
+                    "query":                query,
+                    "worker_timeout":       worker_timeout
                 }
             )
         )
         
-    def copy_project(self, project_id, common_attributes={}, project_attributes={}):
+    def copy_project(self, project_id, common_attributes={}, project_attributes={}, worker_timeout=None):
         """Creates new project
         
         Args:
@@ -253,6 +261,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Keyword Arguments:
             common_attributes (dict): file attributes to override
             project_attributes (dict): project attributes to override
+            worker_timeout (int or float): worker timeout to override
 
         Returns:
             (dict) new project information
@@ -261,7 +270,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 {   
                     "project_id":           project_id,
                     "file_attributes":      common_attributes,
-                    "project_attributes":   project_attributes
+                    "project_attributes":   project_attributes,
+                    "worker_timeout":       worker_timeout
                 }
             )
         )

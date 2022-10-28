@@ -13,6 +13,7 @@ create table projects
     end_timestamp       timestamp with time zone,
     state	            text,
     retry_count         int,
+    worker_timeout      int,
     attributes          jsonb  default '{}'::jsonb,
     query               text
 );
@@ -70,6 +71,7 @@ create table file_handles
     name        text,
     state       text,
     worker_id   text,
+    reserved_since  timestamp with time zone,
     attempts    int default 0,
     attributes  jsonb  default '{}'::jsonb,
     primary key (project_id, namespace, name),

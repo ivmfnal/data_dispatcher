@@ -615,6 +615,12 @@ class ProjectMonitor(Primitive, Logged):
                 n = len(dids_paths)
                 self.log("sending", len(dids_paths), "dids/paths to poller for RSE", rse)
                 poller.submit(dids_paths)
+                
+        project = DBProject.get(self.DB, self.ProjectID)
+        if project is not None and project.WorkerTimeout is not None:
+            n = project.release_timed_out_handles()
+            if n:
+                self.log("released {n} timed-out handles")
         return next_run
 
 

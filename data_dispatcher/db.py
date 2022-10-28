@@ -296,14 +296,15 @@ class DBProject(DBObject, HasLogRecord):
     States = ["active", "failed", "done", "cancelled", "held"]
     EndStates = ["failed", "done", "cancelled"]
     
-    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query".split(",")
+    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query,worker_timeout".split(",")
     Table = "projects"
     PK = ["id"]
     
     LogIDColumns = ["project_id"]
     LogTable = "project_log"
     
-    def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, retry_count=0, attributes={}, query=None):
+    def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, 
+                retry_count=None, attributes={}, query=None, worker_timeout=None):
         self.DB = db
         self.ID = id
         self.Owner = owner
@@ -315,6 +316,7 @@ class DBProject(DBObject, HasLogRecord):
         self.HandleCounts = None
         self.EndTimestamp = end_timestamp
         self.Query = query
+        self.WorkerTimeout = worker_timeout
         
     def pk(self):
         return (self.ID,)
@@ -345,7 +347,8 @@ class DBProject(DBObject, HasLogRecord):
             created_timestamp = self.CreatedTimestamp.timestamp(),
             ended_timestamp = None if self.EndTimestamp is None else self.EndTimestamp.timestamp(),
             active = self.is_active(),
-            query = self.Query
+            query = self.Query,
+            worker_timeout = self.WorkerTimeout
         )
         if with_handles or with_replicas:
             out["file_handles"] = [h.as_jsonable(with_replicas=with_replicas) for h in self.handles()]
@@ -356,17 +359,17 @@ class DBProject(DBObject, HasLogRecord):
         return json.dumps(self.Attributes, indent=4)
         
     @staticmethod
-    def create(db, owner, retry_count=None, attributes={}, query=None):
+    def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None):
         if isinstance(owner, DBUser):
             owner = owner.Username
         c = db.cursor()
         try:
             c.execute("begin")
             c.execute("""
-                insert into projects(owner, state, retry_count, attributes, query)
-                    values(%s, %s, %s, %s, %s)
+                insert into projects(owner, state, retry_count, attributes, query, worker_timeout)
+                    values(%s, %s, %s, %s, %s, %s)
                     returning id
-            """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query))
+            """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query, worker_timeout))
             id = c.fetchone()[0]
             db.commit()
         except:
@@ -719,6 +722,11 @@ class DBProject(DBObject, HasLogRecord):
             out[(namespace, name)] = sorted(lst, key=lambda r: r.T)
         return out
 
+    def release_timed_out_handles(self):
+        if self.WorkerTimeout is None:
+            return 0
+        t = datetime.now() - timedelta(seconds=self.WorkerTimeout)
+        return DBFileReplica.release_reserved_before(self.DB, self.ID, t)
 
 class DBFile(DBObject):
     
@@ -1188,7 +1196,7 @@ class DBReplica(DBObject, HasLogRecord):
 
 class DBFileHandle(DBObject, HasLogRecord):
 
-    Columns = ["project_id", "namespace", "name", "state", "worker_id", "attempts", "attributes"]
+    Columns = ["project_id", "namespace", "name", "state", "worker_id", "attempts", "attributes", "reserved_since"]
     PK = ["project_id", "namespace", "name"]
     Table = "file_handles"
 
@@ -1207,7 +1215,7 @@ class DBFileHandle(DBObject, HasLogRecord):
     LogIDColumns = ["project_id", "namespace", "name"]
     LogTable = "file_handle_log"
 
-    def __init__(self, db, project_id, namespace, name, state=None, worker_id=None, attempts=0, attributes={}):
+    def __init__(self, db, project_id, namespace, name, state=None, worker_id=None, attempts=0, attributes={}, reserved_since=None):
         self.DB = db
         self.ProjectID = project_id
         self.Namespace = namespace
@@ -1218,6 +1226,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         self.Attributes = (attributes or {}).copy()
         self.File = None
         self.Replicas = None
+        self.ReservedSince = reserved_since
 
     def pk(self):
         return (self.ProjectID, self.Namespace, self.Name)
@@ -1281,7 +1290,8 @@ class DBFileHandle(DBObject, HasLogRecord):
             state = self.State,
             worker_id = self.WorkerID,
             attempts = self.Attempts,
-            attributes = self.Attributes or {}
+            attributes = self.Attributes or {},
+            reserved_since = self.ReservedSince.timestamp() if self.ReservedSince is not None else None
         )
         if with_replicas:
             out["replicas"] = {rse:r.as_jsonable() for rse, r in self.replicas().items()}
@@ -1289,14 +1299,6 @@ class DBFileHandle(DBObject, HasLogRecord):
         
     def attributes_as_json(self):
         return json.dumps(self.Attributes, indent=4)
-        
-    @staticmethod
-    def from_tuple(db, dbtup):
-        #print("Handle.from_tuple: tuple:", dbtup)
-        project_id, namespace, name, state, worker_id, attempts, attributes = dbtup
-        attributes = attributes or {}
-        h = DBFileHandle(db, project_id, namespace, name, state=state, worker_id=worker_id, attempts=attempts, attributes=attributes)
-        return h
         
     @staticmethod
     def create(db, project_id, namespace, name, attributes={}):
@@ -1352,12 +1354,12 @@ class DBFileHandle(DBObject, HasLogRecord):
             for f in files 
         ]            
         DBFileHandle.add_log_bulk(db, log_records)
-
+        
     @staticmethod
     def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False):
         wheres = []
         if project_id: wheres.append(f"h.project_id={project_id}")
-        if state:  
+        if state:
             if isinstance(state, (list, tuple)):
                 wheres.append("h.state in (%s)" % ",".join(f"'{s}'" for s in state))
             else:
@@ -1433,57 +1435,6 @@ class DBFileHandle(DBObject, HasLogRecord):
         return DBProject.get(self.DB, self.ProjectID)
 
     @staticmethod
-    def ___reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
-        h_table = DBFileHandle.Table
-        rep_table = DBReplica.Table
-        rse_table = DBRSE.Table
-        c = db.cursor()
-        c.execute("begin")
-        reserved = None
-        try:
-            c.execute(f"""
-                declare handles_cursor cursor for 
-                    select distinct h.namespace, h.name, h.state, h.attempts
-                        from {h_table} h, {rep_table} r, {rse_table} s
-                        where h.namespace = r.namespace and h.name = r.name 
-                            and h.project_id=%s and h.state=%s
-                            and r.available
-                            and s.name=r.rse and s.is_enabled and s.is_available
-                        order by h.attempts
-                        for update of file_handles
-            """, (project_id, DBFileHandle.ReadyState))
-            done = False
-            while not done:
-                c.execute("fetch next from handles_cursor")
-                tup = c.fetchone()
-                if not tup:
-                    done = True
-                else:
-                    namespace, name, state, attempts = tup
-                    if state == DBFileHandle.ReadyState:
-                        c.execute("""
-                            update {h_table}
-                                set state = %s, worker_id = %s
-                                where current of handles_cursor
-                                returning state, worker_id
-                        """, (DBFileHandle.ReservedState, worker_id))
-                        tup = c.fetchone()
-                        if tup and tup == (DBFileHandle.ReservedState, worker_id):
-                            reserved = (namespace, name)
-                            done = True
-            c.execute("""
-                commit
-            """)
-        except:
-            c.execute("rollback")
-            raise
-
-        if reserved:
-            namespace, name = reserved
-            reserved = DBFileHandle.get(db, project_id, namespace, name)
-        return reserved
-        
-    @staticmethod
     def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
         h_table = DBFileHandle.Table
         rep_table = DBReplica.Table
@@ -1507,14 +1458,14 @@ class DBFileHandle(DBObject, HasLogRecord):
                         limit 1
                         for update skip locked
             """
-            print("sql:\n", sql)
+            #print("sql:\n", sql)
             c.execute(sql, (project_id, DBFileHandle.ReadyState))
             tup = c.fetchone()
             if tup:
                 namespace, name = tup
                 c.execute(f"""
                     update {h_table}
-                        set state = %s, worker_id = %s, attempts = attempts + 1
+                        set state = %s, worker_id = %s, attempts = attempts + 1, reserved_since = now()
                         where project_id = %s and namespace = %s and name = %s
                 """, (DBFileHandle.ReservedState, worker_id, project_id, namespace, name))
                 reserved = (namespace, name)
@@ -1536,7 +1487,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             c.execute("begin")
             c.execute("""
                 update file_handles
-                    set state=%s, worker_id=%s, attempts = attempts+1
+                    set state=%s, worker_id=%s, attempts = attempts+1, reserved_since = now()
                     where namespace=%s and name=%s and project_id=%s and state = %s and worker_id is null
                     returning attempts, worker_id;
             """, (self.ReservedState, worker_id, self.Namespace, self.Name, self.ProjectID, self.ReadyState))
@@ -1559,6 +1510,29 @@ class DBFileHandle(DBObject, HasLogRecord):
     #
     # workflow
     #
+
+    @staticmethod
+    def release_reserved_before(db, project_id, reserved_before):
+        if reserved_before is None:
+            return 0
+        c = db.cursor()
+        c.execute("""
+            update file_handles h_new
+                set state = %s, worker_id = null
+                from file_handles h_old                     -- this is the trick to get the worker_id before it is updated to null
+                where h_new.project_id = %s and h_new.state = %s and h_new.reserved_since < %s
+                    and h_new.project_id = h_old.project_id and h_new.namespace = h_old.namespace and h_new.name = h_old.name
+                returning h_new.namespace, h_new.name, h_old.worker_id
+        """, (DBFileHandle.ReadyState, project_id, DBFileHandle.ReservedState, reserved_before))
+        log_records = [
+            (
+                (project_id, namespace, name),
+                dict(event = "worker_timeout", state=self.ReadyState, worker=worker_id)
+            ) for namespace, name, worker_id in c.fetchall()
+        ]
+        c.execute("commit")
+        DBFileHandle.add_log_bulk(db, log_records)
+        return len(log_records)
 
     def is_available(self):
         return any(r.Available and r.RSEAvailable for r in self.replicas().values())
