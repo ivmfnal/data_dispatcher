@@ -1517,6 +1517,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         log_records = [
             (
                 (project_id, namespace, name),
+                "state",
                 dict(event = "worker_timeout", state=DBFileHandle.ReadyState, worker=worker_id)
             ) for namespace, name, worker_id in c.fetchall()
         ]
