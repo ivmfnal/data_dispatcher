@@ -1527,7 +1527,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         log_records = [
             (
                 (project_id, namespace, name),
-                dict(event = "worker_timeout", state=self.ReadyState, worker=worker_id)
+                dict(event = "worker_timeout", state=DBFileHandle.ReadyState, worker=worker_id)
             ) for namespace, name, worker_id in c.fetchall()
         ]
         c.execute("commit")
