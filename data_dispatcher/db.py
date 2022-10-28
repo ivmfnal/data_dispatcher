@@ -557,16 +557,6 @@ class DBProject(DBObject, HasLogRecord):
         else:
             self.add_log("event", log_data)
 
-    def ____restart(self, failed_only=False, force=False):
-        for h in self.handles(reload=True, state="failed" if failed_only else None):
-            if force or h.State != "reserved":
-                h.reset()
-        self.State = "active"
-        self.EndTimestamp = None
-        self.save()
-        self.add_log("event", event="restart", force=force, failed_only=failed_only)
-        self.add_log("state", state="active")
-
     def handles(self, state=None, with_replicas=True, reload=False):
         if reload or self.Handles is None:
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
