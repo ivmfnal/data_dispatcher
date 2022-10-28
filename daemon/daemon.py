@@ -26,7 +26,7 @@ def chunked(iterable, n):
             yield chunk
 
 TaskScheduler = Scheduler()
-SyncScheduler= Scheduler(5)
+SyncScheduler = Scheduler(5)
 Queue = TaskQueue(10, stagger=0.1)
 
 class ProximityMapDownloader(PyThread, Logged):
@@ -580,8 +580,8 @@ class ProjectMaster(PyThread, Logged):
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.files())
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.RucioClient)
-                self.SyncScheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", t0=time.time(), interval=ProjectMonitor.SyncInterval)
-                self.Scheduler.add(monitor.update_replicas_availability, id=f"update_{project_id}", 
+                SyncScheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", t0=time.time(), interval=ProjectMonitor.SyncInterval)
+                TaskScheduler.add(monitor.update_replicas_availability, id=f"update_{project_id}", 
                     t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
                     interval=ProjectMonitor.UpdateInterval)
                 
@@ -590,8 +590,8 @@ class ProjectMaster(PyThread, Logged):
     @synchronized
     def remove_project(self, project_id, reason):
         monitor = self.Monitors.pop(project_id, None)
-        self.Scheduler.remove(f"sync_{project_id}")
-        self.Scheduler.remove(f"update_{project_id}")
+        SyncScheduler.remove(f"sync_{project_id}")
+        TaskScheduler.remove(f"update_{project_id}")
         self.log("project removed:", project_id, "  reason:", reason)
         
 
