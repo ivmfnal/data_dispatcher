@@ -167,9 +167,9 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 open(worker_id_file, "w").write(worker_id)
         self.WorkerID = worker_id
         self.CPUSite = cpu_site
-        
+
         HTTPClient.__init__(self, server_url, token=self.token(), timeout=timeout)
-        
+
     def gen_worker_id(self):
         u = uuid.uuid4().bytes
         n = len(u)//4
