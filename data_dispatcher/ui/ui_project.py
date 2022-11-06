@@ -15,7 +15,7 @@ class CreateCommand(CLICommand):
         -l (-|<flat file with file list>)               - read "namespace:name [attr=value ...]" lines from the file 
         -j (-|<JSON file with file list>)               - read JSON file with file list {"namespace":...,"name"..., "attributes":{...}}
 
-        -t <worker timeout>                             - optional worker timeout in seconds
+        -t <worker timeout>[s|m|h|d]                    - optional worker timeout in seconds (minutes, hours, days)
 
         -q <file with MQL query>                        - read MQL query from file instead
         -c <name>[,<name>...]                           - copy metadata attributes from the query results, 
@@ -101,7 +101,11 @@ class CreateCommand(CLICommand):
                     
         worker_timeout = opts.get("-t")
         if worker_timeout is not None:
-            worker_timeout = float(worker_timeout)
+            mult = 1
+            if worker_timeout[-1].lower() in "smhd":
+                worker_timeout, unit = worker_timeout[:-1], worker_timeout[-1].lower()
+                mult = {'s':1, 'm':60, 'h':3600, 'd':24*3600}[unit]
+            worker_timeout = float(worker_timeout)*mult
 
         #print("files:", files)
         #print("calling API.client.create_project...")

@@ -1,7 +1,7 @@
-import time
+import time, gzip, os.path
 import os
 import datetime
-from pythreader import PyThread, synchronized, Primitive
+from pythreader import PyThread, synchronized, Primitive, TaskQueue, Task
 from threading import Timer, Thread
 
 def make_timestamp(t=None):
@@ -27,10 +27,29 @@ class LogStream(Primitive):
     def write(self, msg):
         self.Stream.write(msg);
         self.Stream.flush()
+
+class CompressTask(Task):
+    
+    def __init__(self, source):
+        Task.__init__(self, name=f"Compress({source})")
+        self.Source = source
+    
+    def run(self):
+        if os.path.isfile(self.Source):
+            with open(self.Source, "rb") as inp:
+                with gzip.open(self.Source+".gz", "wb") as out:
+                    buf = inp.read(10000)
+                    while buf:
+                        out.write(buf)
+                        buf = inp.read(10000)
+            os.remove(self.Source)
         
+_CompressQueue = TaskQueue(5)
+
 class LogFile(Primitive):
     
-        def __init__(self, path, interval = '1d', keep = 10, add_timestamp=True, append=True, flush_interval=None, name=None):
+        def __init__(self, path, interval = '1d', keep = 10, compress_from = 1, add_timestamp=True, 
+                        append=True, flush_interval=None, name=None):
             # interval = 'midnight' means roll over at midnight
             Primitive.__init__(self, name=f"LogFile({path})")
             self.File = None
@@ -57,6 +76,7 @@ class LogFile(Primitive):
             self.LineBuf = ''
             self.LastLog = None
             self.LastFlush = time.time()
+            self.CompressFrom = compress_from
             append = append and os.path.isfile(self.Path)
             if append:
                 self.File = open(self.Path, 'a')
@@ -70,19 +90,32 @@ class LogFile(Primitive):
                 
         def newLog(self):
             if self.File != None:
-                    self.File.close()
-            try:    os.remove('%s.%d' % (self.Path, self.Keep))
-            except: pass
-            for i in range(self.Keep - 1):
-                    inx = self.Keep - i
-                    old = '%s.%d' % (self.Path, inx - 1)
-                    new = '%s.%d' % (self.Path, inx)
-                    try:    os.rename(old, new)
-                    except: pass
-            try:    os.rename(self.Path, self.Path + '.1')
-            except: pass
+                self.File.close()
+            try:    
+                os.remove('%s.%d' % (self.Path, self.Keep))
+            except: 
+                pass
+            try:    
+                os.remove('%s.%d.gz' % (self.Path, self.Keep))
+            except: 
+                pass
+            for i in range(self.Keep):
+                inx = self.Keep - 1 - i
+                old = '%s.%d' % (self.Path, inx) if inx > 0 else self.Path
+                new = '%s.%d' % (self.Path, inx + 1)
+                try:
+                    os.rename(old, new)
+                except Exception as e:
+                    pass
+                try:
+                    os.rename(old+".gz", new+".gz")
+                except Exception as e:
+                    pass
             self.File = open(self.Path, 'w')
             self.CurLogBegin = time.time()
+            if self.CompressFrom is not None:
+                to_compress = '%s.%d' % (self.Path, self.CompressFrom)
+                _CompressQueue << CompressTask(to_compress)
 
         @synchronized
         def log(self, msg, raw=False, t=None):

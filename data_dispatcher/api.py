@@ -136,7 +136,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     DefaultWorkerIDFile = ".data_dispatcher_worker_id"
     
     def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, token = None, token_file = None,
-            cpu_site="DEFAULT"):
+            cpu_site="DEFAULT", timeout=300):
         
         """Initializes the DataDispatcherClient object
 
@@ -147,6 +147,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 Default: <cwd>/.data_dispatcher_worker_id
             worker_id (str): Worker ID to use when reserving next file. If unspecified, will be read from the worker ID file.
             cpu_site (str): Name of the CPU site where the client is running, optional. Will be used when reserving project files.
+            timeout (float or int): Number of seconds to wait for a response.
         """
         
         server_url = server_url or os.environ.get("DATA_DISPATCHER_URL")
@@ -167,9 +168,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         self.WorkerID = worker_id
         self.CPUSite = cpu_site
         
-        HTTPClient.__init__(self, server_url, token=self.token())
-            
-        #print("DataDispatcherClient: token:", token, "  user:", token["user"])
+        HTTPClient.__init__(self, server_url, token=self.token(), timeout=timeout)
         
     def gen_worker_id(self):
         u = uuid.uuid4().bytes
