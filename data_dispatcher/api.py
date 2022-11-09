@@ -420,7 +420,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 return info         # allocated
             if retry:
                 if t1 is None or time.time() < t1:
-                    dt = 30
+                    dt = 60
                     if t1 is not None:
                         dt = min(dt, t1-time.time())
                     if dt > 0:
