@@ -391,7 +391,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             url_tail += f"&cpu_site={cpu_site}"
         return self.get(url_tail)
 
-    def next_file(self, project_id, cpu_site=None, worker_id=None, timeout=None):
+    def next_file(self, project_id, cpu_site=None, worker_id=None, timeout=None, stagger=20.0):
         """Reserves next available file from the project
         
         Args:
@@ -409,6 +409,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         cpu_site = cpu_site or self.CPUSite
         t1 = None if timeout is None else time.time() + timeout
         retry = True
+        if stagger:
+            time.sleep(random.random() * stagger)
         while retry:
             reply = self.__next_file(project_id, cpu_site, worker_id)
             info = reply.get("handle")
@@ -417,12 +419,12 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             if info:
                 return info         # allocated
             if retry:
-                if timeout is None or (timeout > 0 and time.time() < t1):
-                    dt = 5
+                if t1 is None or time.time() < t1:
+                    dt = 30
                     if t1 is not None:
-                        dt = min(5, t1-time.time())
+                        dt = min(dt, t1-time.time())
                     if dt > 0:
-                        time.sleep(dt)
+                        time.sleep(max(1.0, random.random() * dt))
                 else:
                     break
         return retry
