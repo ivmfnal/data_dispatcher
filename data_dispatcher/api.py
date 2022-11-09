@@ -414,10 +414,9 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         while retry:
             reply = self.__next_file(project_id, cpu_site, worker_id)
             info = reply.get("handle")
-            reason = reply.get("reason")
-            retry = reply["retry"]
             if info:
                 return info         # allocated
+            retry = reply["retry"]
             if retry:
                 if t1 is None or time.time() < t1:
                     dt = 60
