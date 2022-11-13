@@ -425,7 +425,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     dt = 60
                     if t1 is not None:
                         dt = min(dt, t1-time.time())
-                    dt0 = min(dt, 10)
+                    dt0 = min(dt, 1.0)
                     if dt > 0:
                         time.sleep(dt0 + (dt-dt0)*random.random())
                 else:
@@ -450,20 +450,21 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         cpu_site = cpu_site or self.CPUSite
         t1 = None if timeout is None else time.time() + timeout
         retry = True
+        if stagger:
+            time.sleep(random.random() * stagger)
         while retry:
             reply = self.__next_file(project_id, cpu_site, worker_id)
             info = reply.get("handle")
-            reason = reply.get("reason")
-            retry = reply["retry"]
             if info:
                 return info         # allocated
+            retry = reply["retry"]
             if retry:
-                if timeout is None or (timeout > 0 and time.time() < t1):
-                    dt = 5
+                if t1 is None or time.time() < t1:
+                    dt = 60
                     if t1 is not None:
-                        dt = min(5, t1-time.time())
+                        dt = min(dt, t1-time.time())
                     if dt > 0:
-                        time.sleep(dt)
+                        time.sleep(max(1.0, random.random() * dt))
                 else:
                     break
         return retry
