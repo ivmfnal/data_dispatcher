@@ -1,9 +1,12 @@
 drop table project_log;
 drop table file_handle_log;
-drop table replicas;
+drop table replicas cascade;
 drop table file_handles;
 drop table files;
 drop table projects;
+drop table proximity_map;
+drop table replica_log;
+drop table rses;
 
 create table projects
 (
@@ -51,7 +54,7 @@ create table replicas
     available   boolean     default false,
     preference  int         default 0,
     primary key (namespace, name, rse),
-    foreign key (namespace, name) references files (namespace, name) on delete cascade
+    foreign key (namespace, name) references files (namespace, name) on delete cascade,
     foreign key (rse) references rses (name) on delete cascade
 );
 

@@ -391,7 +391,48 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             url_tail += f"&cpu_site={cpu_site}"
         return self.get(url_tail)
 
-    def next_file(self, project_id, cpu_site=None, worker_id=None, timeout=None):
+    def next_file(self, project_id, cpu_site=None, worker_id=None, timeout=None, stagger=10):
+        """Reserves next available file from the project
+
+        Args:
+            project_id (int): project id to reserve a file from
+            cpu_site (str): optional, if specified, the file will be reserved according to the CPU/RSE proximity map
+            timeout (int or float): optional, if specified, time to wait for a file to become available. Otherwise, will wait indefinitely
+            stagger (int or float): optional, introduce a random delay between 0 and <stagger> seconds before sending first request. 
+                This will help mitigate the effect of synchronous stard of multiple workers. Default: 10
+
+        Returns:
+            Dictionary or boolean.
+            If dictionary, the dictionary contains the reserved file information.
+            If ``True``: the request timed out, but can be retried.
+            If ``False``: the project has ended.
+        """
+        worker_id = worker_id or self.WorkerID
+        cpu_site = cpu_site or self.CPUSite
+        t1 = None if timeout is None else time.time() + timeout
+        if stagger:
+            time.sleep(stagger * random.random())
+        retry = True
+        while retry:
+            reply = self.__next_file(project_id, cpu_site, worker_id)
+            info = reply.get("handle")
+            if info:
+                return info         # allocated
+            reason = reply.get("reason")
+            retry = reply["retry"]
+            if retry:
+                if t1 is None or time.time() < t1:
+                    dt = 60
+                    if t1 is not None:
+                        dt = min(dt, t1-time.time())
+                    dt0 = min(dt, 10)
+                    if dt > 0:
+                        time.sleep(dt0 + (dt-dt0)*random.random())
+                else:
+                    break
+        return retry            # True=try again later, False=project ended
+
+    def old_next_file(self, project_id, cpu_site=None, worker_id=None, timeout=None):
         """Reserves next available file from the project
         
         Args:
@@ -426,7 +467,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 else:
                     break
         return retry
-        
+
     def reserved_files(self, project_id, worker_id=None):
         """Returns list of file handles reserved in the project by given worker
         

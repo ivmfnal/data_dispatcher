@@ -173,7 +173,6 @@ class ProjectsHandler(BaseHandler):
             self.redirect(f"./project?project_id={project_id}&error=Handle+not+found")
         return self.render_to_response("handle.html", project_id=project_id, handle=handle, handle_log = list(handle.get_log(reversed=True)))
 
-
 class RSEHandler(BaseHandler):
     
     def proximity_map(self, request, relpath, message="", **args):

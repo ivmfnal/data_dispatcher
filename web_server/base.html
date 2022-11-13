@@ -313,8 +313,8 @@
             <td><span style="color:#AAA; padding-right: 10px"><i>All times in UTC</i></span></td>
             <td style="width:100%"></td>
     		<td>
-                        {% if GLOBAL_User %}
-                            <span style="color:#AAA">logged in as {{GLOBAL_User.Name or ""}}&nbsp;{{GLOBAL_User.Username}}&nbsp;</span><a class=button  href="{{GLOBAL_AppRootPath}}/A/logout?redirect={{GLOBAL_AppRootPath}}/index">log out</a>
+                        {% if G_User %}
+                            <span style="color:#AAA">logged in as {{G_User.Name or ""}}&nbsp;{{G_User.Username}}&nbsp;</span><a class=button  href="{{GLOBAL_AppRootPath}}/A/logout?redirect={{GLOBAL_AppRootPath}}/index">log out</a>
                         {% else %}
                             <a class=button href="{{GLOBAL_AppRootPath}}/A/login?redirect={{GLOBAL_AppRootPath}}/index">log in</a>
                         {% endif %}
