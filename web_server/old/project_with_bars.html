@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block html_head %}
+<style type="text/css">
+	svg.timeline text.tooltip {display: none;}
+	svg.timeline g:hover text.tooltip {display: block;}
+</style>
+{% endblock %}
+
+{% block headline %}Project {{project.ID}}{% endblock %}
+
+{% block content %}
+
+<table class="form">
+    <tr>    <th>Project ID</th>         <td>{{project.ID}}</td> </tr>
+    <tr>    <th>User</th>               <td>{{project.Owner}}</td> </tr>
+    <tr>    <th>Created</th>            <td>{{project.CreatedTimestamp|as_dt_utc}}</td> </tr>
+    <tr>    <th>Ended</th>              
+            <td>{% if not project.EndTimestamp is none %}
+                    {{project.EndTimestamp|as_dt_utc}}
+                {% endif %}
+            </td> 
+    </tr>
+
+    <tr>    <th>Status</th>             <td><span class="{{project.State}}" style="padding: 3px">{{project.State}}</span></td> </tr>
+    <tr>    <th>Query</th>              <td><pre>{{project.Query or ""}}</pre></td>
+            {% if project.Query or False and not GLOBAL_MetaCatURL is none %}
+                <td><a href="{{GLOBAL_MetaCatURL}}/gui/query?query={{project.quoted_query()}}&run=yes">run query</a></td>
+            {% endif %}
+    </tr>
+    <tr>    <th>Worker timeout</th>     <td>{{project.WorkerTimeout|none_as_blank}}</td></tr>
+    <tr>    <th>Project attributes</th>         <td class="nopadding">
+            {% if project.Attributes|length %}
+                <table class="placement attributes dense">
+                    {% for name, value in project.Attributes.items() %}
+                        <tr><td style="text-align: right">{{name}}:</td><td>{{value}}</td></tr>
+                    {% endfor %}
+                </table>
+            {% endif %}
+            </td> 
+    </tr>
+    <script type="text/javascript">
+        var CanvasH = 15;
+        var CanvasW = 400;
+        
+        console.log("hello");
+        
+        var svgns = "http://www.w3.org/2000/svg";
+        var created_timestamp = {{ project.CreatedTimestamp.timestamp() }};
+        var now_timestamp = (new Date()).valueOf()/1000;
+        var end_timestamp = {{ project.EndTimestamp.timestamp() if not project.EndTimestamp is none else 'null' }};
+    
+        function element_under(parent, type, attributes, ns)
+        {
+            var element = null;
+            if ( ns == null )
+                element = document.createElement(type);
+            else
+                element = document.createElementNS(ns, type);
+            if( attributes != null )
+                for( attr in attributes )
+                    element.setAttribute(attr, attributes[attr]);
+            if( parent != null )
+                parent.appendChild(element);
+            return element;
+        }
+        
+        function show_timeline(parent, handle_timeline)
+        {
+            const Margin = 10;
+            var svg = element_under(parent, "svg", {
+                "height":  ""+CanvasH,
+                "width":   ""+CanvasW,
+                class: "timeline"
+            }, svgns);
+        
+            var xnext = CanvasW;
+            var tend = end_timestamp == null ? now_timestamp : end_timestamp;
+            var scale = (CanvasW-Margin)/(tend-created_timestamp);        
+            var tnext_utc = "";
+
+            for( j in handle_timeline )
+            {
+                var i = handle_timeline.length - 1 - j;
+                var event = handle_timeline[i];
+                var t = event.t;            // relative to the creation timestamp
+                var e = event.state;
+                var t_utc = event.t_utc;
+                var color = StateColors[e];
+                if( color != null )
+                {
+                    var segment_g = element_under(svg, "g", {
+                        class: "segment"
+                    }, svgns);
+                    var x = t*scale;
+                    var the_rect = element_under(segment_g, "rect", {
+                        x: x,
+                        y: 0,
+                        width: xnext - x,
+                        height:  CanvasH,
+                    }, svgns);
+                    the_rect.style.fill = color;
+
+                    var hover_text = element_under(segment_g, "text", {
+                        class: "tooltip",
+                        x:x + 3,
+                        y:CanvasH - 3
+                    }, svgns);
+                    hover_text.innerHTML = `${e}:${t_utc}`+tnext_utc;
+                    tnext = t;
+                    xnext = x;
+                    tnext_utc = "-"+t_utc;
+                }
+            }
+        }
+    </script>
+    
+    <tr>    
+            <th>Files</th>
+            <td class="nopadding">
+                <table class="placement dense">
+                    <tr>
+                    {% for state in states -%}
+                        <td class="{{state}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</td>
+                    {% endfor %}
+                    </tr>
+                </table>
+                {% if not first_page_link is none %}
+                    <p>page: <a href="{{first_page_link}}">1</a>
+                            {%- if not prev_page_link is none %}&nbsp;<a href="{{prev_page_link}}">{{prev_page+1}}</a>{% endif -%}
+                            &nbsp;{{page + 1}}
+                            {%- if not next_page_link is none %}&nbsp;<a href="{{next_page_link}}">{{next_page+1}}</a>{% endif -%}
+                            &nbsp;<a href="{{last_page_link}}">{{last_page+1}}</a>
+                    </p>
+                {% endif %}
+                <table class="data replicas">
+                    <tr>
+                        <th>File</th>
+                        <th>File<br/>Status</th>
+                        <th>Replicas<br/>(available)</th>
+                        <th>Workflow<br/>Status</th>
+                        <th>Worker</th>
+                        <th>Attempts</th>
+                        <th>Timeline</th>
+                    </tr>
+                    {% for handle in handles %}
+                        {% set did = handle.Namespace + ":" + handle.Name %}
+                        <tr>
+                            {#
+                            <td rowspan=1 id="log_toggle_td:{{did}}">
+                                <a href="javascript:toggle_handle_log('{{did}}')" style="vertical-align: middle">
+                                    <img id="log_toggle_img:{{did}}" width=10 height=10 style="vertical-align: middle"/>
+                                    <script type="text/javascript">
+                                        document.getElementById("log_toggle_img:{{did}}").src=closed_log_arrow;
+                                    </script>
+                                </a>
+                            </td>
+                            #}
+                            <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
+                            {% set wf_state = handle.State %}
+                            {% set file_state = handle.file_state() %}
+                            <td class="{{file_state}}">{{file_state}}</td>
+                            <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
+                            <td class="{{wf_state}}">{{wf_state}}</td>
+                            <td>{{handle.WorkerID or ""}}</td>
+                            <td>{{handle.Attempts}}</td>
+                            <td id="timeline:{{did}}" style="vertical-align: middle"></td>
+                            <script type="text/javascript">
+                                var handle_timeline = [];
+                                {% for record in handles_log[did] %}
+                                        {% if record.Type == "state" %}
+                                            handle_timeline.push(
+                                                {   t: {{project.time_since_created(record.T)}},
+                                                    state: "{{record['state']}}",
+                                                    t_utc: "{{record.T|as_dt_utc}}"
+                                                }
+                                            );
+                                        {% endif %}
+                                {% endfor %}
+                                {#
+                                        var file_timeline = [
+                                        {% for record in files_log[did] %}
+                                            {   t: {{project.time_since_created(record.T)}},
+                                                event: "{{record.Type}}"
+                                            }{{"," if not loop.last}}
+                                        {% endfor %}
+                                    ];
+                                #}
+                                var tend = {{project.time_since_created(project.EndTimestamp)}};
+                                show_timeline(document.getElementById("timeline:{{did}}"), handle_timeline);           //, file_timeline);
+                            </script>
+                        </tr>
+                    {% endfor %}
+                    <script>
+                        function toggle_handle_log(did)
+                        {
+                            var tr = document.getElementById("handle_log:"+did);
+                            var toggle_img = document.getElementById("log_toggle_img:" + did);
+                            var toggle_td = document.getElementById("log_toggle_td:" + did);
+                            if( tr != null )
+                            {
+                                var v = tr.style.visibility;
+                                if( v == "hidden" )
+                                {
+                                    tr.style.visibility = "visible";
+                                    tr.style.display = "table-row";
+                                    toggle_img.src=open_log_arrow;
+                                    toggle_td.rowSpan = 2;
+                                }
+                                else
+                                {
+                                    tr.style.visibility = "hidden";
+                                    tr.style.display = "none";
+                                    toggle_img.src=closed_log_arrow;
+                                    toggle_td.rowSpan = 1;
+                                }
+                            }
+                        }
+                    </script>
+                </table>
+            </td>
+    </tr>
+    <tr>
+        <th>Project log</th>
+        <td class="nopadding">
+            <table class="data">
+                <tr><th>Time</th><th>Type</th><th>Data</th></tr>
+                {% for log_record in project.get_log() %}
+                    <tr>
+                        <td>{{log_record.T|as_dt_utc}}</td>
+                        <td class="{{log_record.Type}}">{{log_record.Type}}</td>
+                        <td style="text-align:left">{{ log_record.Data|format_log_data }}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </td>
+    </tr>
+</table>
+
+{% endblock %}
+
+
+

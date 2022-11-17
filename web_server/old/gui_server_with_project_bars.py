@@ -135,61 +135,43 @@ class ProjectsHandler(BaseHandler):
             message = urllib.parse.quote_plus(f"Project {project_id} not found")
             self.redirect(f"./projects?message={message}")
 
-        all_handles = sorted(project.handles(with_replicas=True), 
+        handles = sorted(project.handles(with_replicas=False), 
                 key=lambda h: (state_order.get(h.State, 100), h.Attempts, h.Namespace, h.Name))
 
-        nhandles = len(all_handles)
+        nhandles = len(handles)
         istart = page*page_size
         t0 = time.time()
-        handles = all_handles[istart:istart+page_size]
-        #handles = list(project.get_handles([h.did() for h in all_handles[istart:istart+page_size]]))
+        handles = list(project.get_handles([h.did() for h in handles[istart:istart+page_size]]))
+        print(time.time() - t0)
         npages = (nhandles + page_size - 1)//page_size
         last_page = npages - 1
         next_page = page + 1
         prev_page = page - 1
-        next_page_link = f"project?project_id={project_id}&page={next_page}&page_size={page_size}"
-        prev_page_link = f"project?project_id={project_id}&page={prev_page}&page_size={page_size}"
-        first_page_link = f"project?project_id={project_id}&page=0&page_size={page_size}"
-        last_page_link = f"project?project_id={project_id}&page={last_page}&page_size={page_size}"
+        next_page_link = f"project?project_id={project_id}&page={next_page}&page_size={page_size}" if next_page < npages else None
+        prev_page_link = f"project?project_id={project_id}&page={prev_page}&page_size={page_size}" if prev_page >= 0 else None
+        first_page_link = f"project?project_id={project_id}&page=0&page_size={page_size}" if npages > 1 else None
+        last_page_link = f"project?project_id={project_id}&page={last_page}&page_size={page_size}" if npages > 1 else None
 
-        index_page_links = None
-        if npages > 1:
-            index_page_links = {}
-            if page != first_page_link: index_page_links[0] = first_page_link
-            if prev_page >= 0: index_page_links[prev_page] = prev_page_link
-            if next_page < npages: index_page_links[next_page] = next_page_link
-            if page != last_page: index_page_links[last_page] = last_page_link
-            index_page_links[page] = None
-            index_page_links = sorted(index_page_links.items())
-            
-        available_handles = 0
         handle_counts_by_state = {state:0 for state in DBFileHandle.DerivedStates}     # {state -> count}
-        state_index = {}        # {state -> page number}
-        for i, h in enumerate(all_handles):
+        available_handles = 0
+        for h in handles:
             replicas = h.replicas()
             h.n_replicas = len(replicas)
             h.n_available_replicas = len([r for r in replicas.values() if r.is_available()]) 
             state = h.state()
             #print("handle State:", h.State, "  state():", state)
             handle_counts_by_state[state] = handle_counts_by_state.get(state, 0) + 1
-
-            if not state in state_index:
-                page = i//page_size
-                state_index[state] = page
-
-        state_page_links = {s: f"project?project_id={project_id}&page={p}&page_size={page_size}" for s, p in state_index.items()}
-
             
-        #handles_log = {}            # {did -> [log record, ...]}
-        #files_log = {}              # {did -> [log record, ...]}
-        #combined_log = {}
+        handles_log = {}            # {did -> [log record, ...]}
+        files_log = {}              # {did -> [log record, ...]}
+        combined_log = {}
         project_log = project.get_log()
         
-        #for log_record in project.handles_log():
-        #    #print("gui.project(): handle log_record:", log_record)
-        #    did = log_record.Namespace + ":" + log_record.Name
-        #    handles_log.setdefault(did, []).append(log_record)
-        #    combined_log.setdefault(did, []).append(log_record)
+        for log_record in project.handles_log():
+            #print("gui.project(): handle log_record:", log_record)
+            did = log_record.Namespace + ":" + log_record.Name
+            handles_log.setdefault(did, []).append(log_record)
+            combined_log.setdefault(did, []).append(log_record)
 
         if False:
             for log_record in project.files_log():
@@ -206,7 +188,12 @@ class ProjectsHandler(BaseHandler):
             available_handles=available_handles,
             handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.DerivedStates,
             project_log = project.get_log(),
-            page = page, page_index = index_page_links, state_index = state_page_links
+            files_log = files_log,
+            handles_log = handles_log,
+            combined_log = combined_log,
+            page = page, prev_page = prev_page, next_page = next_page, last_page = last_page,
+            next_page_link = next_page_link, prev_page_link = prev_page_link,
+            last_page_link = last_page_link, first_page_link= first_page_link
         )
 
     def handle(self, request, relpath, project_id=None, namespace=None, name=None, **args):

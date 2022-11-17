@@ -562,6 +562,9 @@ class DBProject(DBObject, HasLogRecord):
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
         return (h for h in self.Handles if (state is None or h.State == state))
 
+    def get_handles(self, dids, with_replicas=True):
+        yield from DBFileHandle.get_bulk(self.DB, self.ID, dids, with_replicas=with_replicas)
+
     def handle(self, namespace, name):
         return DBFileHandle.get(self.DB, self.ID, namespace, name)
 
@@ -1344,7 +1347,114 @@ class DBFileHandle(DBObject, HasLogRecord):
             for f in files 
         ]            
         DBFileHandle.add_log_bulk(db, log_records)
-        
+
+    @staticmethod
+    def get_bulk(db, project_id, dids, with_replicas=False):
+        namespace_names = tuple(tuple(did.split(":", 1)) for did in dids)       # must be tuple of tuples for SQL to work
+        #print("namespace_names:", type(namespace_names), namespace_names[:3])
+        h_columns = DBFileHandle.columns("h", as_text=True)
+        h_n_columns = len(DBFileHandle.Columns)
+        r_columns = DBReplica.columns("r", as_text=True)
+        r_n_columns = len(DBReplica.Columns)
+        available_replicas_view = DBReplica.ViewWithRSEStatus
+        c = db.cursor()
+        if with_replicas:
+            sql = f"""\
+                select {h_columns}, {r_columns}, rse_available
+                    from file_handles h
+                        inner join {available_replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
+                        where project_id = %s
+                            and (h.namespace, h.name) in %s
+                        order by h.namespace, h.name
+            """
+            #print("DBFileHandle.list: sql:", sql)
+            print(c.mogrify(sql, (project_id, namespace_names)).decode("utf-8"))
+            c.execute(sql, (project_id, namespace_names))
+            h = None
+            for tup in cursor_iterator(c):
+                #print("DBFileHandle.get_bulk:", tup)
+                h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
+                if h is None:
+                    h = DBFileHandle.from_tuple(db, h_tuple)
+                #print("DBFileHandle.get_bulk: h:", h)
+                h1 = DBFileHandle.from_tuple(db, h_tuple)
+                if h1.Namespace != h.Namespace or h1.Name != h.Name:
+                    if h:   
+                        #print("    yield:", h)
+                        yield h
+                    h = h1
+                if r_tuple[0] is not None:
+                    r = DBReplica.from_tuple(db, r_tuple)
+                    r.RSEAvailable = rse_available
+                    h.Replicas = h.Replicas or {}
+                    h.Replicas[r.RSE] = r
+            if h is not None:
+                #print("    yield:", h)
+                yield h
+        else:
+            sql = f"""
+                select {h_columns}
+                    from file_handles h
+                        where project_id = %s and (namespace, name) in %s
+                        order by h.namespace, h.name
+            """
+            c.execute(sql, (project_id, namespace_names))
+            yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
+
+    @staticmethod
+    def get_bulk(db, project_id, dids, with_replicas=False):
+        #print("namespace_names:", type(namespace_names), namespace_names[:3])
+        dids = list(dids)
+        h_columns = DBFileHandle.columns("h", as_text=True)
+        h_n_columns = len(DBFileHandle.Columns)
+        r_columns = DBReplica.columns("r", as_text=True)
+        r_n_columns = len(DBReplica.Columns)
+        available_replicas_view = DBReplica.ViewWithRSEStatus
+        c = db.cursor()
+        if with_replicas:
+            sql = f"""\
+                select {h_columns}, {r_columns}, rse_available
+                    from file_handles h
+                        inner join {available_replicas_view} r on (
+                            (r.namespace || ':' || r.name) = (h.namespace || ':' || h.name)
+                        )
+                        where h.project_id = %s
+                            and (h.namespace || ':' || h.name) = any(%s)
+                        order by h.namespace, h.name
+            """
+            #print("DBFileHandle.list: sql:", sql)
+            c.execute(sql, (project_id, dids))
+            h = None
+            for tup in cursor_iterator(c):
+                #print("DBFileHandle.get_bulk:", tup)
+                h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
+                if h is None:
+                    h = DBFileHandle.from_tuple(db, h_tuple)
+                #print("DBFileHandle.get_bulk: h:", h)
+                h1 = DBFileHandle.from_tuple(db, h_tuple)
+                if h1.Namespace != h.Namespace or h1.Name != h.Name:
+                    if h:   
+                        #print("    yield:", h)
+                        yield h
+                    h = h1
+                if r_tuple[0] is not None:
+                    r = DBReplica.from_tuple(db, r_tuple)
+                    r.RSEAvailable = rse_available
+                    h.Replicas = h.Replicas or {}
+                    h.Replicas[r.RSE] = r
+            if h is not None:
+                #print("    yield:", h)
+                yield h
+        else:
+            sql = f"""
+                select {h_columns}
+                    from file_handles h
+                        where project_id = %s and (namespace || ':' || name) = any(%s)
+                        order by h.namespace, h.name
+            """
+            c.execute(sql, (project_id, dids))
+            yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
+
     @staticmethod
     def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False):
         wheres = []
@@ -1364,7 +1474,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         r_n_columns = len(DBReplica.Columns)
         available_replicas_view = DBReplica.ViewWithRSEStatus
         if with_replicas:
-            sql = f"""
+            sql = f"""\
                 select {h_columns}, {r_columns}, rse_available
                     from file_handles h
                         left outer join {available_replicas_view} r on (r.name = h.name and r.namespace = h.namespace)

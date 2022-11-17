@@ -39,118 +39,44 @@
             {% endif %}
             </td> 
     </tr>
-    <script type="text/javascript">
-        var CanvasH = 15;
-        var CanvasW = 400;
-        
-        console.log("hello");
-        
-        var svgns = "http://www.w3.org/2000/svg";
-        var created_timestamp = {{ project.CreatedTimestamp.timestamp() }};
-        var now_timestamp = (new Date()).valueOf()/1000;
-        var end_timestamp = {{ project.EndTimestamp.timestamp() if not project.EndTimestamp is none else 'null' }};
-    
-        function element_under(parent, type, attributes, ns)
-        {
-            var element = null;
-            if ( ns == null )
-                element = document.createElement(type);
-            else
-                element = document.createElementNS(ns, type);
-            if( attributes != null )
-                for( attr in attributes )
-                    element.setAttribute(attr, attributes[attr]);
-            if( parent != null )
-                parent.appendChild(element);
-            return element;
-        }
-        
-        function show_timeline(parent, handle_timeline)
-        {
-            const Margin = 10;
-            var svg = element_under(parent, "svg", {
-                "height":  ""+CanvasH,
-                "width":   ""+CanvasW,
-                class: "timeline"
-            }, svgns);
-        
-            var xnext = CanvasW;
-            var tend = end_timestamp == null ? now_timestamp : end_timestamp;
-            var scale = (CanvasW-Margin)/(tend-created_timestamp);        
-            var tnext_utc = "";
-
-            for( j in handle_timeline )
-            {
-                var i = handle_timeline.length - 1 - j;
-                var event = handle_timeline[i];
-                var t = event.t;            // relative to the creation timestamp
-                var e = event.state;
-                var t_utc = event.t_utc;
-                var color = StateColors[e];
-                if( color != null )
-                {
-                    var segment_g = element_under(svg, "g", {
-                        class: "segment"
-                    }, svgns);
-                    var x = t*scale;
-                    var the_rect = element_under(segment_g, "rect", {
-                        x: x,
-                        y: 0,
-                        width: xnext - x,
-                        height:  CanvasH,
-                    }, svgns);
-                    the_rect.style.fill = color;
-
-                    var hover_text = element_under(segment_g, "text", {
-                        class: "tooltip",
-                        x:x + 3,
-                        y:CanvasH - 3
-                    }, svgns);
-                    hover_text.innerHTML = `${e}:${t_utc}`+tnext_utc;
-                    tnext = t;
-                    xnext = x;
-                    tnext_utc = "-"+t_utc;
-                }
-            }
-        }
-    </script>
-    
     <tr>    
             <th>Files</th>
             <td class="nopadding">
                 <table class="placement dense">
                     <tr>
                     {% for state in states -%}
-                        <td class="{{state}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</td>
+                        <td class="{{state}}">
+                            {% if state in state_index %}
+                                <a href="{{state_index[state]}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</a>
+                            {% else %}
+                                {{state}}:&nbsp{{handle_counts_by_state[state]}}
+                            {% endif %}
+                        </td>
                     {% endfor %}
                     </tr>
                 </table>
+                {% if not page_index is none %}
+                    <p>page:{%- for p, link in page_index -%}
+                                {%- if link is not none -%}
+                                    &nbsp;&nbsp;<a href="{{link}}">{{p+1}}</a>
+                                {%- else -%}
+                                    &nbsp;&nbsp;{{p+1}}
+                                {%- endif -%}
+                            {%- endfor -%}
+                    </p>
+                {% endif %}
                 <table class="data replicas">
                     <tr>
-                        {#
-                            <th style="border-bottom: 0"></th>
-                        #}
                         <th>File</th>
                         <th>File<br/>Status</th>
                         <th>Replicas<br/>(available)</th>
                         <th>Workflow<br/>Status</th>
                         <th>Worker</th>
                         <th>Attempts</th>
-                        <th>Timeline</th>
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
                         <tr>
-                            {#
-                            <td rowspan=1 id="log_toggle_td:{{did}}">
-                                <a href="javascript:toggle_handle_log('{{did}}')" style="vertical-align: middle">
-                                    <img id="log_toggle_img:{{did}}" width=10 height=10 style="vertical-align: middle"/>
-                                    <script type="text/javascript">
-                                        document.getElementById("log_toggle_img:{{did}}").src=closed_log_arrow;
-                                    </script>
-                                </a>
-                            </td>
-                            #}
                             <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set wf_state = handle.State %}
                             {% set file_state = handle.file_state() %}
@@ -159,59 +85,8 @@
                             <td class="{{wf_state}}">{{wf_state}}</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
-                            <td id="timeline:{{did}}" style="vertical-align: middle"></td>
-                            <script type="text/javascript">
-                                var handle_timeline = [];
-                                {% for record in handles_log[did] %}
-                                        {% if record.Type == "state" %}
-                                            handle_timeline.push(
-                                                {   t: {{project.time_since_created(record.T)}},
-                                                    state: "{{record['state']}}",
-                                                    t_utc: "{{record.T|as_dt_utc}}"
-                                                }
-                                            );
-                                        {% endif %}
-                                {% endfor %}
-                                {#
-                                        var file_timeline = [
-                                        {% for record in files_log[did] %}
-                                            {   t: {{project.time_since_created(record.T)}},
-                                                event: "{{record.Type}}"
-                                            }{{"," if not loop.last}}
-                                        {% endfor %}
-                                    ];
-                                #}
-                                var tend = {{project.time_since_created(project.EndTimestamp)}};
-                                show_timeline(document.getElementById("timeline:{{did}}"), handle_timeline);           //, file_timeline);
-                            </script>
                         </tr>
                     {% endfor %}
-                    <script>
-                        function toggle_handle_log(did)
-                        {
-                            var tr = document.getElementById("handle_log:"+did);
-                            var toggle_img = document.getElementById("log_toggle_img:" + did);
-                            var toggle_td = document.getElementById("log_toggle_td:" + did);
-                            if( tr != null )
-                            {
-                                var v = tr.style.visibility;
-                                if( v == "hidden" )
-                                {
-                                    tr.style.visibility = "visible";
-                                    tr.style.display = "table-row";
-                                    toggle_img.src=open_log_arrow;
-                                    toggle_td.rowSpan = 2;
-                                }
-                                else
-                                {
-                                    tr.style.visibility = "hidden";
-                                    tr.style.display = "none";
-                                    toggle_img.src=closed_log_arrow;
-                                    toggle_td.rowSpan = 1;
-                                }
-                            }
-                        }
-                    </script>
                 </table>
             </td>
     </tr>
