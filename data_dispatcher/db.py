@@ -583,6 +583,7 @@ class DBProject(DBObject, HasLogRecord):
             handle.failed(retry)
         else:
             handle.done()
+        self.add_log("event", event="release", namespace=namespace, name=name, worker_id=handle.WorkerID, retry=retry)
 
         if not self.is_active(reload=True) and self.State == "active":
             failed_handles = [h.did() for h in self.handles() if h.State == "failed"]
@@ -656,6 +657,7 @@ class DBProject(DBObject, HasLogRecord):
     def reserve_handle(self, worker_id, proximity_map, cpu_site):
         handle = DBFileHandle.reserve_for_worker(self.DB, self.ID, worker_id, proximity_map, cpu_site)
         if handle is not None:
+            self.add_log("event", event="reserved", cpu_site=cpu_site, worker_id=worker_id, namespace=handle.Namespace, name=handle.Name)
             return handle, "ok", False
             
         if not self.is_active(reload=True):
@@ -1469,6 +1471,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         if reserved:
             namespace, name = reserved
             reserved = DBFileHandle.get(db, project_id, namespace, name)
+            reserved.add_log("state", event="reserve", state="reserved", worker=worker_id)
         return reserved
         
     def reserve(self, worker_id):
