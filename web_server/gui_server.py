@@ -177,7 +177,7 @@ class ProjectsHandler(BaseHandler):
                 page = i//page_size
                 state_index[state] = page
 
-        state_page_links = {s: f"project?project_id={project_id}&page={p}&page_size={page_size}" for s, p in state_index.items()}
+        state_page_links = {s: f"project?project_id={project_id}&page={p}&page_size={page_size}#state:{s}" for s, p in state_index.items()}
 
             
         #handles_log = {}            # {did -> [log record, ...]}

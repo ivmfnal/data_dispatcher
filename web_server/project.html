@@ -76,9 +76,9 @@
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
-                        <tr>
+                        {% set wf_state = handle.State %}
+                        <tr id="state:{{wf_state}}">
                             <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
-                            {% set wf_state = handle.State %}
                             {% set file_state = handle.file_state() %}
                             <td class="{{file_state}}">{{file_state}}</td>
                             <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
