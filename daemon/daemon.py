@@ -503,7 +503,7 @@ class ProjectMonitor(Primitive, Logged):
     PRESTAGE_HIGH_WATER = 100
 
     @synchronized
-    def prestage_replicas(self):
+    def _________prestage_replicas(self):
         active_handles = self.active_handles()
 
         navailable = 0
@@ -522,7 +522,6 @@ class ProjectMonitor(Primitive, Logged):
             n_to_prestage = min(len(not_prestaged), self.PRESTAGE_HIGH_WATER)
             if n_to_prestage:
                 rng = random.Random(123)
-                to_prestage = 
             
                         
         
