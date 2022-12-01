@@ -649,14 +649,17 @@ class ProjectMaster(PyThread, Logged):
 
     def run(self):
         while not self.Stop:
-            active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
-            #self.debug("run: active projects:", len(active_projects),"   known projects:", len(monitor_projects))
-            with self:
-                monitor_projects = set(self.Monitors.keys())
-                #for project_id in monitor_projects - active_projects:
-                #    self.remove_project(project_id, "inactive")
-                for project_id in active_projects - monitor_projects:
-                    self.add_project(project_id)
+            try:
+                active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
+                #self.debug("run: active projects:", len(active_projects),"   known projects:", len(monitor_projects))
+                with self:
+                    monitor_projects = set(self.Monitors.keys())
+                    #for project_id in monitor_projects - active_projects:
+                    #    self.remove_project(project_id, "inactive")
+                    for project_id in active_projects - monitor_projects:
+                        self.add_project(project_id)
+            except Exception as e:
+                self.error("exception in run():\n", traceback.format_exc())
             self.sleep(self.RunInterval)
 
     @synchronized
