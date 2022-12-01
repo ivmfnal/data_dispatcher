@@ -267,7 +267,15 @@ class ProjectsHandler(BaseHandler):
         handle = DBFileHandle.get(db, int(project_id), namespace, name)
         if handle is None:
             self.redirect(f"./project?project_id={project_id}&error=Handle+not+found")
-        return self.render_to_response("handle.html", project_id=project_id, handle=handle, handle_log = list(handle.get_log(reversed=True)))
+        handle_log = list(handle.get_log(reversed=True))
+        for entry in handle_log:
+            data = entry.Data.copy()
+            data.pop("old_state", None)
+            data.pop("state", None)
+            data.pop("event", None)
+            data.pop("worker", None)
+            entry._RestOfData = data
+        return self.render_to_response("handle.html", project_id=project_id, handle=handle, handle_log = handle_log)
 
 class RSEHandler(BaseHandler):
     
