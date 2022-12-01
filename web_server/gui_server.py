@@ -137,17 +137,30 @@ class ProjectsHandler(BaseHandler):
         if project is None:
             return 404, "Project not found"
         log_records = sorted([entry for entry in project.handles_log() if entry.Type == "state"], key = lambda e:e.T)
-        history = []        # [(int t, {counts}), ...]
+        if not log_records:
+            return "[]", "text/json"
+        tmin = log_records[0].T.timestamp()
+        tmax = log_records[1].T.timestamp()
+        interval = tmax - tmin
+        bin = 1.0
+        if interval >= 3600:
+            bin = 10.0
+        if interval >= 3600*12:
+            bin = 60.0
+        if interval >= 3600*24:
+            bin = 300.0
+        history = []        # [{counts,t}, ...]
         n_ready = n_reserved = n_failed = n_done = 0
         last_t = None
         counts = {"initial":0, "reserved":0, "done":0, "failed":0}
         for entry in log_records:
-            t = int(entry.T.timestamp())
+            t = int((entry.T.timestamp()-tmin)/bin)
             if last_t is None:
                 last_t = t
             if t != last_t:
-                if counts:
-                    history.append((last_t, counts.copy()))
+                data = counts.copy()
+                data["t"] = last_t
+                history.append(data)
                 last_t = t
             state = entry["state"]
             old_state = entry.get("old_state")
@@ -155,13 +168,11 @@ class ProjectsHandler(BaseHandler):
             counts[state] += 1
             if old_state:
                 counts[old_state] -= 1
-        if counts:
-            history.append((last_t, counts.copy()))
-        out = []
-        for t, counts in history:
-            counts["t"] = t
-            out.append(counts)
-        return json.dumps(out), "text/json"
+        if not history or history[-1]["t"] != last_t:
+            data = counts.copy()
+            data["t"] = last_t
+            history.append(data)
+        return json.dumps(history), "text/json"
 
     def project(self, request, relpath, project_id=None, page=0, page_size=100, **args):
 

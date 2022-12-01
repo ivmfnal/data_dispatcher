@@ -135,6 +135,7 @@
         var tmin = null;
         var tmax = null;
         var record;
+        const margin = 3;
 
         for( record of data )
         {
@@ -148,7 +149,7 @@
             let n = record.initial + record.done + record.failed + record.reserved;
             if( n > nmax )  nmax = n;
         }
-        var dx = (width - 20)/(tmax - tmin);        // 10 is margin for the time from last update to now
+        var dx = (width - margin)/(tmax - tmin);        // 10 is margin for the time from last update to now
         if( dx > 10 )
             dx = 10;            // pixels per second
         var i;
@@ -163,7 +164,7 @@
             if( i < data.length - 1 )
                 x_next = (data[i+1].t - tmin)*dx;
             else
-                x_next = x+20;
+                x_next = x+margin;
             var n_ready = r.initial;
             var n_reserved = r.reserved;
             var n_failed = r.failed;
@@ -177,14 +178,17 @@
                 if( n > 0 )
                 {
                     let color = StateColors[label];
-                    let h = n * dy;
-                    ctx.beginPath();
-                    ctx.fillStyle = color;
-                    ctx.strokeStyle = color;
-                    ctx.fillRect(x,y,x_next-x, h);
-                    ctx.rect(x,y,x_next-x, h);
-                    ctx.stroke();
-                    y += h;
+                    let h = Math.round(n * dy);
+                    if( h > 0 )
+                    {
+                        ctx.beginPath();
+                        ctx.fillStyle = color;
+                        ctx.strokeStyle = color;
+                        ctx.fillRect(x,y,x_next-x, h);
+                        ctx.rect(x,y,x_next-x, h);
+                        ctx.stroke();
+                        y += h;
+                    }
                 }
             }
         }   
