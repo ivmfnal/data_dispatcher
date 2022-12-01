@@ -2,6 +2,13 @@ from data_dispatcher.api import DataDispatcherClient
 import sys, os, getopt, random, time
 from pythreader import PyThread
 
+Usage = """
+python run_project.py [options] <project_id>
+    -n <number>             - files for each worker to process sequentially
+    -m <number>             - max number of workers to run
+    -t <number>             - spend from <number> to <number>*2 seconds "processing" each file
+"""
+
 class WorkerThread(PyThread):
     
     def __init__(self, project_id, nfiles, tmin, tmax, failure_rate, cpu_site="DEFAULT"):
@@ -40,7 +47,7 @@ class WorkerThread(PyThread):
             self.log("starting processing file", did, "...")
             time.sleep(self.TMin + random.random()*(self.TMax - self.TMin))
             if random.random() < self.FailureRate:
-                self.Client.file_failed(self.ProjectID, did, retry=random.random() < 0.0)
+                self.Client.file_failed(self.ProjectID, did, retry=True)
                 self.log("failed processing file", did, "...")
             else:
                 self.Client.file_done(self.ProjectID, did)
