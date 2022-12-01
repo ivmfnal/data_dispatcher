@@ -181,7 +181,7 @@ class DBLogRecord(object):
        )
 
     def __getattr__(self, key):
-        return getattr(self.Data)
+        return getattr(self.Data, key)
 
     def __getitem__(self, key):
         return self.Data[key]
@@ -1579,9 +1579,12 @@ class DBFileHandle(DBObject, HasLogRecord):
         if reserved:
             namespace, name = reserved
             reserved = DBFileHandle.get(db, project_id, namespace, name)
+            reserved.record_state_change(DBFileHandle.ReservedState, 
+                event = "reserve",
+                old_state = DBFileHandle.ReadyState, worker=worker_id)
         return reserved
         
-    def reserve(self, worker_id):
+    def ____reserve(self, worker_id):
         c = self.DB.cursor()
         try:
             c.execute("begin")
@@ -1644,31 +1647,34 @@ class DBFileHandle(DBObject, HasLogRecord):
     def is_reserved(self):
         return self.State == self.ReservedState
 
-    def set_state(self, new_state, event=None):
+    def record_state_change(self, new_state, old_state=None, **log_data):
         assert new_state in self.States, "Unknown file handle state: "+new_state
-        if self.State != new_state:
+        old_state = old_state or self.State
+        self.State = new_state
+        data = log_data.copy()
+        data["state"] = new_state
+        data["old_state"] = old_state
+        self.add_log("state", data)
+            
+    def set_state(self, state, **log_data):
+        assert state in self.States, "Unknown file handle state: "+new_state
+        if self.State != state:
+            self.record_state_change(state, **log_data)
             self.State = state
-            data = {"state":state}
-            if event:
-                data["event"] = event
-            self.add_log("state", data)
-            self.save()
             
     def done(self):
-        self.State = "done"
-        self.add_log("state", event=self.State, worker=self.WorkerID, state=self.State)
+        self.set_state("done", event="done", worker=self.WorkerID)
         self.WorkerID = None
         self.save()
 
     def failed(self, retry=True):
-        self.State = self.ReadyState if retry else "failed"
-        self.add_log("state", event="failed", worker=self.WorkerID, final=not retry, state=self.State)
+        state = self.ReadyState if retry else "failed"
+        self.set_state(state, event="failed", worker=self.WorkerID)
         self.WorkerID = None
         self.save()
         
     def reset(self):
-        self.State = self.ReadyState
-        self.add_log("state", event="reset", state=self.State)
+        self.set_state(self.ReadyState, event="reset", worker=self.WorkerID)
         self.WorkerID = None
         self.save()
 

@@ -2,7 +2,7 @@ from webpie import WPApp, WPHandler, WPStaticHandler
 from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap       # , DBUser
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
-import urllib, os, yaml, time
+import urllib, os, yaml, time, json
 from urllib.parse import quote, unquote, unquote_plus
 from wsdbtools import ConnectionPool
 from datetime import timezone
@@ -120,6 +120,48 @@ class ProjectsHandler(BaseHandler):
         next_page_link = f"projects/page={next_page}&page_size={page_size}"
         
         return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates, message=message)
+        
+    def handle_logs(self, request, relpath, project_id=None):
+        db = self.App.db()
+        project_id = int(project_id)
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        log_records = sorted([entry for entry in project.handles_log() if entry.Type == "state"], key = lambda e:e.T)
+        return json.dumps([e.as_jsonable() for e in log_records]), "text/json"
+
+    def handle_counts_history(self, request, relpath, project_id=None):
+        db = self.App.db()
+        project_id = int(project_id)
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        log_records = sorted([entry for entry in project.handles_log() if entry.Type == "state"], key = lambda e:e.T)
+        history = []        # [(int t, {counts}), ...]
+        n_ready = n_reserved = n_failed = n_done = 0
+        last_t = None
+        counts = {"initial":0, "reserved":0, "done":0, "failed":0}
+        for entry in log_records:
+            t = int(entry.T.timestamp())
+            if last_t is None:
+                last_t = t
+            if t != last_t:
+                if counts:
+                    history.append((last_t, counts.copy()))
+                last_t = t
+            state = entry["state"]
+            old_state = entry.get("old_state")
+            assert state in counts and (old_state is None or old_state in counts)
+            counts[state] += 1
+            if old_state:
+                counts[old_state] -= 1
+        if counts:
+            history.append((last_t, counts.copy()))
+        out = []
+        for t, counts in history:
+            counts["t"] = t
+            out.append(counts)
+        return json.dumps(out), "text/json"
 
     def project(self, request, relpath, project_id=None, page=0, page_size=100, **args):
 

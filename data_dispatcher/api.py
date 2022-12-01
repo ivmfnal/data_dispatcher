@@ -169,6 +169,10 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         self.CPUSite = cpu_site
 
         HTTPClient.__init__(self, server_url, token=self.token(), timeout=timeout)
+        
+    @staticmethod
+    def random_worker_id(prefix=""):
+        return prefix + uuid.uuid4().hex[:8]
 
     def gen_worker_id(self):
         u = uuid.uuid4().bytes

@@ -5,6 +5,9 @@
 	svg.timeline text.tooltip {display: none;}
 	svg.timeline g:hover text.tooltip {display: block;}
 </style>
+
+<script src="{{GLOBAL_AppTopPath}}/static/js/request.js"></script>
+
 {% endblock %}
 
 {% block headline %}Project {{project.ID}}{% endblock %}
@@ -24,9 +27,11 @@
 
     <tr>    <th>Status</th>             <td><span class="{{project.State}}" style="padding: 3px">{{project.State}}</span></td> </tr>
     <tr>    <th>Query</th>              <td><pre>{{project.Query or ""}}</pre></td>
-            {% if project.Query or False and not GLOBAL_MetaCatURL is none %}
+            {#
+                {% if project.Query or False and not GLOBAL_MetaCatURL is none %}
                 <td><a href="{{GLOBAL_MetaCatURL}}/gui/query?query={{project.quoted_query()}}&run=yes">run query</a></td>
-            {% endif %}
+                {% endif %}
+            #}
     </tr>
     <tr>    <th>Worker timeout</th>     <td>{{project.WorkerTimeout|none_as_blank}}</td></tr>
     <tr>    <th>Project attributes</th>         <td class="nopadding">
@@ -37,6 +42,11 @@
                     {% endfor %}
                 </table>
             {% endif %}
+            </td> 
+    </tr>
+    <tr>    <th>Project history</th>         
+            <td>
+                <canvas id="project_history_canvas" height=100 width=800></canvas>
             </td> 
     </tr>
     <tr>    
@@ -107,6 +117,81 @@
         </td>
     </tr>
 </table>
+
+<script type="text/javascript">
+    
+    function project_history_received(data, param)
+    {
+        var canvas = document.getElementById("project_history_canvas");
+        var ctx = canvas.getContext("2d");
+        ctx.clearRect(0,0,width,height);      
+        if( data.length <= 0 )
+            return;
+
+        var width = parseInt(canvas.getAttribute("width"));
+        var height = parseInt(canvas.getAttribute("height"));
+
+        var nmax = 0;
+        var tmin = null;
+        var tmax = null;
+        var record;
+
+        for( record of data )
+        {
+            if( tmin == null || tmax == null )
+            {
+                tmin = record.t;
+                tmax = record.t;
+            }
+            else
+                tmax = record.t;        // assume sorted by time
+            let n = record.initial + record.done + record.failed + record.reserved;
+            if( n > nmax )  nmax = n;
+        }
+        var dx = (width - 20)/(tmax - tmin);        // 10 is margin for the time from last update to now
+        if( dx > 10 )
+            dx = 10;            // pixels per second
+        var i;
+        var dy = height/nmax;
+        for ( i=0; i<data.length; i++ )
+        {
+            const r = data[i];
+            
+            var t = r.t;
+            var x_next;
+            var x = (t-tmin)*dx;
+            if( i < data.length - 1 )
+                x_next = (data[i+1].t - tmin)*dx;
+            else
+                x_next = x+20;
+            var n_ready = r.initial;
+            var n_reserved = r.reserved;
+            var n_failed = r.failed;
+            var n_done = r.done;
+            
+            let labels = ["initial", "failed", "done", "reserved"];
+            y = 0;
+            for ( label of labels )
+            {
+                let n = r[label];
+                if( n > 0 )
+                {
+                    let color = StateColors[label];
+                    let h = n * dy;
+                    ctx.beginPath();
+                    ctx.fillStyle = color;
+                    ctx.strokeStyle = color;
+                    ctx.fillRect(x,y,x_next-x, h);
+                    ctx.rect(x,y,x_next-x, h);
+                    ctx.stroke();
+                    y += h;
+                }
+            }
+        }   
+    }
+    simple_request("./handle_counts_history?project_id={{project.ID}}", project_history_received, "json", null)
+</script>
+
 
 {% endblock %}
 

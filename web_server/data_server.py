@@ -464,6 +464,6 @@ if __name__ == "__main__":
     app = create_application(config)
     port = server_config.get("data_port", 8088)
     print(f"Starting at port {port}...")
-    app.run_server(port, logging=True)
+    app.run_server(port, logging=False)
     
     

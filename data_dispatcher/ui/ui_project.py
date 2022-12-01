@@ -8,7 +8,7 @@ from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
 class CreateCommand(CLICommand):
     
-    Opts = "q:c:l:j:A:a:t:"
+    Opts = "q:c:l:j:A:a:t:p:"
     Usage = """[options] [inline MQL query]         -- create project
 
         Use an inline query or one of the following to provide file list:
@@ -58,6 +58,7 @@ class CreateCommand(CLICommand):
                 
         if query:
             files = MetaCatClient().query(query, with_metadata = "-c" in opts)
+            files = list(files)
             for info in files:
                 info["attributes"] = common_attrs.copy()
             
@@ -109,6 +110,7 @@ class CreateCommand(CLICommand):
 
         #print("files:", files)
         #print("calling API.client.create_project...")
+        #print("")
         info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query, worker_timeout=worker_timeout)
         printout = opts.get("-p", "id")
         if printout == "json":
