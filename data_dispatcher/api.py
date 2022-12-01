@@ -172,6 +172,9 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         
     @staticmethod
     def random_worker_id(prefix=""):
+        """
+        Static method to generate random worker id
+        """
         return prefix + uuid.uuid4().hex[:8]
 
     def gen_worker_id(self):
