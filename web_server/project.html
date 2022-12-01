@@ -2,8 +2,8 @@
 
 {% block html_head %}
 <style type="text/css">
-	svg.timeline text.tooltip {display: none;}
-	svg.timeline g:hover text.tooltip {display: block;}
+	svg#project_history_svg text {display: none;}
+	svg#project_history_svg g:hover text {display: block;}
 </style>
 
 <script src="{{GLOBAL_AppTopPath}}/static/js/request.js"></script>
@@ -46,7 +46,21 @@
     </tr>
     <tr>    <th>Project history</th>         
             <td>
-                <canvas id="project_history_canvas" height=100 width=800></canvas>
+                <span id="count_display"></span><br/>
+                <svg id="project_history_svg" height=100 width=800 onmouseout="display_count()"></svg>
+                <script type="text/javascript">
+                    function display_count(label, n)
+                    {
+                        var d = document.getElementById("count_display");
+                        if( label == null )
+                            d.innerHTML = "";
+                        else
+                        {
+                            d.innerHTML = label + ": " + n;
+                            d.className = label;
+                        }
+                    }
+                </script>
             </td> 
     </tr>
     <tr>    
@@ -122,11 +136,10 @@
     
     function project_history_received(data, param)
     {
-        var canvas = document.getElementById("project_history_canvas");
-        var ctx = canvas.getContext("2d");
-        ctx.clearRect(0,0,width,height);      
+        var canvas = document.getElementById("project_history_svg");
         if( data.length <= 0 )
             return;
+        const svgns = "http://www.w3.org/2000/svg";
 
         var width = parseInt(canvas.getAttribute("width"));
         var height = parseInt(canvas.getAttribute("height"));
@@ -160,34 +173,41 @@
             
             var t = r.t;
             var x_next;
-            var x = (t-tmin)*dx;
+            var x = Math.round((t-tmin)*dx);
             if( i < data.length - 1 )
-                x_next = (data[i+1].t - tmin)*dx;
+                x_next = Math.round((data[i+1].t - tmin)*dx);
             else
                 x_next = x+margin;
-            var n_ready = r.initial;
-            var n_reserved = r.reserved;
-            var n_failed = r.failed;
-            var n_done = r.done;
-            
-            let labels = ["initial", "failed", "done", "reserved"];
-            y = 0;
-            for ( label of labels )
+            let w = x_next - x;
+            if ( w > 0 )
             {
-                let n = r[label];
-                if( n > 0 )
+                var n_ready = r.initial;
+                var n_reserved = r.reserved;
+                var n_failed = r.failed;
+                var n_done = r.done;
+            
+                let labels = ["initial", "failed", "done", "reserved"];
+                y = 0;
+                for ( label of labels )
                 {
-                    let color = StateColors[label];
-                    let h = Math.round(n * dy);
-                    if( h > 0 )
+                    let n = r[label];
+                    if( n > 0 )
                     {
-                        ctx.beginPath();
-                        ctx.fillStyle = color;
-                        ctx.strokeStyle = color;
-                        ctx.fillRect(x,y,x_next-x, h);
-                        ctx.rect(x,y,x_next-x, h);
-                        ctx.stroke();
-                        y += h;
+                        let color = StateColors[label];
+                        let h = Math.round(n * dy);
+                        if( h > 0 )
+                        {
+                            var rect = document.createElementNS(svgns, 'rect');
+                            rect.setAttribute("x", x);
+                            rect.setAttribute("y", y);
+                            rect.setAttribute("width", w);
+                            rect.setAttribute("height", h);
+                            rect.setAttribute("style", "stroke-width:0;" + "fill:"+color+";");
+                            
+                            rect.setAttribute("onmouseover", "display_count('"+label+"',"+n+")");
+                            canvas.appendChild(rect);
+                            y += h;
+                        }
                     }
                 }
             }
