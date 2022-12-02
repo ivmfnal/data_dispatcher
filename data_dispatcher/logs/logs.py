@@ -89,28 +89,31 @@ class Logger(AbstractLogger):
         if self.Debug:
             self.log(*message, channel="debug", sep=sep, who=who, t=t)
 
-
 class Logged(AbstractLogger):
 
-    def __init__(self, name=None, debug=True, logger=None):
+    def __init__(self, name=None, debug=True, logger=None,
+            log_channel="log", error_channel="error", debug_channel="debug"):
         assert logger is None or isinstance(logger, AbstractLogger), "logger must be either None or a Logger or a Logged"
         self.Logger = logger
         self.LogName = name or self.__class__.__name__
         self.Debug = debug
-        #print("Logged: LogName=", self.LogName)
+        self.LogChannel = log_channel
+        self.ErrorChannel = error_channel
+        self.DebugChannel = debug_channel
 
-    def log(self, *message, sep=" ", who=None, t=None, channel="log"):
-        print("Logged.log(", message, sep, who, t, channel, ")")
+    def log(self, *message, sep=" ", who=None, t=None, channel=None):
+        #print("Logged.log(", message, sep, who, t, channel, ")")
+        channel = channel or self.LogChannel
         who = who or self.LogName
         logger = self.Logger or DefaultLogger
-        if logger is not None and (channel != "debug" or self.Debug):
+        if logger is not None and (channel != self.DebugChannel or self.Debug):
            logger.log(*message, sep=sep, who=who, t=t, channel=channel)
     
     def error(self, *message, sep=" ", who=None, t=None):
-        self.log(*message, sep=sep, who=who or self.LogName, t=t, channel="error")
+        self.log(*message, sep=sep, who=who or self.LogName, t=t, channel=self.ErrorChannel)
 
     def debug(self, *message, sep=" ", who=None, t=None):
-        self.log(*message, sep=sep, who=who or self.LogName, t=t, channel="debug")
+        self.log(*message, sep=sep, who=who or self.LogName, t=t, channel=self.DebugChannel)
 
 
 def init(log_output, error_out=None, debug_out=None, debug_enabled=False):
