@@ -684,12 +684,13 @@ class DBProject(DBObject, HasLogRecord):
 
     def files_log(self):
         return DBFile.log_records_for_project(self.DB, self.ID)
-
+        
     @staticmethod
-    def purge(db, retain=3600):
+    def purge(db, retain=86400):        # 24 hours
         c = db.cursor()
         table = DBProject.Table
         t_retain = datetime.now(timezone.utc) - timedelta(seconds=retain)
+        deleted = 0
         c.execute("begin")
         try:
             c.execute(f"""
@@ -698,11 +699,12 @@ class DBProject(DBObject, HasLogRecord):
                         and end_timestamp is not null
                         and end_timestamp < %s
             """, (t_retain,))
+            deleted = c.rowcount
             c.execute("commit")
         except:
             c.execute("rollback")
             raise
-        return c.rowcount
+        return deleted
 
     def replicas_logs(self):
         log_records = DBReplica.log_records_for_dids([(h.Namespace, h.Name) for h in self.handles()])
@@ -845,6 +847,7 @@ class DBFile(DBObject):
     def purge(db):
         c = db.cursor()
         table = DBFile.Table
+        deleted = 0
         c.execute("begin")
         try:
             c.execute(f"""
@@ -854,12 +857,13 @@ class DBFile(DBObject):
                                 where f.namespace = h.namespace
                                     and f.name = h.name
                     )
-            """, (t_retain,))
+            """)
+            deleted = c.rowcount
             c.execute("commit")
         except:
             c.execute("rollback")
             raise
-        return c.rowcount
+        return deleted
 
 
 class DBReplica(DBObject, HasLogRecord):
