@@ -368,7 +368,7 @@ class ProjectMonitor(Primitive, Logged):
 
         self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
         for rse, replicas in tape_replicas_by_rse.items():
-            self.debug("sending %d replicas to %s pinner" % (len(replicas, rse)))
+            self.debug("sending %d replicas to %s pinner" % (len(replicas), rse))
             self.Pinners[rse][self.ProjectID] = replicas
         
         #
