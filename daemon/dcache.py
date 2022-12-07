@@ -222,7 +222,7 @@ class DCachePinner(PyThread, Logged):
                                 # pin request is still not done, poll files individually
                                 dids_paths = list(all_files.items())
                                 n = len(dids_paths)
-                                self.log(f"RSE: {rse} sending", len(dids_paths), "dids/paths to poller")
+                                self.log("sending", len(dids_paths), "dids/paths to poller")
                                 self.Poller.submit(dids_paths)
                     else:
                         self.debug("no files to pin")
