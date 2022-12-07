@@ -347,7 +347,7 @@ class ProjectMonitor(Primitive, Logged):
             return "stop"
         
         active_handles = self.active_handles()
-        reserved_handles = {h.did():h for h in active_replicas if h.State == "reserved"}
+        reserved_handles = {h.did():h for h in active_handles if h.State == "reserved"}
 
         self.debug("update_replicas_availability(): active_handles:", None if active_handles is None else len(active_handles))
 

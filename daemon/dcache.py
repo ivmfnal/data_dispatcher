@@ -204,24 +204,28 @@ class DCachePinner(PyThread, Logged):
                         self.PinRequest.delete()
                         self.PinRequest = None
 
-                    if self.PinRequest is None:
-                        self.PinRequest = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
-                        self.PinRequest.send()
-                        self.log("new pin request created for %d files" % (len(all_paths),))
-                    else:
-                        if self.PinRequest.error():
-                            self.log("error in pin request -- deleting pin request")
-                            self.PinRequest.delete()
-                            self.PinRequest = None
-                        elif self.PinRequest.complete():
-                            all_dids = list(all_files.keys())
-                            self.log("pin request complete for %d files" % (len(all_dids),))
-                            DBReplica.update_availability_bulk(self.DB, True, self.RSE, all_dids)
+                    if all_files:       # anything to pin ??
+                        if self.PinRequest is None:
+                            self.PinRequest = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
+                            self.PinRequest.send()
+                            self.log("new pin request created for %d files" % (len(all_paths),))
                         else:
-                            dids_paths = list(replica_paths.items())
-                            n = len(dids_paths)
-                            self.log(f"RSE: {rse} sending", len(dids_paths), "dids/paths to poller")
-                            self.Poller.submit(dids_paths)
+                            if self.PinRequest.error():
+                                self.log("error in pin request -- deleting pin request")
+                                self.PinRequest.delete()
+                                self.PinRequest = None
+                            elif self.PinRequest.complete():
+                                all_dids = list(all_files.keys())
+                                self.log("pin request complete for %d files" % (len(all_dids),))
+                                DBReplica.update_availability_bulk(self.DB, True, self.RSE, all_dids)
+                            else:
+                                # pin request is still not done, poll files individually
+                                dids_paths = list(all_files.items())
+                                n = len(dids_paths)
+                                self.log(f"RSE: {rse} sending", len(dids_paths), "dids/paths to poller")
+                                self.Poller.submit(dids_paths)
+                    else:
+                        self.debug("no files to pin")
             except Exception as e:
                 self.error("exception in run:\n", traceback.format_exc())
             time.sleep(next_run)
