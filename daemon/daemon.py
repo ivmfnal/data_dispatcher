@@ -348,6 +348,7 @@ class ProjectMonitor(Primitive, Logged):
         
         active_handles = self.active_handles()
         reserved_handles = {h.did():h for h in active_handles if h.State == "reserved"}
+        ready_handles = {h.did():h for h in active_handles if h.State == "initial"}
 
         self.debug("update_replicas_availability(): active_handles:", None if active_handles is None else len(active_handles))
 
@@ -368,9 +369,25 @@ class ProjectMonitor(Primitive, Logged):
 
         self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
         for rse, replicas in tape_replicas_by_rse.items():
-            self.debug("sending %d replicas to %s pinner" % (len(replicas), rse))
-            did_paths = {did:r.Path for did, r in replicas.items()}
-            self.Pinners[rse][self.ProjectID] = did_paths
+            
+            reserved_replicas = [
+                    (did, r.Path) 
+                    for did, r in replicas.items() 
+                    if did in reserved_handles
+            ]
+            ready_replicas = [
+                    (did, r.Path, ready_handles[did].Attempts) 
+                    for did, r in replicas.items()
+                    if did in ready_handles
+            ]
+            ready_replicas = sorted(ready_replicas, key=lambda tup: (tup[2], tup[0]))
+            ready_replicas = [(did, path) for did, path, _ in ready_replicas][:self.LOW_WATER_PRESTAGE]
+            
+            replicas_to_pin = dict(reserved_replicas + ready_replicas)
+            
+            self.debug("sending %d reserved and %d ready replicas out of %d replicas to %s pinner" % 
+                    (len(reserved_replicas), len(ready_replicas), len(replicas), rse))
+            self.Pinners[rse][self.ProjectID] = replicas_to_pin
         
         #
         # Release timed-out handles
