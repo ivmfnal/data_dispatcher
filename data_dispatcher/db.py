@@ -1684,7 +1684,6 @@ class DBFileHandle(DBObject, HasLogRecord):
         self.WorkerID = None
         self.save()
 
-
 class DBRSE(DBObject):
     
     Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference"]
