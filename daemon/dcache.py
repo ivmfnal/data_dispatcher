@@ -152,8 +152,9 @@ class PinRequest(Logged):
         return self.Error
 
     def complete(self):
-        info = self.query()
-        self.Complete = info.get("status").upper() == "COMPLETED" and len(info.get("failures", {}).get("failures",{})) == 0
+        if not self.Complete:
+            info = self.query()
+            self.Complete = info.get("status").upper() == "COMPLETED" and len(info.get("failures", {}).get("failures",{})) == 0
         return self.Complete
         
     def expired(self):
