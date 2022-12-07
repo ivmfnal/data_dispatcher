@@ -3,6 +3,7 @@ from data_dispatcher.db import DBFile, DBProject, DBReplica, DBRSE, DBProximityM
 from pythreader import PyThread, Primitive, Scheduler, synchronized, LogFile, LogStream, TaskQueue, Task
 from data_dispatcher.logs import Logged
 from daemon_web_server import DaemonWebServer
+from dcache import DCachePinner, DCachePoller
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -107,164 +108,6 @@ class RSEListLoader(PyThread, Logged):
             if not self.Stop:
                 self.sleep(self.Interval)
 
-
-class DCachePoller(PyThread, Logged):
-    
-    STAGGER = 0.1
-    
-    def __init__(self, rse, db, base_url, max_burst, ssl_config):
-        PyThread.__init__(self, name=f"DCachePoller({rse})")
-        Logged.__init__(self, f"DCachePoller({rse})")
-        self.MaxBurst = max_burst
-        self.DB = db
-        self.RSE = rse
-        self.BaseURL = base_url
-        self.Files = {}                 # { did -> path }
-        self.Stop = False
-        ssl_config = ssl_config or {}
-        self.Cert = ssl_config.get("cert")
-        self.Key = ssl_config.get("key")
-        #self.CA_Bundle = ssl_config.get("ca_bundle")
-        
-    @synchronized
-    def submit(self, dids_paths):
-        self.Files.update(dict(dids_paths))
-        self.wakeup()
-        
-    def run(self):
-        while not self.Stop:
-            while self.Files:
-                with self:
-                    items = list(self.Files.items())
-                    n = len(items)
-                    nburst = min(self.MaxBurst, max(10, n//10))
-                    burst, items = items[:nburst], items[nburst:]
-                    self.Files = dict(items)
-                headers = { "accept" : "application/json",
-                        "content-type" : "application/json"}
-                available_dids = []
-                unavailable_dids = []
-                remove_dids = []
-                for did, path in burst:
-                    url = self.BaseURL + path + "?locality=true"
-                    cert = None if self.Cert is None else (self.Cert, self.Key)
-                    self.debug("dCache poll URL:", url)
-                    response = requests.get(url, headers=headers, cert=cert, verify=False)
-                    #self.debug("response:", response.status_code, response.text)
-                    if response.status_code == 404:
-                        #self.debug(f"file not found (status 404): {did} - removing")
-                        self.log("Replica not found:", path)
-                        remove_dids.append(did)
-                    elif response.status_code//100 != 2:
-                        continue
-                    else:
-                        data = response.json()
-                        available = "ONLINE" in data.get("fileLocality", "").upper()
-                        if available:
-                            self.log("Replica available:", did, path)
-                            available_dids.append(did)
-                        else:
-                            unavailable_dids.append(did)
-                            self.log("Replica unavailable:", did, path)
-                DBReplica.update_availability_bulk(self.DB, True, self.RSE, available_dids)
-                DBReplica.update_availability_bulk(self.DB, False, self.RSE, unavailable_dids)
-                DBReplica.remove_bulk(self.DB, self.RSE, remove_dids)
-                time.sleep(self.STAGGER)
-            self.sleep(10)
-
-class PinRequest(Logged):
-    
-    # dCache version
-    # see https://docs.google.com/document/d/14sdrRmJts5JYBFKSvedKCxT1tcrWtWchR-PJhxdunT8/edit?usp=sharing
-    
-    PinLifetime = 3600
-    SafetyInterval = 600            # if the expiration time is too close, consider the request expired
-    
-    def __init__(self, project_id, url, pin_prefix, ssl_config, replicas):
-        Logged.__init__(self, f"PinRequest({project_id})")
-        self.BaseURL = url
-        self.Replicas = replicas.copy()             # {did -> path}
-        self.SSLConfig = ssl_config
-        self.URL = None
-        self.PinPrefix = pin_prefix
-        self.Cert = self.SSLConfig.get("cert")
-        self.Key = self.SSLConfig.get("key")
-        self.CertTuple = (self.Cert, self.Key) if self.Cert else None
-        self.Error = False
-        self.ErrorText = True
-        self.Complete = False
-        self.Expiration = None
-        self.debug("created with base url:", self.BaseURL)
-
-    def send(self):
-        headers = { "accept" : "application/json",
-                    "content-type" : "application/json"}
-        data =  {
-            "target" : json.dumps(list(self.Replicas.values())),
-            "activity" : "PIN",
-            "clearOnSuccess" : "false",             # 6/30/22: dCache will accept strings instead of booleans for a while. In the future it will start accepting both 
-            "clearOnFailure" : "false", 
-            "expandDirectories" : None,
-            "arguments": {
-                "lifetime": str(self.PinLifetime),  # 6/30/22: dCache will accept strings instead of ints
-                "lifetime-unit": "SECONDS"
-            }
-        }
-        if self.PinPrefix:
-            data["target-prefix"] = self.PinPrefix
-        self.debug("request data:", json.dumps(data, indent="  "))
-        r = requests.post(self.BaseURL, data = json.dumps(data), headers=headers, 
-                verify=False, cert = self.CertTuple)
-
-        #print("send(): response:", r)
-        self.debug("response text:", r.text)
-        r.raise_for_status()
-        self.URL = r.headers['request-url']
-        self.Expiration = time.time() + self.PinLifetime
-        self.log("Pin request created. URL:", self.URL)
-
-    def query(self):
-        assert self.URL is not None
-        headers = { "accept" : "application/json" }
-        r = requests.get(self.URL, headers=headers, verify=False, cert = self.CertTuple)
-        #self.debug("status(): response:", r)
-        if r.status_code // 100 == 4:
-            self.Error = True
-            self.ErrorText = r.text
-            return "ERROR"
-        r.raise_for_status()
-        self.debug("query: my URL:", self.URL, "   response:", r.text)
-        return r.json()
-
-    def delete(self):
-        assert self.URL is not None
-        headers = { "accept" : "application/json" }
-        r = requests.delete(self.URL, headers=headers, verify=False, cert = self.CertTuple)
-        #self.debug("status(): response:", r)
-        if r.status_code // 100 == 4:
-            self.Error = True
-            self.ErrorText = r.text
-            return "ERROR"
-        r.raise_for_status()
-        self.debug("delete: my URL:", self.URL, "   response:", r.text)
-        return r.json()
-
-    def status(self):
-        return self.query()["status"]
-
-    def error(self):
-        return self.Error
-
-    def complete(self):
-        info = self.query()
-        self.Complete = info.get("status").upper() == "COMPLETED" and len(info.get("failures", {}).get("failures",{})) == 0
-        return self.Complete
-        
-    def expired(self):
-        return self.Expiration is None or time.time() >= self.Expiration - self.SafetyInterval
-
-    def same_files(self, replicas):
-        return set(replicas.keys()) == set(self.Replicas.keys())
 
 class RSEConfig(Logged):
     
@@ -384,20 +227,20 @@ class ListReplicasTask(Task):
                 return self.Client.list_replicas(self.DIDs, all_states=False, ignore_availability=False)
         finally:
             self.Master = None      # unlink
-
+            
 class ProjectMonitor(Primitive, Logged):
     
     UpdateInterval = 30         # replica availability update interval
     NewRequestInterval = 5      # interval to check on new pin request
     SyncInterval = 600          # interval to re-sync replicas with Rucio
     
-    def __init__(self, master, scheduler, project_id, db, rse_config, pollers, rucio_client):
+    def __init__(self, master, scheduler, project_id, db, rse_config, pollers, pinners, rucio_client):
         Logged.__init__(self, f"ProjectMonitor({project_id})")
         Primitive.__init__(self, name=f"ProjectMonitor({project_id})")
         self.ProjectID = project_id
         self.DB = db
         self.RSEConfig = rse_config
-        self.PinRequests = {}       # {rse -> PinRequest}
+        self.Pinners = pinners
         self.Pollers = pollers
         self.Master = master
         self.Scheduler = scheduler
@@ -405,9 +248,8 @@ class ProjectMonitor(Primitive, Logged):
 
     def remove_me(self, reason):
         self.log("remove me:", reason)
-        for rse, pin_request in self.PinRequests.items():
-            pin_request.delete()
-            self.log("pin request for", rse, "deleted")
+        for pinner in self.Pinners.values():
+            del pinner[self.ProjectID]
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
         self.log("removed:", reason)
@@ -426,6 +268,7 @@ class ProjectMonitor(Primitive, Logged):
             for rse, replica in h.replicas().items():
                 if self.RSEConfig.is_tape(rse):
                     #print("tape_replicas_by_rse(): Tape RSE:", rse)
+                    replica.Handle = h
                     tape_replicas_by_rse.setdefault(rse, {})[replica.did()] = replica
         return tape_replicas_by_rse
 
@@ -434,14 +277,16 @@ class ProjectMonitor(Primitive, Logged):
 
         self.debug("sync_replicas...")
 
+        project = DBProject.get(self.DB, self.ProjectID)
+        if project is None:
+            self.remove_me("project deleted")
+            return "stop"
+
         active_handles = self.active_handles()
         self.debug("sync_replicas(): active_handles:", None if active_handles is None else len(active_handles))
 
-        if active_handles is None:
-            self.remove_me("deleted")
-            return "stop"
-        elif not active_handles:
-            self.remove_me("done")
+        if not active_handles:
+            self.remove_me("no active handles")
             return "stop"
             
         try:
@@ -479,102 +324,19 @@ class ProjectMonitor(Primitive, Logged):
             self.error("exception in sync_replicas:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
  
-    def create_pin_request(self, rse, paths):
-        # paths: [did -> path]
-        try:
-            old_pin_request = self.PinRequests.get(rse)
-            ssl_config = self.RSEConfig.ssl_config(rse)
-            pin_url = self.RSEConfig.pin_url(rse)
-            pin_prefix = self.RSEConfig.pin_prefix(rse)
-            self.debug("create_pin_request: rse:", rse, "   pin_url:", pin_url)
-            self.PinRequests[rse] = pin_request = PinRequest(self.ProjectID, pin_url, pin_prefix,
-                ssl_config, paths
-            )
-            pin_request.send()
-            if old_pin_request is not None:
-                old_pin_request.delete()
-                self.log("old pin request deleted")
-            return pin_request
-        except Exception as e:
-            self.error("Error in create_pin_request:", traceback.format_exc())
-            raise
-
-    PRESTAGE_LOW_WATER = 50
-    PRESTAGE_HIGH_WATER = 100
-
-    @synchronized
-    def _________prestage_replicas(self):
-        active_handles = self.active_handles()
-
-        navailable = 0
-        for h in active_handles():
-            for r in h.replicas():
-                if r.Available:
-                    navailable += 1
-        
-        if navailable < self.PRESTAGE_LOW_WATER:
-            tape_replicas = self.tape_replicas_by_rse(active_handles)
-            not_prestaged = []
-            for rse, replicas in sorted(tape_replicas.items()):
-                for did, r in sorted(replicas.items()):
-                    if not r.Available:
-                        not_prestaged.append(r)
-            n_to_prestage = min(len(not_prestaged), self.PRESTAGE_HIGH_WATER)
-            if n_to_prestage:
-                rng = random.Random(123)
-            
-                        
-        
-        self.debug("prestage_replicas(): active_handles:", None if active_handles is None else len(active_handles))
-
-        if active_handles is None:
-            self.remove_me("deleted")
-            return "stop"
-        elif not active_handles:
-            self.remove_me("done")
-            return "stop"
-
-        #
-        # Collect replica info on active replicas located in tape storages
-        #
-
-        tape_replicas_by_rse = self.tape_replicas_by_rse(active_handles)               # {rse -> {did -> path}}
-        
-        next_run = self.UpdateInterval
-
-        self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
-        for rse, replicas in tape_replicas_by_rse.items():
-            pin_request = self.PinRequests.get(rse)
-            if pin_request is None or pin_request.expired() or not pin_request.same_files(replicas):
-                self.create_pin_request(rse, replicas)
-                next_run = self.NewRequestInterval     # this is new pin request. Check it in 20 seconds
-            elif pin_request.complete():
-                self.debug("pin request COMPLETE")
-                DBReplica.update_availability_bulk(self.DB, True, rse, list(replicas.keys()))
-            elif pin_request.error():
-                self.debug("ERROR in pin request. Creating new one\n", pin_request.ErrorText)
-                self.create_pin_request(rse, replicas)
-                next_run = self.NewRequestInterval     # this is new pin request. Check it in 20 seconds
-            else:
-                poller = self.Pollers[rse]
-                dids_paths = [(did, path) for did, path in replicas.items()]
-                n = len(dids_paths)
-                self.log("sending", len(dids_paths), "dids/paths to poller for RSE", rse)
-                poller.submit(dids_paths)
-                
-        project = DBProject.get(self.DB, self.ProjectID)
-        if project is not None and project.WorkerTimeout is not None:
-            self.debug("releasing timed-out handles, timeout=", project.WorkerTimeout)
-            n = project.release_timed_out_handles()
-            if n:
-                self.log(f"released {n} timed-out handles")
-        self.debug("update_replicas_availability(): done")
-        return next_run
-
+    LOW_WATER_PRESTAGE = 10     # unreserved files to keep prestaged per tape RSE
 
     @synchronized
     def update_replicas_availability(self):
+        
+        project = DBProject.get(self.DB, self.ProjectID)
+        if project is None:
+            self.remove_me("project deleted")
+            return "stop"
+        
         active_handles = self.active_handles()
+        reserved_handles = {h.did():h for h in active_replicas if h.State == "reserved"}
+
         self.debug("update_replicas_availability(): active_handles:", None if active_handles is None else len(active_handles))
 
         if active_handles is None:
@@ -588,33 +350,19 @@ class ProjectMonitor(Primitive, Logged):
         # Collect replica info on active replicas located in tape storages
         #
 
-        tape_replicas_by_rse = self.tape_replicas_by_rse(active_handles)               # {rse -> {did -> replica}}
+        tape_replicas_by_rse = self.tape_replicas_by_rse(active_handles)               # {rse -> {did -> replica}}, will set the replica.Handle pointer
         
         next_run = self.UpdateInterval
 
         self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
         for rse, replicas in tape_replicas_by_rse.items():
-            replica_paths = {did: r.Path for did, r in replicas.items()}
-            pin_request = self.PinRequests.get(rse)
-            if pin_request is None or pin_request.expired() or not pin_request.same_files(replica_paths):
-                self.create_pin_request(rse, replica_paths)
-                next_run = self.NewRequestInterval     # this is new pin request. Check it in 20 seconds
-            elif pin_request.complete():
-                self.debug("pin request COMPLETE")
-                DBReplica.update_availability_bulk(self.DB, True, rse, list(replicas.keys()))
-            elif pin_request.error():
-                self.debug("ERROR in pin request. Creating new one\n", pin_request.ErrorText)
-                self.create_pin_request(rse, replica_paths)
-                next_run = self.NewRequestInterval     # this is new pin request. Check it in 20 seconds
-            else:
-                poller = self.Pollers[rse]
-                dids_paths = list(replica_paths.items())
-                n = len(dids_paths)
-                self.log("sending", len(dids_paths), "dids/paths to poller for RSE", rse)
-                poller.submit(dids_paths)
-                
-        project = DBProject.get(self.DB, self.ProjectID)
-        if project is not None and project.WorkerTimeout is not None:
+            self.debug("sending %d replicas to %s pinner" % (len(replicas, rse)))
+            self.Pinners[rse][self.ProjectID] = replicas
+        
+        #
+        # Release timed-out handles
+        #
+        if project.WorkerTimeout is not None:
             self.debug("releasing timed-out handles, timeout=", project.WorkerTimeout)
             n = project.release_timed_out_handles()
             if n:
@@ -627,7 +375,7 @@ class ProjectMaster(PyThread, Logged):
     RunInterval = 10        # seconds       - new project discovery latency
     PurgeInterval = 30*60
     
-    def __init__(self, db, scheduler, rse_config, pollers, rucio_client):
+    def __init__(self, db, scheduler, rse_config, pollers, pinners, rucio_client):
         Logged.__init__(self, "ProjectMaster")
         PyThread.__init__(self, name="ProjectMaster")
         self.DB = db
@@ -636,6 +384,7 @@ class ProjectMaster(PyThread, Logged):
         self.Scheduler = scheduler
         self.RSEConfig = rse_config
         self.Pollers = pollers
+        self.Pinners = pinners
         self.RucioClient = rucio_client
         self.Scheduler.add(self.clean, id="cleaner")
 
@@ -672,7 +421,7 @@ class ProjectMaster(PyThread, Logged):
             if project is not None:
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.files())
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
-                    self.RSEConfig, self.Pollers, self.RucioClient)
+                    self.RSEConfig, self.Pollers, self.Pinners, self.RucioClient)
                 SyncScheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", t0=time.time(), interval=ProjectMonitor.SyncInterval)
                 TaskScheduler.add(monitor.update_replicas_availability, id=f"update_{project_id}", 
                     t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
@@ -819,6 +568,7 @@ def main():
     rse_client = RSEClient()
     
     pollers = {}
+    pinners = {}
 
     for rse in rse_config.rses():
         #
@@ -832,6 +582,10 @@ def main():
                  rse_config.poll_url(rse), rse_config.max_burst(rse), rse_config.ssl_config(rse)
             )
             poller.start()
+            pollers[rse] = poller
+            pinner = pinners[rse] = DCachePinner(rse, connection_pool, rse_config.pin_url(rse), rse_config.pin_prefix(rse),
+                rse_config.ssl_config(rse), poller)
+            pinner.start()
 
     proximity_map_loader = None
     proximity_map_url = config.get("proximity_map", {}).get("url")
@@ -854,7 +608,7 @@ def main():
     rucio_listener = RucioListener(connection_pool, rucio_config, rse_config)
     rucio_listener.start()
 
-    project_master = ProjectMaster(connection_pool, scheduler, rse_config, pollers, replica_client)
+    project_master = ProjectMaster(connection_pool, scheduler, rse_config, pollers, pinners, replica_client)
     project_master.start()
 
     server_config = config.get("daemon_server", {})
