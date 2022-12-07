@@ -170,6 +170,7 @@ class DCachePinner(PyThread, Logged):
         PyThread.__init__(self, name=f"DCachePinner({rse})")
         Logged.__init__(self, name=f"DCachePinner({rse})")
         self.URL = url
+        self.debug("url:", self.URL)
         self.RSE = rse
         self.Prefix = prefix
         self.SSLConfig = ssl_config
