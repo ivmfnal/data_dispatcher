@@ -152,6 +152,7 @@ class PinRequest(Logged):
         return self.Error
 
     def complete(self):
+        self.debug("previous complete status:", self.Complete)
         if not self.Complete:
             info = self.query()
             self.Complete = info.get("status").upper() == "COMPLETED" and len(info.get("failures", {}).get("failures",{})) == 0
