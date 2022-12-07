@@ -1,3 +1,4 @@
+
 import json, time, io, traceback, urllib.parse
 from datetime import datetime, timedelta, timezone
 from metacat.auth import BaseDBUser as DBUser
@@ -1355,4 +1356,514 @@ class DBFileHandle(DBObject, HasLogRecord):
 
     @staticmethod
     def get_bulk(db, project_id, dids, with_replicas=False):
-        namespace_names = tuple(tuple(did.split(":", 1)) for did in dids)\x20\x20\x20\x20\x20\x20\x20\x23\x20\x6D\x75\x73\x74\x20\x62\x65\x20\x74\x75\x70\x6C\x65\x20\x6F\x66\x20\x74\x75\x70\x6C\x65\x73\x20\x66\x6F\x72\x20\x53\x51\x4C\x20\x74\x6F\x20\x77\x6F\x72\x6B\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x23\x70\x72\x69\x6E\x74\x28\x22\x6E\x61\x6D\x65\x73\x70\x61\x63\x65\x5F\x6E\x61\x6D\x65\x73\x3A\x22\x2C\x20\x74\x79\x70\x65\x28\x6E\x61\x6D\x65\x73\x70\x61\x63\x65\x5F\x6E\x61\x6D\x65\x73\x29\x2C\x20\x6E\x61\x6D\x65\x73\x70\x61\x63\x65\x5F\x6E\x61\x6D\x65\x73\x5B\x3A\x33\x5D\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x68\x5F\x63\x6F\x6C\x75\x6D\x6E\x73\x20\x3D\x20\x44\x42\x46\x69\x6C\x65\x48\x61\x6E\x64\x6C\x65\x2E\x63\x6F\x6C\x75\x6D\x6E\x73\x28\x22\x68\x22\x2C\x20\x61\x73\x5F\x74\x65\x78\x74\x3D\x54\x72\x75\x65\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x68\x5F\x6E\x5F\x63\x6F\x6C\x75\x6D\x6E\x73\x20\x3D\x20\x6C\x65\x6E\x28\x44\x42\x46\x69\x6C\x65\x48\x61\x6E\x64\x6C\x65\x2E\x43\x6F\x6C\x75\x6D\x6E\x73\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x72\x5F\x63\x6F\x6C\x75\x6D\x6E\x73\x20\x3D\x20\x44\x42\x52\x65\x70\x6C\x69\x63\x61\x2E\x63\x6F\x6C\x75\x6D\x6E\x73\x28\x22\x72\x22\x2C\x20\x61\x73\x5F\x74\x65\x78\x74\x3D\x54\x72\x75\x65\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x72\x5F\x6E\x5F\x63\x6F\x6C\x75\x6D\x6E\x73\x20\x3D\x20\x6C\x65\x6E\x28\x44\x42\x52\x65\x70\x6C\x69\x63\x61\x2E\x43\x6F\x6C\x75\x6D\x6E\x73\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x61\x76\x61\x69\x6C\x61\x62\x6C\x65\x5F\x72\x65\x70\x6C\x69\x63\x61\x73\x5F\x76\x69\x65\x77\x20\x3D\x20\x44\x42\x52\x65\x70\x6C\x69\x63\x61\x2E\x56\x69\x65\x77\x57\x69\x74\x68\x52\x53\x45\x53\x74\x61\x74\x75\x73\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x63\x20\x3D\x20\x64\x62\x2E\x63\x75\x72\x73\x6F\x72\x28\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x69\x66\x20\x77\x69\x74\x68\x5F\x72\x65\x70\x6C\x69\x63\x61\x73\x3A\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x73\x71\x6C\x20\x3D\x20\x66\x22\x22\x22\x5C\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x73\x65\x6C\x65\x63\x74\x20\x7B\x68\x5F\x63\x6F\x6C\x75\x6D\x6E\x73\x7D\x2C\x20\x7B\x72\x5F\x63\x6F\x6C\x75\x6D\x6E\x73\x7D\x2C\x20\x72\x73\x65\x5F\x61\x76\x61\x69\x6C\x61\x62\x6C\x65\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x66\x72\x6F\x6D\x20\x66\x69\x6C\x65\x5F\x68\x61\x6E\x64\x6C\x65\x73\x20\x68\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x69\x6E\x6E\x65\x72\x20\x6A\x6F\x69\x6E\x20\x7B\x61\x76\x61\x69\x6C\x61\x62\x6C\x65\x5F\x72\x65\x70\x6C\x69\x63\x61\x73\x5F\x76\x69\x65\x77\x7D\x20\x72\x20\x6F\x6E\x20\x28\x72\x2E\x6E\x61\x6D\x65\x20\x3D\x20\x68\x2E\x6E\x61\x6D\x65\x20\x61\x6E\x64\x20\x72\x2E\x6E\x61\x6D\x65\x73\x70\x61\x63\x65\x20\x3D\x20\x68\x2E\x6E\x61\x6D\x65\x73\x70\x61\x63\x65\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x77\x68\x65\x72\x65\x20\x70\x72\x6F\x6A\x65\x63\x74\x5F\x69\x64\x20\x3D\x20\x25\x73\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x61\x6E\x64\x20\x28\x68\x2E\x6E\x61\x6D\x65\x73\x70\x61\x63\x65\x2C\x20\x68\x2E\x6E\x61\x6D\x65\x29\x20\x69\x6E\x20\x25\x73\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x6F\x72\x64\x65\x72\x20\x62\x79\x20\x68\x2E\x6E\x61\x6D\x65\x73\x70\x61\x63\x65\x2C\x20\x68\x2E\x6E\x61\x6D\x65\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x22\x22\x22\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x23\x70\x72\x69\x6E\x74\x28\x22\x44\x42\x46\x69\x6C\x65\x48\x61\x6E\x64\x6C\x65\x2E\x6C\x69\x73\x74\x3A\x20\x73\x71\x6C\x3A\x22\x2C\x20\x73\x71\x6C\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x70\x72\x69\x6E\x74\x28\x63\x2E\x6D\x6F\x67\x72\x69\x66\x79\x28\x73\x71\x6C\x2C\x20\x28\x70\x72\x6F\x6A\x65\x63\x74\x5F\x69\x64\x2C\x20\x6E\x61\x6D\x65\x73\x70\x61\x63\x65\x5F\x6E\x61\x6D\x65\x73\x29\x29\x2E\x64\x65\x63\x6F\x64\x65\x28\x22\x75\x74\x66\x2D\x38\x22\x29\x29\x0A\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x63\x2E\x65\x78\x65\x63\x75\x74\x65\x28\x73\x71\x6C\x2 
+        namespace_names = tuple(tuple(did.split(":", 1)) for did in dids)       # must be tuple of tuples for SQL to work
+        #print("namespace_names:", type(namespace_names), namespace_names[:3])
+        h_columns = DBFileHandle.columns("h", as_text=True)
+        h_n_columns = len(DBFileHandle.Columns)
+        r_columns = DBReplica.columns("r", as_text=True)
+        r_n_columns = len(DBReplica.Columns)
+        available_replicas_view = DBReplica.ViewWithRSEStatus
+        c = db.cursor()
+        if with_replicas:
+            sql = f"""\
+                select {h_columns}, {r_columns}, rse_available
+                    from file_handles h
+                        inner join {available_replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
+                        where project_id = %s
+                            and (h.namespace, h.name) in %s
+                        order by h.namespace, h.name
+            """
+            #print("DBFileHandle.list: sql:", sql)
+            print(c.mogrify(sql, (project_id, namespace_names)).decode("utf-8"))
+            c.execute(sql, (project_id, namespace_names))
+            h = None
+            for tup in cursor_iterator(c):
+                #print("DBFileHandle.get_bulk:", tup)
+                h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
+                if h is None:
+                    h = DBFileHandle.from_tuple(db, h_tuple)
+                #print("DBFileHandle.get_bulk: h:", h)
+                h1 = DBFileHandle.from_tuple(db, h_tuple)
+                if h1.Namespace != h.Namespace or h1.Name != h.Name:
+                    if h:   
+                        #print("    yield:", h)
+                        yield h
+                    h = h1
+                if r_tuple[0] is not None:
+                    r = DBReplica.from_tuple(db, r_tuple)
+                    r.RSEAvailable = rse_available
+                    h.Replicas = h.Replicas or {}
+                    h.Replicas[r.RSE] = r
+            if h is not None:
+                #print("    yield:", h)
+                yield h
+        else:
+            sql = f"""
+                select {h_columns}
+                    from file_handles h
+                        where project_id = %s and (namespace, name) in %s
+                        order by h.namespace, h.name
+            """
+            c.execute(sql, (project_id, namespace_names))
+            yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
+
+    @staticmethod
+    def get_bulk(db, project_id, dids, with_replicas=False):
+        #print("namespace_names:", type(namespace_names), namespace_names[:3])
+        dids = list(dids)
+        h_columns = DBFileHandle.columns("h", as_text=True)
+        h_n_columns = len(DBFileHandle.Columns)
+        r_columns = DBReplica.columns("r", as_text=True)
+        r_n_columns = len(DBReplica.Columns)
+        available_replicas_view = DBReplica.ViewWithRSEStatus
+        c = db.cursor()
+        if with_replicas:
+            sql = f"""\
+                select {h_columns}, {r_columns}, rse_available
+                    from file_handles h
+                        inner join {available_replicas_view} r on (
+                            (r.namespace || ':' || r.name) = (h.namespace || ':' || h.name)
+                        )
+                        where h.project_id = %s
+                            and (h.namespace || ':' || h.name) = any(%s)
+                        order by h.namespace, h.name
+            """
+            #print("DBFileHandle.list: sql:", sql)
+            c.execute(sql, (project_id, dids))
+            h = None
+            for tup in cursor_iterator(c):
+                #print("DBFileHandle.get_bulk:", tup)
+                h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
+                if h is None:
+                    h = DBFileHandle.from_tuple(db, h_tuple)
+                #print("DBFileHandle.get_bulk: h:", h)
+                h1 = DBFileHandle.from_tuple(db, h_tuple)
+                if h1.Namespace != h.Namespace or h1.Name != h.Name:
+                    if h:   
+                        #print("    yield:", h)
+                        yield h
+                    h = h1
+                if r_tuple[0] is not None:
+                    r = DBReplica.from_tuple(db, r_tuple)
+                    r.RSEAvailable = rse_available
+                    h.Replicas = h.Replicas or {}
+                    h.Replicas[r.RSE] = r
+            if h is not None:
+                #print("    yield:", h)
+                yield h
+        else:
+            sql = f"""
+                select {h_columns}
+                    from file_handles h
+                        where project_id = %s and (namespace || ':' || name) = any(%s)
+                        order by h.namespace, h.name
+            """
+            c.execute(sql, (project_id, dids))
+            yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
+
+    @staticmethod
+    def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False):
+        wheres = []
+        if project_id: wheres.append(f"h.project_id={project_id}")
+        if state:
+            if isinstance(state, (list, tuple)):
+                wheres.append("h.state in (%s)" % ",".join(f"'{s}'" for s in state))
+            else:
+                wheres.append(f"h.state='{state}'")
+        if not_state:       wheres.append(f"h.state!='{not_state}'")
+        if namespace:       wheres.append(f"h.namespace='{namespace}'")
+        wheres = " and ".join(wheres)
+        c = db.cursor()
+        h_columns = DBFileHandle.columns("h", as_text=True)
+        r_columns = DBReplica.columns("r", as_text=True)
+        h_n_columns = len(DBFileHandle.Columns)
+        r_n_columns = len(DBReplica.Columns)
+        available_replicas_view = DBReplica.ViewWithRSEStatus
+        if with_replicas:
+            sql = f"""\
+                select {h_columns}, {r_columns}, rse_available
+                    from file_handles h
+                        left outer join {available_replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
+                        where true and {wheres}
+                        order by h.namespace, h.name
+            """
+            #print("DBFileHandle.list: sql:", sql)
+            c.execute(sql)
+            h = None
+            for tup in cursor_iterator(c):
+                #print("DBFileHandle.list:", tup)
+                h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
+                if h is None:
+                    h = DBFileHandle.from_tuple(db, h_tuple)
+                h1 = DBFileHandle.from_tuple(db, h_tuple)
+                if h1.Namespace != h.Namespace or h1.Name != h.Name:
+                    if h:   
+                        #print("    yield:", h)
+                        yield h
+                    h = h1
+                if r_tuple[0] is not None:
+                    r = DBReplica.from_tuple(db, r_tuple)
+                    r.RSEAvailable = rse_available
+                    h.Replicas = h.Replicas or {}
+                    h.Replicas[r.RSE] = r
+            if h is not None:
+                #print("    yield:", h)
+                yield h
+
+        else:
+            sql = f"""
+                select {h_columns}
+                    from file_handles h
+                        where {wheres}
+            """
+            c.execute(sql)
+            yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
+                    
+    def save(self):
+        c = self.DB.cursor()
+        try:
+            c.execute("begin")
+            c.execute("""
+                update file_handles set state=%s, worker_id=%s, attempts=%s, attributes=%s
+                    where project_id=%s and namespace=%s and name=%s
+            """, (self.State, self.WorkerID, self.Attempts, json.dumps(self.Attributes), 
+                    self.ProjectID, self.Namespace, self.Name
+                )            
+            )
+            #print("DBFileHandle.save: attempts:", self.Attempts)
+            self.DB.commit()
+        except Exception as e:
+            c.execute("rollback")
+            raise
+            
+    @property
+    def project(self):
+        return DBProject.get(self.DB, self.ProjectID)
+
+    @staticmethod
+    def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
+        h_table = DBFileHandle.Table
+        rep_table = DBReplica.Table
+        rse_table = DBRSE.Table
+        c = db.cursor()
+        c.execute("begin")
+        reserved = None
+        try:
+            sql = f"""
+                    select h.namespace, h.name
+                        from {h_table} h
+                        where 
+                            h.project_id = %s and h.state = %s
+                            and exists (
+                                select * from {rep_table} r, {rse_table} s
+                                    where h.namespace = r.namespace and h.name = r.name 
+                                        and r.rse = s.name
+                                        and s.is_enabled and s.is_available
+                            )
+                        order by attempts
+                        limit 1
+                        for update skip locked
+            """
+            #print("sql:\n", sql)
+            c.execute(sql, (project_id, DBFileHandle.ReadyState))
+            tup = c.fetchone()
+            if tup:
+                namespace, name = tup
+                c.execute(f"""
+                    update {h_table}
+                        set state = %s, worker_id = %s, attempts = attempts + 1, reserved_since = now()
+                        where project_id = %s and namespace = %s and name = %s
+                """, (DBFileHandle.ReservedState, worker_id, project_id, namespace, name))
+                reserved = (namespace, name)
+            c.execute("""
+                commit
+            """)
+        except:
+            c.execute("rollback")
+            raise
+
+        if reserved:
+            namespace, name = reserved
+            reserved = DBFileHandle.get(db, project_id, namespace, name)
+            reserved.record_state_change(DBFileHandle.ReservedState, 
+                event = "reserve",
+                old_state = DBFileHandle.ReadyState, worker=worker_id)
+        return reserved
+        
+    def ____reserve(self, worker_id):
+        c = self.DB.cursor()
+        try:
+            c.execute("begin")
+            c.execute("""
+                update file_handles
+                    set state=%s, worker_id=%s, attempts = attempts+1, reserved_since = now()
+                    where namespace=%s and name=%s and project_id=%s and state = %s and worker_id is null
+                    returning attempts, worker_id;
+            """, (self.ReservedState, worker_id, self.Namespace, self.Name, self.ProjectID, self.ReadyState))
+            tup = c.fetchone()
+            if tup and tup[1] == worker_id:
+                attempts = tup[0]
+                self.WorkerID = worker_id
+                self.State = self.ReservedState
+                self.Attempts = attempts
+                c.execute("commit")
+                self.add_log("state", event="reserve", state="reserved", worker=worker_id)
+                return True
+            else:
+                c.execute("rollback")
+                return False
+        except:
+            c.execute("rollback")
+            raise
+
+    #
+    # workflow
+    #
+
+    @staticmethod
+    def release_reserved_before(db, project_id, reserved_before):
+        if reserved_before is None:
+            return 0
+        c = db.cursor()
+        c.execute("""
+            update file_handles h_new
+                set state = %s, worker_id = null
+                from file_handles h_old                     -- this is the trick to get the worker_id before it is updated to null
+                where h_new.project_id = %s and h_new.state = %s and h_new.reserved_since < %s
+                    and h_new.project_id = h_old.project_id and h_new.namespace = h_old.namespace and h_new.name = h_old.name
+                returning h_new.namespace, h_new.name, h_old.worker_id
+        """, (DBFileHandle.ReadyState, project_id, DBFileHandle.ReservedState, reserved_before))
+        log_records = [
+            (
+                (project_id, namespace, name),
+                "state",
+                dict(event = "worker_timeout", state=DBFileHandle.ReadyState, worker=worker_id)
+            ) for namespace, name, worker_id in c.fetchall()
+        ]
+        c.execute("commit")
+        DBFileHandle.add_log_bulk(db, log_records)
+        return len(log_records)
+
+    def is_available(self):
+        return any(r.Available and r.RSEAvailable for r in self.replicas().values())
+
+    def is_active(self):
+        return self.State not in ("done", "failed")
+        
+    def is_reserved(self):
+        return self.State == self.ReservedState
+
+    def record_state_change(self, new_state, old_state=None, **log_data):
+        assert new_state in self.States, "Unknown file handle state: "+new_state
+        old_state = old_state or self.State
+        self.State = new_state
+        data = log_data.copy()
+        data["state"] = new_state
+        data["old_state"] = old_state
+        self.add_log("state", data)
+            
+    def set_state(self, state, **log_data):
+        assert state in self.States, "Unknown file handle state: "+new_state
+        if self.State != state:
+            self.record_state_change(state, **log_data)
+            self.State = state
+            
+    def done(self):
+        self.set_state("done", event="done", worker=self.WorkerID)
+        self.WorkerID = None
+        self.save()
+
+    def failed(self, retry=True):
+        state = self.ReadyState if retry else "failed"
+        self.set_state(state, event="failed", worker=self.WorkerID)
+        self.WorkerID = None
+        self.save()
+        
+    def reset(self):
+        self.set_state(self.ReadyState, event="reset", worker=self.WorkerID)
+        self.WorkerID = None
+        self.save()
+
+
+class DBRSE(DBObject):
+    
+    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference"]
+    PK = ["name"]
+    Table = "rses"
+
+    def __init__(self, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
+        self.DB = db
+        self.Name = name
+        self.Description = description
+        self.Available = is_available
+        self.Enabled = is_enabled
+        self.Tape = is_tape
+        self.PinURL = pin_url
+        self.PollURL = poll_url
+        self.RemovePrefix = remove_prefix
+        self.AddPrefix = add_prefix
+        self.PinPrefix = pin_prefix
+        self.Preference = preference
+
+    def as_dict(self):
+        return dict(
+            name            =   self.Name,
+            description     =   self.Description,
+            is_available    =   self.Available,
+            is_tape         =   self.Tape,
+            pin_url         =   self.PinURL,
+            poll_url        =   self.PollURL,
+            remove_prefix   =   self.RemovePrefix,
+            add_prefix      =   self.AddPrefix,
+            pin_prefix      =   self.PinPrefix,
+            preference      =   self.Preference,
+            is_enabled      =   self.Enabled
+        )
+
+    as_jsonable = as_dict
+
+    @classmethod
+    def create(cls, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
+        c = db.cursor()
+        table = cls.Table
+        columns = cls.columns(as_text=True)
+        try:
+            c.execute("begin")
+            c.execute(f"""
+                begin;
+                insert into {table}({columns})
+                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict(name) do nothing;
+                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, pin_prefix, preference)
+            )
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+        
+        return DBRSE.get(db, name)
+
+    @classmethod
+    def list(cls, db, include_disabled=False):
+        c = db.cursor()
+        table = cls.Table
+        columns = cls.columns(as_text=True)
+        wheres = "" if include_disabled else "where is_enabled"
+        c.execute(f"""
+            select {columns} from {table} {wheres}
+        """)
+        return (cls.from_tuple(db, tup) for tup in cursor_iterator(c))
+
+    def save(self):
+        c = self.DB.cursor()
+        try:
+            #print("saving urls:", self.PinURL, self.PollURL)
+            c.execute("begin")
+            c.execute("""
+                begin;
+                update rses 
+                    set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, pin_prefix=%s, preference=%s
+                    where name=%s
+                """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
+                    self.AddPrefix, self.PinPrefix, self.Preference,
+                    self.Name)
+            )
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
+
+    @staticmethod
+    def create_many(db, names):
+        c = db.cursor()
+        table = DBRSE.Table
+        try:
+            c.execute("begin")
+            c.executemany(f"""insert into {table}(name) values(%s) on conflict(name) do nothing""",
+                [(name,) for name in names]
+            )
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
+class DBProximityMap(DBObject):
+
+    Columns = ["cpu", "rse", "proximity"]
+    PK = ["cpu", "rse"]
+    Table = "proximity_map"
+    
+    def __init__(self, db, tuples=None, defaults = {}, overrides={}, default=None, rses=None):
+        self.DB = db
+        self.Defaults = defaults
+        self.Overrides = overrides
+        self.Default = default
+        self.Map = {}
+        if tuples is not None:
+            self._load(tuples)
+        else:
+            self.load()
+            
+        if rses is not None:
+            rses = set(rses)
+            for cpu, cpu_map in self.Map.items():
+                for rse in list(cpu_map.keys()):
+                    if rse.upper() != "DEFAULT" and rse not in rses:
+                        del cpu_map[rse]
+
+    def _load(self, tuples):
+        for cpu, rse, proximity in tuples:
+            self.Map.setdefault(cpu, {})[rse] = proximity
+    
+    def load(self):
+        self.Map = {}
+        c = self.DB.cursor()
+        c.execute(f"""
+            select cpu, rse, proximity
+                from {self.Table}
+        """)
+        self._load(cursor_iterator(c))
+        return self
+    
+    def save(self):
+        c = self.DB.cursor()
+        tuples = []
+        for cpu, cpu_dict in self.Map.items():
+            for rse, proximity in cpu_dict.items():
+                tuples.append((cpu, rse, proximity))
+        try:
+            c.execute("begin")
+            for cpu, rse, proximity in tuples:
+                c.execute(f"""
+                    insert into {self.Table}(cpu, rse, proximity)
+                        values(%s, %s, %s)
+                        on conflict(cpu, rse)
+                            do update set proximity=%s
+                    """, (cpu, rse, proximity, proximity))
+            c.execute("commit")
+        except:
+            c.execute("rollback")
+            raise
+
+    def proximity(self, cpu, rse, default="_default_"):
+        if default == "_default_":
+            default = self.Default
+        if cpu is None: cpu = "DEFAULT"
+        cpu_map = self.Map.get(cpu,  self.Map.get("DEFAULT", self.Defaults.get(cpu, {})))
+        overrides = self.Overrides.get(cpu, {})
+        return overrides.get(rse, cpu_map.get(rse, cpu_map.get("DEFAULT", default)))
+        
+    def raw(self, cpu, rse, default=None):
+        return self.Map.get(cpu, {}).get(rse, default)
+
+    def cpus(self):
+        return sorted(list(self.Map.keys()), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
+
+    def rses(self):
+        rses = set()
+        for cpu, cpu_map in self.Map.items():
+            rses |= set(rse for rse in cpu_map.keys())
+        return sorted(list(rses), key=lambda x: "-" if x.upper() == "DEFAULT" else x)
