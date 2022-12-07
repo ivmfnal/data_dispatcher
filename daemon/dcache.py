@@ -166,7 +166,7 @@ class DCachePinner(PyThread, Logged):
     
     UpdateInterval = 5         # replica availability update interval
 
-    def __init__(self, db, rse, url, prefix, ssl_config, poller):
+    def __init__(self, rse, db, url, prefix, ssl_config, poller):
         PyThread.__init__(self, name=f"DCachePinner({rse})")
         Logged.__init__(self, name=f"DCachePinner({rse})")
         self.URL = url
