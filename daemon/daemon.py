@@ -119,6 +119,7 @@ class RSEConfig(Logged):
         #print("RSEConfig: config:")
         #pprint.pprint(config)
         self.DB = db
+        self.CfgCache = {}      # rse -> (expiration, DBRSE object)
 
     def unview(self, rse):
         cfg = self.Config[rse]
@@ -126,9 +127,18 @@ class RSEConfig(Logged):
 
     def is_view(self, rse):
         return self.Config[rse].get("view") is not None
-        
+    
+    CACHE_EXPIRATION = 60
+    
     def get_actual_config(self, rse):
-        dbrse = DBRSE.get(self.DB, rse)
+        tup = self.CfgCache.get(rse)
+        dbrse = None
+        if tup and tup[0] >= time.time():
+            dbrse = tup[1]
+        if dbrse is None:
+            dbrse = DBRSE.get(self.DB, rse)
+            if dbrse is not None:
+                self.CfgCache[rse] = (time.time() + self.CACHE_EXPIRATION, dbrse)
         if dbrse is None:
             raise KeyError(f"RSE {rse} not in the database")
         dbcfg = dbrse.as_dict()
