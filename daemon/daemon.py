@@ -369,7 +369,8 @@ class ProjectMonitor(Primitive, Logged):
         self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
         for rse, replicas in tape_replicas_by_rse.items():
             self.debug("sending %d replicas to %s pinner" % (len(replicas), rse))
-            self.Pinners[rse][self.ProjectID] = replicas
+            did_paths = {did:r.Path for did, r in replicas.items()}
+            self.Pinners[rse][self.ProjectID] = did_paths
         
         #
         # Release timed-out handles
