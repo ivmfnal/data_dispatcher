@@ -378,6 +378,10 @@ class DBProject(DBObject, HasLogRecord):
             
         project = DBProject.get(db, id)
         return project
+        
+    def handle_states(self):
+        return {(h.Namespace, h.Name): h.Availability if h.State == "initial" else h.State 
+                for h in self.handles(reload=True, with_availability=True)}
 
     @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
@@ -557,9 +561,11 @@ class DBProject(DBObject, HasLogRecord):
         else:
             self.add_log("event", log_data)
 
-    def handles(self, state=None, with_replicas=True, reload=False):
+    def handles(self, state=None, with_replicas=True, with_availability=False, reload=False):
         if reload or self.Handles is None:
-            self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
+            self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, 
+                with_replicas=with_replicas, with_availability=with_availability)
+            )
         return (h for h in self.Handles if (state is None or h.State == state))
 
     def get_handles(self, dids, with_replicas=True):
@@ -1221,6 +1227,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         self.WorkerID = worker_id
         self.Attempts = attempts
         self.Attributes = (attributes or {}).copy()
+        self.Availability = None             # "not found", "found" (but unavailable), "available"
         self.File = None
         self.Replicas = None
         self.ReservedSince = reserved_since
@@ -1460,7 +1467,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
 
     @staticmethod
-    def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False):
+    def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False, with_availability=False):
         wheres = []
         if project_id: wheres.append(f"h.project_id={project_id}")
         if state:
@@ -1478,15 +1485,25 @@ class DBFileHandle(DBObject, HasLogRecord):
         r_n_columns = len(DBReplica.Columns)
         available_replicas_view = DBReplica.ViewWithRSEStatus
         if with_replicas:
-            sql = f"""\
-                select {h_columns}, {r_columns}, rse_available
-                    from file_handles h
-                        left outer join {available_replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
-                        where true and {wheres}
-                        order by h.namespace, h.name
-            """
+            if with_availability:
+                sql  = f"""\
+                    select {h_columns}, {r_columns}, rses.is_available
+                        from file_handles h
+                            left outer join replicas r on (r.name = h.name and r.namespace = h.namespace)
+                            inner join rses on (rses.name = r.rse)
+                        where (%(project_id)s is null or h.project_id = %(project_id)s)
+                        order by h.project_id, h.namespace, h.name
+                    """
+            else:
+                sql  = f"""\
+                    select {h_columns}, {r_columns}, null
+                        from file_handles h
+                            left outer join replicas r on (r.name = h.name and r.namespace = h.namespace)
+                        where (%s is null or h.project_id = %s)
+                        order by h.project_id, h.namespace, h.name
+                    """
+            c.execute(sql, {"project_id":project_id})
             #print("DBFileHandle.list: sql:", sql)
-            c.execute(sql)
             h = None
             for tup in cursor_iterator(c):
                 #print("DBFileHandle.list:", tup)
@@ -1499,15 +1516,20 @@ class DBFileHandle(DBObject, HasLogRecord):
                         #print("    yield:", h)
                         yield h
                     h = h1
+                    if with_availability:
+                        h.Availability = "not found"
                 if r_tuple[0] is not None:
+                    if h.Availability == "not found":
+                        h.Availability = "found"
                     r = DBReplica.from_tuple(db, r_tuple)
                     r.RSEAvailable = rse_available
                     h.Replicas = h.Replicas or {}
                     h.Replicas[r.RSE] = r
+                    if with_availability and rse_available and r.Available:
+                        h.Availability = "available"
             if h is not None:
                 #print("    yield:", h)
                 yield h
-
         else:
             sql = f"""
                 select {h_columns}

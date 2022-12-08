@@ -106,20 +106,37 @@ class ProjectsHandler(BaseHandler):
         page = int(page)
         page_size = int(page_size)
         istart = page*page_size
-        projects = list(DBProject.list(db, with_handle_counts=True))
+        projects = list(DBProject.list(db, with_handle_counts=False))
         nprojects = len(projects)
         npages = (nprojects + page_size - 1)//page_size
         projects = projects[istart:istart + page_size]
         for project in projects:
-            ntotal = sum(project.HandleCounts.values())
-            project._HandleShares = {state:float(count)/ntotal for state, count in project.HandleCounts.items()}
+            if project.HandleCounts:
+                ntotal = sum(project.HandleCounts.values())
+                project._HandleShares = {state:float(count)/ntotal for state, count in project.HandleCounts.items()}
         if message:   message = urllib.parse.unquote_plus(message)
         
+        npages = (nprojects + page_size - 1)//page_size
+        last_page = npages - 1
         next_page = page + 1
         prev_page = page - 1
-        next_page_link = f"projects/page={next_page}&page_size={page_size}"
+        next_page_link = f"projects?page={next_page}&page_size={page_size}"
+        prev_page_link = f"projects?page={prev_page}&page_size={page_size}"
+        first_page_link = f"projects?page=0&page_size={page_size}"
+        last_page_link = f"projects?page={last_page}&page_size={page_size}"
+
+        index_page_links = None
+        if npages > 1:
+            index_page_links = {}
+            if page != first_page_link: index_page_links[0] = first_page_link
+            if prev_page >= 0: index_page_links[prev_page] = prev_page_link
+            if next_page < npages: index_page_links[next_page] = next_page_link
+            if page != last_page: index_page_links[last_page] = last_page_link
+            index_page_links[page] = None
+            index_page_links = sorted(index_page_links.items())
         
-        return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates, message=message)
+        return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates,
+                    page_index = index_page_links, message=message)
         
     def handle_logs(self, request, relpath, project_id=None):
         db = self.App.db()
@@ -129,6 +146,17 @@ class ProjectsHandler(BaseHandler):
             return 404, "Project not found"
         log_records = sorted([entry for entry in project.handles_log() if entry.Type == "state"], key = lambda e:e.T)
         return json.dumps([e.as_jsonable() for e in log_records]), "text/json"
+
+    def handle_state_counts(self, request, relpath, project_id=None):
+        db = self.App.db()
+        project_id = int(project_id)
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        counts = {state:0 for state in DBFileHandle.DerivedStates}
+        for state in project.handle_states().values():
+            counts[state] = counts.get(state, 0) + 1
+        return json.dumps(counts), "text/json"
 
     def handle_counts_history(self, request, relpath, project_id=None):
         db = self.App.db()
