@@ -561,7 +561,7 @@ class DBProject(DBObject, HasLogRecord):
         else:
             self.add_log("event", log_data)
 
-    def handles(self, state=None, with_replicas=True, with_availability=False, reload=False):
+    def handles(self, state=None, with_replicas=True, with_availability=True, reload=False):
         if reload or self.Handles is None:
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, 
                 with_replicas=with_replicas, with_availability=with_availability)
@@ -897,8 +897,10 @@ class DBReplica(DBObject, HasLogRecord):
         return f"{self.Namespace}:{self.Name}"
         
     def is_available(self):
-        assert self.Available is not None and self.RSEAvailable is not None
-        return self.Available and self.RSEAvailable
+        if self.Available is not None and self.RSEAvailable is not None:
+            return self.Available and self.RSEAvailable
+        else:
+            return None
 
     @staticmethod
     def list(db, namespace=None, name=None, rse=None):
