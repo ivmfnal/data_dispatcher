@@ -1499,7 +1499,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                     select {h_columns}, {r_columns}, null
                         from file_handles h
                             left outer join replicas r on (r.name = h.name and r.namespace = h.namespace)
-                        where (%s is null or h.project_id = %s)
+                        where (%(project_id)s is null or h.project_id = %(project_id)s)
                         order by h.project_id, h.namespace, h.name
                     """
             c.execute(sql, {"project_id":project_id})
