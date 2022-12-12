@@ -59,18 +59,20 @@ class HTTPClient(object):
     def retry_request(self, method, url, timeout=None, **args):
         """
         Implements the functionality to retry on 503 response with random exponentially growing delay
+        Use timemout = 0 to try the request exactly once
+        Returns the response with status=503 on timeout
         """
         if timeout is None:
-            timeout = self.Timeout
+            timeout = self.DefaultTimeout
         tend = time.time() + timeout
         retry_interval = self.InitialRetry
         response = None
+        done = False
         while time.time() < tend:
             if method == "get":
                 response = requests.get(url, timeout=self.Timeout, **args)
             else:
                 response = requests.post(url, timeout=self.Timeout, **args)
-            #print("retry_request: response:", response)
             if response.status_code != 503:
                 break
             sleep_time = min(random.random() * retry_interval, tend-time.time())
@@ -83,9 +85,10 @@ class HTTPClient(object):
         if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
         url = "%s%s" % (self.ServerURL, uri_suffix)
         #print("url:", url)
-        headers = {}
-        if self.Token is not None:
-            headers["X-Authentication-Token"] = self.Token.encode()
+        try:
+            headers = self.auth_headers()           # in case we have TokenAuthClientMixin or similar
+        except AttributeError:
+            headers = {}
         response = self.retry_request("get", url, headers=headers)
         if response.status_code != 200:
             if none_if_not_found and response.status_code == 404:
@@ -114,9 +117,10 @@ class HTTPClient(object):
             
         url = "%s%s" % (self.ServerURL, uri_suffix)
         
-        headers = {}
-        if self.Token is not None:
-            headers["X-Authentication-Token"] = self.Token.encode()
+        try:
+            headers = self.auth_headers()           # in case we have TokenAuthClientMixin or similar
+        except AttributeError:
+            headers = {}
 
         response = self.retry_request("post", url, data=data, headers=headers)
         if response.status_code != 200:
