@@ -108,18 +108,37 @@ class ProjectsHandler(BaseHandler):
         istart = page*page_size
         projects = list(DBProject.list(db, with_handle_counts=True))
         nprojects = len(projects)
+        print("projects found:", nprojects)
         npages = (nprojects + page_size - 1)//page_size
         projects = projects[istart:istart + page_size]
         for project in projects:
             ntotal = sum(project.HandleCounts.values())
             project._HandleShares = {state:float(count)/ntotal for state, count in project.HandleCounts.items()}
         if message:   message = urllib.parse.unquote_plus(message)
-        
+
+        last_page = npages - 1
         next_page = page + 1
         prev_page = page - 1
-        next_page_link = f"projects/page={next_page}&page_size={page_size}"
-        
-        return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates, message=message)
+        next_page_link = f"projects?page={next_page}&page_size={page_size}"
+        prev_page_link = f"projects?page={prev_page}&page_size={page_size}"
+        first_page_link = f"projecst?page=0&page_size={page_size}"
+        last_page_link = f"projects?page={last_page}&page_size={page_size}"
+
+        index_page_links = None
+        if npages > 1:
+            index_page_links = {}
+            if page != first_page_link: index_page_links[0] = first_page_link
+            if prev_page >= 0: index_page_links[prev_page] = prev_page_link
+            if next_page < npages: index_page_links[next_page] = next_page_link
+            if page != last_page: index_page_links[last_page] = last_page_link
+            index_page_links[page] = None
+            index_page_links = sorted(index_page_links.items())
+
+        print("page_index:", index_page_links)
+
+        return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates, message=message,
+            page = page, page_index = index_page_links
+        )
         
     def handle_logs(self, request, relpath, project_id=None):
         db = self.App.db()

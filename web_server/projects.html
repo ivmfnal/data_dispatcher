@@ -45,6 +45,17 @@
 
 </script>
 
+{% if not page_index is none %}
+    <p>page:{%- for p, link in page_index -%}
+                {%- if link is not none -%}
+                    &nbsp;&nbsp;<a href="{{link}}">{{p+1}}</a>
+                {%- else -%}
+                    &nbsp;&nbsp;{{p+1}}
+                {%- endif -%}
+            {%- endfor -%}
+    </p>
+{% endif %}
+
 <table class="data">
 	<tr>
 		<th rowspan=2>Project ID</th>
