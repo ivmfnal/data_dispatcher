@@ -642,9 +642,11 @@ class ProjectMaster(PyThread, Logged):
     def clean(self):
         self.debug("cleaner...")
         try:
-            nprojects = DBProject.purge(self.DB)
+            #nprojects = DBProject.purge(self.DB)       never purge projects
+            nabandoned = DBProject.mark_abandoned(self.DB)
+            nreplicas = DBeplica.purge(self.DB)
             nfiles = DBFile.purge(self.DB)
-            self.log("purged projects:", nprojects, ", files:", nfiles)
+            self.log("abandoned projects:", nabandoned, ", purged files:", nfiles, ", purged replicas:", nreplicas)
         except:
             self.error("Exception in ProjectMaster.clean():", "\n" + traceback.format_exc())
         return self.PurgeInterval

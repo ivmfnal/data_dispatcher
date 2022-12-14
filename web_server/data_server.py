@@ -8,6 +8,7 @@ from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatu
 from metacat.auth.server import BaseHandler, BaseApp, AuthHandler
 import json, urllib.parse, yaml, secrets, hashlib
 import requests
+from datetime import datetime, timedelta
 
 
 def to_bytes(x):
@@ -46,11 +47,17 @@ class Handler(BaseHandler):
         files = specs["files"]
         query = specs.get("query")
         worker_timeout = specs.get("worker_timeout")
+        if worker_timeout is not None:
+            worker_timeout = timedelta(seconds=worker_timeout)
+        idle_timeout = specs.get("idle_timeout")
+        if idle_timeout is not None:
+            idle_timeout = timedelta(seconds=idle_timeout)
         attributes = specs.get("project_attributes", {})
         #print(specs.get("files"))
         db = self.App.db()
         #print("calling DBProject.create()...")
-        project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout)
+        project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout,
+                        idle_timeout=idle_timeout)
         files_converted = []
         for f in files:
             if isinstance(f, str):

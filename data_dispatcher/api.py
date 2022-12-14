@@ -217,7 +217,11 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     #
     # projects
     #
-    def create_project(self, files, common_attributes={}, project_attributes={}, query=None, worker_timeout=None):
+    
+    DEFAULT_IDLE_TIMEOUT = 72*3600      # 72 hors
+    
+    def create_project(self, files, common_attributes={}, project_attributes={}, query=None, worker_timeout=None,
+            idle_timeout = DEFAULT_IDLE_TIMEOUT):
         """Creates new project
         
         Parameters
@@ -257,7 +261,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     "files":                file_list,
                     "project_attributes":   project_attributes,
                     "query":                query,
-                    "worker_timeout":       worker_timeout
+                    "worker_timeout":       worker_timeout,
+                    "idle_timeout":         idle_timeout
                 }
             )
         )

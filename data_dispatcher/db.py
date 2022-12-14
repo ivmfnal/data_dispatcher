@@ -16,6 +16,11 @@ def json_literal(v):
     else:   v = str(v)
     return v
     
+def to_timedelta(t):
+    if isinstance(t, (int, float)):
+        t = timedelta(seconds=t)
+    return t
+    
 class DBObject(object):
     
     @classmethod
@@ -293,10 +298,10 @@ class HasLogRecord(object):
 class DBProject(DBObject, HasLogRecord):
     
     InitialState = "active"
-    States = ["active", "failed", "done", "cancelled", "held"]
+    States = ["active", "failed", "done", "cancelled", "held", "abandoned"]
     EndStates = ["failed", "done", "cancelled"]
     
-    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query,worker_timeout".split(",")
+    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query,worker_timeout,idle_timeout,last_ping".split(",")
     Table = "projects"
     PK = ["id"]
     
@@ -304,7 +309,7 @@ class DBProject(DBObject, HasLogRecord):
     LogTable = "project_log"
     
     def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, 
-                retry_count=None, attributes={}, query=None, worker_timeout=None):
+                retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None, last_ping=None):
         self.DB = db
         self.ID = id
         self.Owner = owner
@@ -316,7 +321,9 @@ class DBProject(DBObject, HasLogRecord):
         self.HandleCounts = None
         self.EndTimestamp = end_timestamp
         self.Query = query
-        self.WorkerTimeout = worker_timeout
+        self.WorkerTimeout = to_timedelta(worker_timeout)
+        self.IdleTimeout = to_timedelta(idle_timeout)
+        self.LastPing = last_ping
         
     def pk(self):
         return (self.ID,)
@@ -348,7 +355,9 @@ class DBProject(DBObject, HasLogRecord):
             ended_timestamp = None if self.EndTimestamp is None else self.EndTimestamp.timestamp(),
             active = self.is_active(),
             query = self.Query,
-            worker_timeout = self.WorkerTimeout
+            worker_timeout = self.WorkerTimeout.total_seconds(),
+            idle_timeout = self.IdleTimeout.total_seconds(),
+            last_ping = None if self.LastPing is None else self.LastPing.timestamp()
         )
         if with_handles or with_replicas:
             out["file_handles"] = [h.as_jsonable(with_replicas=with_replicas) for h in self.handles()]
@@ -359,17 +368,19 @@ class DBProject(DBObject, HasLogRecord):
         return json.dumps(self.Attributes, indent=4)
         
     @staticmethod
-    def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None):
+    def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None):
         if isinstance(owner, DBUser):
             owner = owner.Username
         c = db.cursor()
         try:
             c.execute("begin")
             c.execute("""
-                insert into projects(owner, state, retry_count, attributes, query, worker_timeout)
-                    values(%s, %s, %s, %s, %s, %s)
+                insert into projects(owner, state, retry_count, attributes, query, worker_timeout, idle_timeout)
+                    values(%s, %s, %s, %s, %s, %s, %s)
                     returning id
-            """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query, worker_timeout))
+            """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query, 
+                        to_timedelta(worker_timeout), to_timedelta(idle_timeout))
+            )
             id = c.fetchone()[0]
             db.commit()
         except:
@@ -691,6 +702,55 @@ class DBProject(DBObject, HasLogRecord):
     def files_log(self):
         return DBFile.log_records_for_project(self.DB, self.ID)
         
+    def ping(self):
+        c = db.cursor()
+        p_table = self.Table
+        c.execute(f"""\
+            update {p_table}
+                set last_ping = now()
+                where id = %s;
+            commit
+        """, (self.ID,))
+        
+    @staticmethod
+    def find_abandoned(db):
+        c = db.cursor()
+        p_table = DBProject.Table
+        hl_table = DBFileHandle.LogTable
+        c.execute(f"""\
+            select p.id, max(hl.t) as last_update
+                from {p_table} p, {hl_table} hl
+                where p.id = hl.project_id
+                    and p.state = 'active'
+                group by p.id
+                having p.idle_timeout is not null and p.idle_timeout + last_update < now()
+        """)
+        
+    @staticmethod
+    def mark_abandoned(db):
+        # assume every handle has at least one log record on creation
+        p_table = DBProject.Table
+        hl_table = DBFileHandle.LogTable
+        c = db.cursor()
+        c.execute(f"""\
+            update {p_table} p 
+                set state='abandoned'
+                where p.id in (
+                    select pp.id
+                        from {p_table} pp
+                        left outer join {hl_table} hl on (pp.id = hl.project_id)
+                        where pp.idle_timeout is not null 
+                            and pp.state = 'active'
+                            and pp.idle_timeout + pp.created_timestamp < now()
+                            and (pp.last_ping is null or pp.idle_timeout + pp.last_ping < now())
+                        group by pp.id
+                        having max(hl.t) is null or pp.idle_timeout + max(hl.t) < now()
+                )
+            """)
+        n = c.rowcount
+        c.execute("commit")
+        return n
+        
     @staticmethod
     def purge(db, retain=86400):        # 24 hours
         c = db.cursor()
@@ -726,7 +786,7 @@ class DBProject(DBObject, HasLogRecord):
     def release_timed_out_handles(self):
         if self.WorkerTimeout is None:
             return 0
-        t = datetime.now() - timedelta(seconds=self.WorkerTimeout)
+        t = datetime.now() - to_timedelta(self.WorkerTimeout)
         return DBFileHandle.release_reserved_before(self.DB, self.ID, t)
 
 class DBFile(DBObject):
@@ -1198,6 +1258,25 @@ class DBReplica(DBObject, HasLogRecord):
         ]
         if log_records:
             DBReplica.add_log_bulk(db, log_records)
+            
+    @staticmethod
+    def purge(db):
+        table = DBReplica.Table
+        h_table = DBFileHandle.Table
+        p_table = DBProject.Table
+        c = db.cursor()
+        c.execute(f"""\
+            delete from {table} r
+                where not exists (
+                    select p.* from {h_table} h, {p_table} p
+                        where r.namespace = h.namespace and r.name = h.name
+                            and h.project_id = p.id
+                            and p.state = 'active'
+                )
+        """)
+        n = c.rowcount
+        c.execute("commit")
+        return n
 
 class DBFileHandle(DBObject, HasLogRecord):
 
