@@ -8,14 +8,15 @@ from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
 class CreateCommand(CLICommand):
     
-    Opts = "q:c:l:j:A:a:t:p:"
+    Opts = "q:c:l:j:A:a:t:p:w:"
     Usage = """[options] [inline MQL query]         -- create project
 
         Use an inline query or one of the following to provide file list:
         -l (-|<flat file with file list>)               - read "namespace:name [attr=value ...]" lines from the file 
         -j (-|<JSON file with file list>)               - read JSON file with file list {"namespace":...,"name"..., "attributes":{...}}
 
-        -t <worker timeout>[s|m|h|d]                    - optional worker timeout in seconds (minutes, hours, days)
+        -w (<worker timeout>[s|m|h|d] | none)           - worker timeout in seconds (minutes, hours, days), default: 12 hours
+        -t (<idle timeout>[s|m|h|d] | none)             - worker timeout in seconds (minutes, hours, days), default: 72 hours
 
         -q <file with MQL query>                        - read MQL query from file instead
         -c <name>[,<name>...]                           - copy metadata attributes from the query results, 
@@ -100,18 +101,31 @@ class CreateCommand(CLICommand):
                     namespace, name = did.split(":", 1)
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
                     
-        worker_timeout = opts.get("-t")
+        worker_timeout = opts.get("-w")
         if worker_timeout is not None:
             mult = 1
             if worker_timeout[-1].lower() in "smhd":
                 worker_timeout, unit = worker_timeout[:-1], worker_timeout[-1].lower()
                 mult = {'s':1, 'm':60, 'h':3600, 'd':24*3600}[unit]
             worker_timeout = float(worker_timeout)*mult
+        else:
+            worker_timeout = 12*3600
+
+        idle_timeout = opts.get("-t")
+        if idle_timeout is not None:
+            mult = 1
+            if idle_timeout[-1].lower() in "smhd":
+                idle_timeout, unit = idle_timeout[:-1], idle_timeout[-1].lower()
+                mult = {'s':1, 'm':60, 'h':3600, 'd':24*3600}[unit]
+            idle_timeout = float(idle_timeout)*mult
+        else:
+            idle_timeout = 72*3600
 
         #print("files:", files)
         #print("calling API.client.create_project...")
         #print("")
-        info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query, worker_timeout=worker_timeout)
+        info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query, 
+                    worker_timeout=worker_timeout, idle_timeout=idle_timeout)
         printout = opts.get("-p", "id")
         if printout == "json":
             print(pretty_json(info))

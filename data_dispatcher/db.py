@@ -293,7 +293,24 @@ class HasLogRecord(object):
         c = self.DB.cursor()
         c.execute(sql)
         return (DBLogRecord(type, t, message) for type, t, message in cursor_iterator(c))
-
+        
+    def last_log_record(self, type=None):
+        parent_pk_columns = self.LogIDColumns
+        c = self.DB.cursor()
+        pk_wheres = " and ".join([f"({c} = %s)" for c in parent_pk_columns])
+        c.execute(f"""
+            select type, t, data from {self.LogTable}
+                where {pk_wheres}
+                    and (%s is null or type = %s)
+                order by t desc
+                limit 1
+        """, tuple(self.pk()) + (type, type)
+        )
+        tup = c.fetchone()
+        if tup:
+            return DBLogRecord(*tup)
+        else:
+            return None
 
 class DBProject(DBObject, HasLogRecord):
     
@@ -389,7 +406,24 @@ class DBProject(DBObject, HasLogRecord):
             
         project = DBProject.get(db, id)
         return project
-        
+
+    def ping(self):
+        c = self.DB.cursor()
+        table = self.Table
+        columns = self.columns(as_text=True)
+        c.execute("""
+            begin;
+            update {table}
+                set last_ping = now()
+                where id = %s
+                returning last_ping
+        """, (self.ID,))
+        tup = c.fetchone()
+        if tup is not None:
+            self.LastPing = tup[0]
+        c.execute("commit")
+        return self.LastPing
+
     def handle_states(self):
         return {(h.Namespace, h.Name): h.Availability if h.State == "initial" else h.State 
                 for h in self.handles(reload=True, with_availability=True)}
@@ -584,7 +618,7 @@ class DBProject(DBObject, HasLogRecord):
 
     def handle(self, namespace, name):
         return DBFileHandle.get(self.DB, self.ID, namespace, name)
-
+        
     def add_files(self, files_descs):
         # files_descs is list of disctionaries: [{"namespace":..., "name":...}, ...]
         files_descs = list(files_descs)     # make sure it's not a generator
