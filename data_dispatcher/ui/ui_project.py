@@ -221,6 +221,24 @@ class RestartCommand(CLICommand):
             
             handle_states = {s:True for s in handle_states}
             client.restart_handles(project_id, **handle_states)
+            
+class PingCommand(CLICommand):
+    
+    Usage = """[-j] <project id>    -- keep the project from being marked abandoned
+        -j                                              - print project info as JSON
+    """
+    Opts = "j"
+    MinArgs = 1
+
+    def __call__(self, command, client, opts, args):
+        project_id = args[0]
+        info = client.ping_project(project_id)
+        if info is None:
+            print("Project not found")
+            sys.exit(1)
+        if "-j" in opts:
+            print(json.dumps(info))
+        
 
 class ShowCommand(CLICommand):
     
@@ -354,6 +372,7 @@ ProjectCLI = CLI(
     "copy",     CopyCommand(),
     "show",     ShowCommand(),
     "list",     ListCommand(),
+    "ping",     PingCommand(),
     "cancel",   CancelCommand(),
     "delete",   DeleteCommand(),
     "restart",  RestartCommand()

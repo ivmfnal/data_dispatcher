@@ -91,6 +91,22 @@ class DBObject(object):
         pk_values = {column:value for column, value in zip(self.PK, self.pk())}
         return self._delete(cursor=None, do_commit=True, **pk_values)
     
+def transactioned(method):
+    def decorated(first, *params, transaction=None, **args):
+
+        if transaction is not None:
+            return method(first, *params, transaction=transaction, **args)
+
+        if isinstance(first, DBObject):
+            transaction = first.DB.transaction()
+        else:
+            transaction = first.transaction()       # static method
+
+        with transaction:
+            return method(first, *params, transaction=transaction, **args)
+
+    return decorated
+
 class DBManyToMany(object):
     
     def __init__(self, db, table, src_fk_values, dst_fk_columns, payload_columns, dst_class):
@@ -102,7 +118,8 @@ class DBManyToMany(object):
         self.DstTable = dst_class.Table
         self.DstPKColumns = self.DstTable.PK
 
-    def add(self, dst_pk_values, payload, cursor=None, do_commit=True):
+    @transactioned
+    def add(self, dst_pk_values, payload, transaction=None):
         assert len(dst_pk_values) == len(self.DstFKColumns)
         
         payload_cols_vals = list(payload.items())
@@ -112,17 +129,10 @@ class DBManyToMany(object):
         cols = ",".join(self.SrcFKColumns + self.DstFKColumns + payload_cols)
         vals = ",".join([f"'{v}'" for v in self.SrcFKValues + dst_pk_values + payload_vals])
         
-        if cursor is None: cursor = self.DB.cursor()
-        try:
-            cursor.execute(f"""
+        transaction.execute(f"""
                 insert into {self.Table}({cols}) values({vals})
                     on conflict({fk_cols}) do nothing
             """)
-            if do_commit:
-                cursor.execute("commit")
-        except:
-            cursor.execute(rollback)
-            raise
         return self
 
     def list(self, cursor=None):
@@ -211,14 +221,14 @@ class HasLogRecord(object):
     #   LogIDColumns    - list of columns in the log table identifying the parent
     #
 
-    def add_log(self, type, data=None, **kwargs):
+    @transactioned
+    def add_log(self, type, data=None, transaction=None, **kwargs):
         #print("add_log:", type, data, kwargs)
-        c = self.DB.cursor()
         data = (data or {}).copy()
         data.update(kwargs)
         parent_pk_columns = ",".join(self.LogIDColumns)
         parent_pk_values = ",".join([f"'{v}'" for v in self.pk()])
-        c.execute(f"""
+        transaction.execute(f"""
             begin;
             insert into {self.LogTable}({parent_pk_columns}, type, data)
                 values({parent_pk_values}, %s, %s);
@@ -372,8 +382,8 @@ class DBProject(DBObject, HasLogRecord):
             ended_timestamp = None if self.EndTimestamp is None else self.EndTimestamp.timestamp(),
             active = self.is_active(),
             query = self.Query,
-            worker_timeout = self.WorkerTimeout.total_seconds(),
-            idle_timeout = self.IdleTimeout.total_seconds(),
+            worker_timeout = None if self.WorkerTimeout is None else self.WorkerTimeout.total_seconds(),
+            idle_timeout = None if self.IdleTimeout is None else self.IdleTimeout.total_seconds(),
             last_ping = None if self.LastPing is None else self.LastPing.timestamp()
         )
         if with_handles or with_replicas:
@@ -385,7 +395,7 @@ class DBProject(DBObject, HasLogRecord):
         return json.dumps(self.Attributes, indent=4)
         
     @staticmethod
-    def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None):
+    def create_notxn(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None):
         if isinstance(owner, DBUser):
             owner = owner.Username
         c = db.cursor()
@@ -407,12 +417,11 @@ class DBProject(DBObject, HasLogRecord):
         project = DBProject.get(db, id)
         return project
 
-    def ping(self):
-        c = self.DB.cursor()
+    @transactioned
+    def refresh(self, transaction=None):
         table = self.Table
         columns = self.columns(as_text=True)
-        c.execute("""
-            begin;
+        transaction.execute("""
             update {table}
                 set last_ping = now()
                 where id = %s
@@ -421,12 +430,29 @@ class DBProject(DBObject, HasLogRecord):
         tup = c.fetchone()
         if tup is not None:
             self.LastPing = tup[0]
-        c.execute("commit")
         return self.LastPing
 
     def handle_states(self):
         return {(h.Namespace, h.Name): h.Availability if h.State == "initial" else h.State 
                 for h in self.handles(reload=True, with_availability=True)}
+
+    @staticmethod
+    @transactioned
+    def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None,
+                    transaction=None):
+        if isinstance(owner, DBUser):
+            owner = owner.Username
+
+        transaction.execute("""
+            insert into projects(owner, state, retry_count, attributes, query, worker_timeout, idle_timeout)
+                values(%s, %s, %s, %s, %s, %s, %s)
+                returning id
+        """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query, 
+                    to_timedelta(worker_timeout), to_timedelta(idle_timeout))
+        )
+        id = transaction.fetchone()[0]
+        project = DBProject.get(db, id)
+        return project
 
     @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
@@ -556,7 +582,7 @@ class DBProject(DBObject, HasLogRecord):
             for tup in cursor_iterator(c):
                 yield DBProject.from_tuple(db, tup)
 
-    def save(self):
+    def save_old(self):
         c = self.DB.cursor()
         try:
             c.execute("begin")
@@ -568,6 +594,13 @@ class DBProject(DBObject, HasLogRecord):
         except:
             self.DB.rollback()
             raise
+
+    @transactioned
+    def save(self, transaction=None):
+        transaction.execute("""
+            update projects set state=%s, end_timestamp=%s
+                where id=%s
+        """, (self.State, self.EndTimestamp, self.ID))
 
     def cancel(self):
         self.State = "cancelled"
@@ -627,16 +660,17 @@ class DBProject(DBObject, HasLogRecord):
         
     def files(self):
         return DBFile.list(self.DB, self.ID)
-        
-    def release_handle(self, namespace, name, failed, retry):
+    
+    @transactioned
+    def release_handle(self, namespace, name, failed, retry, transaction=None):
         handle = self.handle(namespace, name)
         if handle is None:
             return None
 
         if failed:
-            handle.failed(retry)
+            handle.failed(retry, transaction=transaction)
         else:
-            handle.done()
+            handle.done(transaction=transaction)
 
         if not self.is_active(reload=True) and self.State == "active":
             failed_handles = [h.did() for h in self.handles() if h.State == "failed"]
@@ -648,11 +682,11 @@ class DBProject(DBObject, HasLogRecord):
                 state = "done"
                 data = {}
 
-            self.add_log("state", event="release", state=state)
+            self.add_log("state", event="release", state=state, transaction=transaction)
 
             self.State = state
             self.EndTimestamp = datetime.now(timezone.utc)
-            self.save()
+            self.save(transaction=transaction)
         return handle
         
     def is_active(self, reload=False):
@@ -736,16 +770,6 @@ class DBProject(DBObject, HasLogRecord):
     def files_log(self):
         return DBFile.log_records_for_project(self.DB, self.ID)
         
-    def ping(self):
-        c = db.cursor()
-        p_table = self.Table
-        c.execute(f"""\
-            update {p_table}
-                set last_ping = now()
-                where id = %s;
-            commit
-        """, (self.ID,))
-        
     @staticmethod
     def find_abandoned(db):
         c = db.cursor()
@@ -786,7 +810,7 @@ class DBProject(DBObject, HasLogRecord):
         return n
         
     @staticmethod
-    def purge(db, retain=86400):        # 24 hours
+    def purge_old(db, retain=86400):        # 24 hours
         c = db.cursor()
         table = DBProject.Table
         t_retain = datetime.now(timezone.utc) - timedelta(seconds=retain)
@@ -805,6 +829,20 @@ class DBProject(DBObject, HasLogRecord):
             c.execute("rollback")
             raise
         return deleted
+
+    @transactioned
+    @staticmethod
+    def purge(db, retain=86400, transaction=None):        # 24 hours
+        table = DBProject.Table
+        t_retain = datetime.now(timezone.utc) - timedelta(seconds=retain)
+        deleted = 0
+        transaction.execute(f"""
+                delete from {table}
+                    where state in ('done', 'failed', 'cancelled')
+                        and end_timestamp is not null
+                        and end_timestamp < %s
+            """, (t_retain,))
+        return transaction.rowcount
 
     def replicas_logs(self):
         log_records = DBReplica.log_records_for_dids([(h.Namespace, h.Name) for h in self.handles()])
@@ -867,7 +905,7 @@ class DBFile(DBObject):
         return self.replicas().get(rse)
         
     @staticmethod
-    def create(db, namespace, name, error_if_exists=False):
+    def create_old(db, namespace, name, error_if_exists=False):
         c = self.DB.cursor()
         try:
             c.execute("begin")
@@ -878,31 +916,32 @@ class DBFile(DBObject):
             c.execute("rollback")
             raise
 
+    @transactioned
     @staticmethod
-    def create_many(db, descs):
+    def create(db, namespace, name, transaction=None, error_if_exists=False):
+        conflict = "on conflict (namespace, name) do nothing" if not error_if_exists else ""
+        transaction.execute(f"insert into files(namespace, name) values(%s, %s) {conflict}; commit" % (namespace, name))
+        return DBFile.get(db, namespace, name)
+
+    @transactioned
+    @staticmethod
+    def create_many(db, descs, transaction=None):
         #
         # descs: [{"namespace":..., "name":..., ...}]
         #
         csv = [f"%s\t%s" % (item["namespace"], item["name"]) for item in descs]
         data = io.StringIO("\n".join(csv))
         table = DBFile.Table
-        c = db.cursor()
-        try:
-            t = int(time.time()*1000)
-            temp_table = f"files_temp_{t}"
-            c.execute("begin")
-            c.execute(f"create temp table {temp_table} (namespace text, name text)")
-            c.copy_from(data, temp_table)
-            c.execute(f"""
-                insert into {table}(namespace, name)
-                    select namespace, name from {temp_table}
-                    on conflict(namespace, name) do nothing;
-                drop table {temp_table};
-                commit
-                """)
-        except Exception as e:
-            c.execute("rollback")
-            raise
+        t = int(time.time()*1000)
+        temp_table = f"files_temp_{t}"
+        transaction.execute(f"create temp table {temp_table} (namespace text, name text)")
+        transaction.copy_from(data, temp_table)
+        transaction.execute(f"""
+            insert into {table}(namespace, name)
+                select namespace, name from {temp_table}
+                on conflict(namespace, name) do nothing;
+            drop table {temp_table};
+            """)
             
     @staticmethod
     def list(db, project=None):
@@ -1675,54 +1714,47 @@ class DBFileHandle(DBObject, HasLogRecord):
     def project(self):
         return DBProject.get(self.DB, self.ProjectID)
 
+    @transactioned
     @staticmethod
-    def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
+    def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site, transaction=None):
         h_table = DBFileHandle.Table
         rep_table = DBReplica.Table
         rse_table = DBRSE.Table
-        c = db.cursor()
-        c.execute("begin")
         reserved = None
-        try:
-            sql = f"""
-                    select h.namespace, h.name
-                        from {h_table} h
-                        where 
-                            h.project_id = %s and h.state = %s
-                            and exists (
-                                select * from {rep_table} r, {rse_table} s
-                                    where h.namespace = r.namespace and h.name = r.name 
-                                        and r.rse = s.name
-                                        and s.is_enabled and s.is_available
-                            )
-                        order by attempts
-                        limit 1
-                        for update skip locked
-            """
-            #print("sql:\n", sql)
-            c.execute(sql, (project_id, DBFileHandle.ReadyState))
-            tup = c.fetchone()
-            if tup:
-                namespace, name = tup
-                c.execute(f"""
-                    update {h_table}
-                        set state = %s, worker_id = %s, attempts = attempts + 1, reserved_since = now()
-                        where project_id = %s and namespace = %s and name = %s
-                """, (DBFileHandle.ReservedState, worker_id, project_id, namespace, name))
-                reserved = (namespace, name)
-            c.execute("""
-                commit
-            """)
-        except:
-            c.execute("rollback")
-            raise
+        sql = f"""
+                select h.namespace, h.name
+                    from {h_table} h
+                    where 
+                        h.project_id = %s and h.state = %s
+                        and exists (
+                            select * from {rep_table} r, {rse_table} s
+                                where h.namespace = r.namespace and h.name = r.name 
+                                    and r.rse = s.name
+                                    and s.is_enabled and s.is_available
+                        )
+                    order by attempts
+                    limit 1
+                    for update skip locked
+        """
+        #print("sql:\n", sql)
+        transaction.execute(sql, (project_id, DBFileHandle.ReadyState))
+        tup = transaction.fetchone()
+        if tup:
+            namespace, name = tup
+            transaction.execute(f"""
+                update {h_table}
+                    set state = %s, worker_id = %s, attempts = attempts + 1, reserved_since = now()
+                    where project_id = %s and namespace = %s and name = %s
+            """, (DBFileHandle.ReservedState, worker_id, project_id, namespace, name))
+            reserved = (namespace, name)
 
         if reserved:
             namespace, name = reserved
             reserved = DBFileHandle.get(db, project_id, namespace, name)
             reserved.record_state_change(DBFileHandle.ReservedState, 
                 event = "reserve",
-                old_state = DBFileHandle.ReadyState, worker=worker_id)
+                old_state = DBFileHandle.ReadyState, worker=worker_id,
+                transaction=transaction)
         return reserved
         
     def ____reserve(self, worker_id):
@@ -1788,15 +1820,16 @@ class DBFileHandle(DBObject, HasLogRecord):
     def is_reserved(self):
         return self.State == self.ReservedState
 
-    def record_state_change(self, new_state, old_state=None, **log_data):
+    @transactioned
+    def record_state_change(self, new_state, old_state=None, transaction=None, **log_data):
         assert new_state in self.States, "Unknown file handle state: "+new_state
         old_state = old_state or self.State
         self.State = new_state
         data = log_data.copy()
         data["state"] = new_state
         data["old_state"] = old_state
-        self.add_log("state", data)
-            
+        self.add_log("state", data, transaction=transaction)
+
     def set_state(self, state, **log_data):
         assert state in self.States, "Unknown file handle state: "+new_state
         if self.State != state:

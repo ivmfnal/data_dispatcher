@@ -1,5 +1,6 @@
 import requests, uuid, json, urllib.parse, os, time, random
 from metacat.auth import TokenLib, TokenAuthClientMixin
+from metacat.common import HTTPClient
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -44,8 +45,8 @@ def to_str(x):
     if isinstance(x, bytes):
         x = x.decode("utf-8")
     return x
-    
-class HTTPClient(object):
+
+class ___sHTTPClient(object):
 
     InitialRetry = 1.0
     RetryExponent = 1.5
@@ -105,7 +106,7 @@ class HTTPClient(object):
         return data
 
     def post(self, uri_suffix, data):
-        #print("post_json: data:", type(data), data)
+        #print("post: data:", type(data), data)
         
         if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
         
@@ -113,7 +114,7 @@ class HTTPClient(object):
             data = json.dumps(data)
         else:
             data = to_bytes(data)
-        #print("post_json: data:", type(data), data)
+        #print("post: data:", type(data), data)
             
         url = "%s%s" % (self.ServerURL, uri_suffix)
         
@@ -277,7 +278,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Returns:
             (dict) with the project information or None if the project is not found
         """
-        return self.get(f"ping_project?project_id={project_id}")
+        return self.get(f"ping_project?project_id={project_id}", none_if_not_found=True)
         
     def copy_project(self, project_id, common_attributes={}, project_attributes={}, worker_timeout=None):
         """Creates new project
