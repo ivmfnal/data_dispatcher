@@ -20,7 +20,6 @@
     <tr>    <th>Created</th>            <td>{{project.CreatedTimestamp|as_dt_utc}}</td> </tr>
     <tr>    <th>Worker timeout</th>     <td>{{project.WorkerTimeout|none_as_blank}}</td></tr>
     <tr>    <th>Idle timeout</th>       <td>{{project.IdleTimeout|none_as_blank}}</td></tr>
-    <tr>    <th>Last ping</th>          <td>{{project.LastPing|as_dt_utc}}</td></tr>
     <tr>    <th>Ended</th>              
             <td>{% if not project.EndTimestamp is none %}
                     {{project.EndTimestamp|as_dt_utc}}

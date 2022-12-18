@@ -774,7 +774,7 @@ class DBProject(DBObject, HasLogRecord):
                 update {p_table} p 
                     set state='abandoned'
                     where p.id = any(%s)
-                """, project_ids)
+                """, (project_ids,))
             n = transaction.rowcount
         return n
         
