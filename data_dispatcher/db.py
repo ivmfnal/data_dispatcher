@@ -20,7 +20,28 @@ def to_timedelta(t):
     if isinstance(t, (int, float)):
         t = timedelta(seconds=t)
     return t
-    
+
+def transactioned(method):
+    def decorated(first, *params, transaction=None, **args):
+
+        if transaction is not None:
+            return method(first, *params, transaction=transaction, **args)
+
+        if isinstance(first, DBObject):
+            transaction = first.DB.transaction()
+        elif isinstance(first, type):
+            # class method -- DB is second argument
+            transaction = params[0].DB.transaction()
+        else:
+            transaction = first.transaction()       # static method
+
+        with transaction:
+            return method(first, *params, transaction=transaction, **args)
+
+    return decorated
+
+
+
 class DBObject(object):
     
     @classmethod
@@ -91,22 +112,6 @@ class DBObject(object):
         pk_values = {column:value for column, value in zip(self.PK, self.pk())}
         return self._delete(cursor=None, do_commit=True, **pk_values)
     
-def transactioned(method):
-    def decorated(first, *params, transaction=None, **args):
-
-        if transaction is not None:
-            return method(first, *params, transaction=transaction, **args)
-
-        if isinstance(first, DBObject):
-            transaction = first.DB.transaction()
-        else:
-            transaction = first.transaction()       # static method
-
-        with transaction:
-            return method(first, *params, transaction=transaction, **args)
-
-    return decorated
-
 class DBManyToMany(object):
     
     def __init__(self, db, table, src_fk_values, dst_fk_columns, payload_columns, dst_class):
@@ -1231,7 +1236,7 @@ class DBFileHandle(DBObject, HasLogRecord):
 
     def replicas(self):
         if self.Replicas is None:
-            self.Replicas = self.get_file().replicas()
+            self.Replicas = {r.RSE:r for r in DBReplica.list(self.DB, self.Namespace, self.Name)}
         return self.Replicas
         
     def state(self):
