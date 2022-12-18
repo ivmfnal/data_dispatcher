@@ -328,7 +328,7 @@ class DBProject(DBObject, HasLogRecord):
     States = ["active", "failed", "done", "cancelled", "held", "abandoned"]
     EndStates = ["failed", "done", "cancelled"]
     
-    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query,worker_timeout,idle_timeout,last_ping".split(",")
+    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query,worker_timeout,idle_timeout".split(",")
     Table = "projects"
     PK = ["id"]
     
@@ -336,7 +336,7 @@ class DBProject(DBObject, HasLogRecord):
     LogTable = "project_log"
     
     def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, 
-                retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None, last_ping=None):
+                retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None):
         self.DB = db
         self.ID = id
         self.Owner = owner
@@ -350,7 +350,6 @@ class DBProject(DBObject, HasLogRecord):
         self.Query = query
         self.WorkerTimeout = to_timedelta(worker_timeout)
         self.IdleTimeout = to_timedelta(idle_timeout)
-        self.LastPing = last_ping
         
     def pk(self):
         return (self.ID,)
@@ -383,8 +382,7 @@ class DBProject(DBObject, HasLogRecord):
             active = self.is_active(),
             query = self.Query,
             worker_timeout = None if self.WorkerTimeout is None else self.WorkerTimeout.total_seconds(),
-            idle_timeout = None if self.IdleTimeout is None else self.IdleTimeout.total_seconds(),
-            last_ping = None if self.LastPing is None else self.LastPing.timestamp()
+            idle_timeout = None if self.IdleTimeout is None else self.IdleTimeout.total_seconds()
         )
         if with_handles or with_replicas:
             out["file_handles"] = [h.as_jsonable(with_replicas=with_replicas) for h in self.handles()]
@@ -416,21 +414,6 @@ class DBProject(DBObject, HasLogRecord):
             
         project = DBProject.get(db, id)
         return project
-
-    @transactioned
-    def refresh(self, transaction=None):
-        table = self.Table
-        columns = self.columns(as_text=True)
-        transaction.execute("""
-            update {table}
-                set last_ping = now()
-                where id = %s
-                returning last_ping
-        """, (self.ID,))
-        tup = c.fetchone()
-        if tup is not None:
-            self.LastPing = tup[0]
-        return self.LastPing
 
     def handle_states(self):
         return {(h.Namespace, h.Name): h.Availability if h.State == "initial" else h.State 
@@ -800,7 +783,6 @@ class DBProject(DBObject, HasLogRecord):
                         where pp.idle_timeout is not null 
                             and pp.state = 'active'
                             and pp.idle_timeout + pp.created_timestamp < now()
-                            and (pp.last_ping is null or pp.idle_timeout + pp.last_ping < now())
                         group by pp.id
                         having max(hl.t) is null or pp.idle_timeout + max(hl.t) < now()
                 )
@@ -916,15 +898,15 @@ class DBFile(DBObject):
             c.execute("rollback")
             raise
 
-    @transactioned
     @staticmethod
+    @transactioned
     def create(db, namespace, name, transaction=None, error_if_exists=False):
         conflict = "on conflict (namespace, name) do nothing" if not error_if_exists else ""
         transaction.execute(f"insert into files(namespace, name) values(%s, %s) {conflict}; commit" % (namespace, name))
         return DBFile.get(db, namespace, name)
 
-    @transactioned
     @staticmethod
+    @transactioned
     def create_many(db, descs, transaction=None):
         #
         # descs: [{"namespace":..., "name":..., ...}]
@@ -1714,8 +1696,8 @@ class DBFileHandle(DBObject, HasLogRecord):
     def project(self):
         return DBProject.get(self.DB, self.ProjectID)
 
-    @transactioned
     @staticmethod
+    @transactioned
     def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site, transaction=None):
         h_table = DBFileHandle.Table
         rep_table = DBReplica.Table

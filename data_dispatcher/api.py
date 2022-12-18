@@ -268,18 +268,6 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             )
         )
         
-    def ping_project(self, project_id):
-        """
-        Ping project to keep it from being marked as abandoned
-
-        Args:
-            project_id (int): id of the project to copy
-        
-        Returns:
-            (dict) with the project information or None if the project is not found
-        """
-        return self.get(f"ping_project?project_id={project_id}", none_if_not_found=True)
-        
     def copy_project(self, project_id, common_attributes={}, project_attributes={}, worker_timeout=None):
         """Creates new project
         
