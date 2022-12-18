@@ -671,7 +671,7 @@ class ProjectMaster(PyThread, Logged):
             # check if new project
             project = DBProject.get(self.DB, project_id)
             if project is not None:
-                files = ({"namespace":f.Namespace, "name":f.Name} for f in project.files())
+                files = ({"namespace":f.Namespace, "name":f.Name} for f in project.handles(with_replicas=False))
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.RucioClient)
                 SyncScheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", t0=time.time(), interval=ProjectMonitor.SyncInterval)
