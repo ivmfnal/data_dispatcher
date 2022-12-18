@@ -1464,10 +1464,13 @@ class DBFileHandle(DBObject, HasLogRecord):
         if with_replicas:
             if with_availability:
                 sql  = f"""\
-                    select {h_columns}, {r_columns}, rses.is_available
+                    select {h_columns}, {r_columns}, r.rse_available
                         from file_handles h
-                            left outer join replicas r on (r.name = h.name and r.namespace = h.namespace)
-                            inner join rses on (rses.name = r.rse)
+                            left outer join 
+                            (   select rr.* rr, rs.is_available as rse_available
+                                    from replicas rr, rses rs
+                                        where rr.rse = rs.name
+                            ) r on (r.name = h.name and r.namespace = h.namespace)
                         where (%(project_id)s is null or h.project_id = %(project_id)s)
                         order by h.project_id, h.namespace, h.name
                     """
