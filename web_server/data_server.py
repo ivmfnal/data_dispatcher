@@ -85,23 +85,6 @@ class Handler(BaseHandler):
         self.App.project_created(project.ID)
         return json.dumps(project.as_jsonable(with_handles=True)), "text/json"
         
-    def ping_project(self, request, relpath, project_id=None, **args):
-        if not project_id:
-            return 400, "Project id must be specified"
-        user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
-        
-        project_id = int(project_id)
-        db = self.App.db()
-        project = DBProject.get(db, project_id)
-        if project is None:
-            return 404, "Project not found"
-        if user.Username != project.Owner and not user.is_admin():
-            return 403, "Forbidden"
-        project.refresh()
-        return json.dumps(project.as_jsonable()), "text/json"
-        
     def delete_project(self, request, relpath, project_id=None, **args):
         if not project_id:
             return 400, "Project id must be specified"

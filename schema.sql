@@ -18,7 +18,6 @@ create table projects
     retry_count         int,
     worker_timeout      interval,
     idle_timeout        interval,
-    last_ping           timestamp with time zone,
     attributes          jsonb  default '{}'::jsonb,
     query               text
 );

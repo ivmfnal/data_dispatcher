@@ -644,7 +644,7 @@ class ProjectMaster(PyThread, Logged):
         try:
             #nprojects = DBProject.purge(self.DB)       never purge projects
             nabandoned = DBProject.mark_abandoned(self.DB)
-            nreplicas = DBeplica.purge(self.DB)
+            nreplicas = DBReplica.purge(self.DB)
             nfiles = DBFile.purge(self.DB)
             self.log("abandoned projects:", nabandoned, ", purged files:", nfiles, ", purged replicas:", nreplicas)
         except:

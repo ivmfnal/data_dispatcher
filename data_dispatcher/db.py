@@ -754,41 +754,41 @@ class DBProject(DBObject, HasLogRecord):
         return DBFile.log_records_for_project(self.DB, self.ID)
         
     @staticmethod
-    def find_abandoned(db):
-        c = db.cursor()
+    @transactioned
+    def find_abandoned(db, transaction=None):
         p_table = DBProject.Table
         hl_table = DBFileHandle.LogTable
-        c.execute(f"""\
-            select p.id, max(hl.t) as last_update
-                from {p_table} p, {hl_table} hl
-                where p.id = hl.project_id
+        pl_table = DBProject.LogTable
+        columns = DBProject.columns("p", as_text=True)
+        transaction.execute(f"""\
+            select {columns}, max(hl.t), max(pl.t)
+                from {p_table} p
+                    left outer join {hl_table} hl on (hl.project_id=p.id)
+                    left outer join {pl_table} pl on (pl.project_id=p.id)
+                where p.idle_timeout is not null
                     and p.state = 'active'
+                    and p.created_timestamp + p.idle_timeout < now()
                 group by p.id
-                having p.idle_timeout is not null and p.idle_timeout + last_update < now()
+                having (max(hl.t) is null or max(hl.t) + last_update < now())
+                    or (max(pl.t) is null or max(pl.t) + last_update < now())
         """)
-        
+        return (DBProject.from_tuple(db, tup[:-2]) for tup in transaction.cursor_iterator())
+
     @staticmethod
-    def mark_abandoned(db):
+    @transactioned
+    def mark_abandoned(db, transaction=None):
         # assume every handle has at least one log record on creation
-        p_table = DBProject.Table
-        hl_table = DBFileHandle.LogTable
-        c = db.cursor()
-        c.execute(f"""\
-            update {p_table} p 
-                set state='abandoned'
-                where p.id in (
-                    select pp.id
-                        from {p_table} pp
-                        left outer join {hl_table} hl on (pp.id = hl.project_id)
-                        where pp.idle_timeout is not null 
-                            and pp.state = 'active'
-                            and pp.idle_timeout + pp.created_timestamp < now()
-                        group by pp.id
-                        having max(hl.t) is null or pp.idle_timeout + max(hl.t) < now()
-                )
-            """)
-        n = c.rowcount
-        c.execute("commit")
+        project_ids = [p.ID for DBProject.find_abandoned(db, transaction=transaction)]
+        n = 0
+        if project_ids:
+            p_table = DBProject.Table
+            r_table = DBReplica.Table
+            transaction.execute(f"""\
+                update {p_table} p 
+                    set state='abandoned'
+                    where p.id = any(%s)
+                """, project_ids)
+            n = transaction.rowcount
         return n
         
     @staticmethod
@@ -1315,23 +1315,32 @@ class DBReplica(DBObject, HasLogRecord):
             DBReplica.add_log_bulk(db, log_records)
             
     @staticmethod
-    def purge(db):
+    @transactioned
+    def purge(db, transaction=None):
         table = DBReplica.Table
         h_table = DBFileHandle.Table
         p_table = DBProject.Table
-        c = db.cursor()
-        c.execute(f"""\
+        transaction.execute(f"""\
             delete from {table} r
                 where not exists (
-                    select p.* from {h_table} h, {p_table} p
+                    select * from {h_table} h
                         where r.namespace = h.namespace and r.name = h.name
-                            and h.project_id = p.id
-                            and p.state = 'active'
                 )
         """)
-        n = c.rowcount
-        c.execute("commit")
-        return n
+        norphans = transaction.rowcount
+        
+        transaction.execute(f"""\
+            delete from {table} r
+                where not exists (
+                    select pp.id
+                        from {p_table} pp, {h_table} hh
+                        where p.state = 'active'
+                            and p.id = hh.project_id
+                            and hh.namespace = r.namespace and hh.name = r.name
+                )
+        """)
+        nabandoned = transaction.rowcount
+        return nabandoned + norphans
 
 class DBFileHandle(DBObject, HasLogRecord):
 
