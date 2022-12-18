@@ -254,7 +254,8 @@ class HasLogRecord(object):
             yield DBLogRecord(type, t, data, id_columns)
 
     @classmethod
-    def add_log_bulk(cls, db, records):
+    @transactioned
+    def add_log_bulk(cls, db, records, transaction=None):
         """
             records: list of tuples:
                 (
@@ -275,14 +276,7 @@ class HasLogRecord(object):
 
             table = cls.LogTable
             columns = cls.LogIDColumns + ["type", "data"]
-            c = db.cursor()
-            try:
-                c.execute("begin")
-                c.copy_from(csv, table, columns=columns)
-                c.execute("commit")
-            except:
-                c.execute("rollback")
-                raise
+            transaction.copy_from(csv, table, columns=columns)
 
     def get_log(self, type=None, since=None, reversed=False):
         parent_pk_columns = self.LogIDColumns
@@ -638,12 +632,8 @@ class DBProject(DBObject, HasLogRecord):
     def add_files(self, files_descs):
         # files_descs is list of disctionaries: [{"namespace":..., "name":...}, ...]
         files_descs = list(files_descs)     # make sure it's not a generator
-        DBFile.create_many(self.DB, files_descs)
         DBFileHandle.create_many(self.DB, self.ID, files_descs)
         
-    def files(self):
-        return DBFile.list(self.DB, self.ID)
-    
     @transactioned
     def release_handle(self, namespace, name, failed, retry, transaction=None):
         handle = self.handle(namespace, name)
@@ -750,9 +740,6 @@ class DBProject(DBObject, HasLogRecord):
             log_record.Name = log_record.IDColumns["name"]
             yield log_record
 
-    def files_log(self):
-        return DBFile.log_records_for_project(self.DB, self.ID)
-        
     @staticmethod
     @transactioned
     def find_abandoned(db, transaction=None):
@@ -843,150 +830,6 @@ class DBProject(DBObject, HasLogRecord):
         t = datetime.now() - to_timedelta(self.WorkerTimeout)
         return DBFileHandle.release_reserved_before(self.DB, self.ID, t)
 
-class DBFile(DBObject):
-    
-    Columns = ["namespace", "name"]
-    PK = ["namespace", "name"]
-    Table = "files"
-    
-    #LogIDColumns = ["namespace", "name"]
-    #LogTable = "file_log"
-    
-    def __init__(self, db, namespace, name):
-        self.DB = db
-        self.Namespace = namespace
-        self.Name = name
-        self.Replicas = None	# {rse -> DBReplica}
-    
-    def id(self):
-        return f"{self.Namespace}:{self.Name}"
-
-    def did(self):
-        return f"{self.Namespace}:{self.Name}"
-
-    def as_jsonable(self, with_replicas=False):
-        out = dict(
-            namespace   = self.Namespace,
-            name        = self.Name,
-        )
-        if with_replicas:
-            out["replicas"] = {rse: r.as_jsonable() for rse, r in self.replicas().items()}
-        return out
-        
-    def replicas(self):
-        if self.Replicas is None:
-            self.Replicas = {r.RSE: r for r in DBReplica.list(self.DB, self.Namespace, self.Name)}
-        return self.Replicas
-
-    def create_replica(self, rse, path, url, preference=0, available=False):
-        replica = DBReplica.create(self.DB, self.Namespace, self.Name, rse, path, url, preference=preference, available=available)
-        self.Replicas = None	# force re-load from the DB
-        return replica
-
-    def get_replica(self, rse):
-        return self.replicas().get(rse)
-        
-    @staticmethod
-    def create_old(db, namespace, name, error_if_exists=False):
-        c = self.DB.cursor()
-        try:
-            c.execute("begin")
-            conflict = "on conflict (namespace, name) do nothing" if not error_if_exists else ""
-            c.execute(f"insert into files(namespace, name) values(%s, %s) {conflict}; commit" % (namespace, name))
-            return DBFile.get(db, namespace, name)
-        except:
-            c.execute("rollback")
-            raise
-
-    @staticmethod
-    @transactioned
-    def create(db, namespace, name, transaction=None, error_if_exists=False):
-        conflict = "on conflict (namespace, name) do nothing" if not error_if_exists else ""
-        transaction.execute(f"insert into files(namespace, name) values(%s, %s) {conflict}; commit" % (namespace, name))
-        return DBFile.get(db, namespace, name)
-
-    @staticmethod
-    @transactioned
-    def create_many(db, descs, transaction=None):
-        #
-        # descs: [{"namespace":..., "name":..., ...}]
-        #
-        csv = [f"%s\t%s" % (item["namespace"], item["name"]) for item in descs]
-        data = io.StringIO("\n".join(csv))
-        table = DBFile.Table
-        t = int(time.time()*1000)
-        temp_table = f"files_temp_{t}"
-        transaction.execute(f"create temp table {temp_table} (namespace text, name text)")
-        transaction.copy_from(data, temp_table)
-        transaction.execute(f"""
-            insert into {table}(namespace, name)
-                select namespace, name from {temp_table}
-                on conflict(namespace, name) do nothing;
-            drop table {temp_table};
-            """)
-            
-    @staticmethod
-    def list(db, project=None):
-        project_id = project.ID if isinstance(project, DBProject) else project
-        c = db.cursor()
-        table = DBFile.Table
-        columns = DBFile.columns(as_text=True)
-        files_columns = DBFile.columns(table, as_text=True)
-        project_where = f" id = {project_id} " if project is not None else " true "
-        c.execute(f"""
-            select {columns}
-                from {table}, projects
-                where {project_where}
-        """)
-        return (DBFile.from_tuple(db, tup) for tup in cursor_iterator(c))
-
-    @staticmethod
-    def delete_many(db, specs):
-        csv = [f"{namespace}:{name}"  for namespace, name in specs]
-        data = io.StringIO("\n".join(csv))
-        
-        c = db.cursor()
-        try:
-            t = int(time.time()*1000)
-            temp_table = f"files_temp_{t}"
-            c.execute("begin")
-            c.execute(f"creare temp table {temp_table} (spec text)")
-            c.copy_from(data, temp_table)
-            c.execute(f"""
-                delete from {self.Table} 
-                    where namespace || ':' || name in 
-                        (select * from {temp_table});
-                    on conflict (namespace, name) do nothing;       -- in case some other projects still use it
-                drop table {temp_table};
-                commit
-                """)
-        except Exception as e:
-            c.execute("rollback")
-            raise
-            
-    @staticmethod
-    def purge(db):
-        c = db.cursor()
-        table = DBFile.Table
-        deleted = 0
-        c.execute("begin")
-        try:
-            c.execute(f"""
-                delete from {table} f
-                    where not exists (
-                            select * from file_handles h 
-                                where f.namespace = h.namespace
-                                    and f.name = h.name
-                    )
-            """)
-            deleted = c.rowcount
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
-        return deleted
-
-
 class DBReplica(DBObject, HasLogRecord):
     Table = "replicas"
     ViewWithRSEStatus = "replicas_with_rse_availability"
@@ -1063,23 +906,18 @@ class DBReplica(DBObject, HasLogRecord):
         return out
 
     @staticmethod
-    def create(db, namespace, name, rse, path, url, preference=0, available=False, error_if_exists=False):
-        c = db.cursor()
+    @transactioned
+    def create(db, namespace, name, rse, path, url, preference=0, available=False, error_if_exists=False, transaction=None):
         table = DBReplica.Table
-        try:
-            c.execute("begin")
-            c.execute(f"""
-                insert into {table}(namespace, name, rse, path, url, preference, available)
-                    values(%s, %s, %s, %s, %s, %s, %s)
-                    on conflict(namespace, name, rse)
-                        do update set path=%s, url=%s, preference=%s, available=%s;
-                commit
-            """, (namespace, name, rse, path, url, preference, available,
-                    path, url, preference, available)
-            )
-        except:
-            c.execute("rollback")
-            raise
+        transaction.execute(f"""
+            insert into {table}(namespace, name, rse, path, url, preference, available)
+                values(%s, %s, %s, %s, %s, %s, %s)
+                on conflict(namespace, name, rse)
+                    do update set path=%s, url=%s, preference=%s, available=%s;
+            commit
+        """, (namespace, name, rse, path, url, preference, available,
+                path, url, preference, available)
+        )
         
         replica = DBReplica.get(db, namespace, name, rse)
         replica.add_log("state", {
@@ -1391,11 +1229,6 @@ class DBFileHandle(DBObject, HasLogRecord):
     def did(self):
         return f"{self.Namespace}:{self.Name}"
 
-    def get_file(self):
-        if self.File is None:
-            self.File = DBFile.get(self.DB, self.Namespace, self.Name)
-        return self.File
-        
     def replicas(self):
         if self.Replicas is None:
             self.Replicas = self.get_file().replicas()
@@ -1468,7 +1301,8 @@ class DBFileHandle(DBObject, HasLogRecord):
         return handle
 
     @staticmethod
-    def create_many(db, project_id, files):
+    @transactioned
+    def create_many(db, project_id, files, transaction=None):
         #
         # files: [ {"name":"...", "namespace":"...", "attributes":{}}]
         #
@@ -1481,15 +1315,8 @@ class DBFileHandle(DBObject, HasLogRecord):
             attributes = info.get("attributes") or {}
             files_csv.append("%s\t%s\t%s\t%s\t%s" % (project_id, namespace, name, DBFileHandle.InitialState, json.dumps(attributes)))
         
-        c = db.cursor()
-        try:
-            c.execute("begin")
-            c.copy_from(io.StringIO("\n".join(files_csv)), "file_handles", 
+        transaction.copy_from(io.StringIO("\n".join(files_csv)), "file_handles", 
                     columns = ["project_id", "namespace", "name", "state", "attributes"])
-            c.execute("commit")
-        except Exception as e:
-            c.execute("rollback")
-            raise
             
         log_records = [
             (
@@ -1502,7 +1329,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             )
             for f in files 
         ]            
-        DBFileHandle.add_log_bulk(db, log_records)
+        DBFileHandle.add_log_bulk(db, log_records, transaction=transaction)
 
     @staticmethod
     def get_bulk(db, project_id, dids, with_replicas=False):

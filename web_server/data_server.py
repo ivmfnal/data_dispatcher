@@ -199,49 +199,6 @@ class Handler(BaseHandler):
         project.cancel()
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
-    def replica_available(self, request, relpath, namespace=None, name=None, rse=None, **args):
-        user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
-        data = request.json
-        db = self.App.db()
-        if rse is None:             return 400, "RSE must be specified"
-        if None in (namespace, name):       return 400, "File namespace and name must be specified"
-        preference = data.get("preference", 0)
-        url = data.get("url")
-        path = data.get("path")
-        f = DBFile.get(db, namespace, name)
-        if not f:
-            return 404, "File not found"
-        f.create_replica(rse, path, url, preference=preference, available=True)
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-            
-    def replica_unavailable(self, request, relpath, namespace=None, name=None, rse=None, **args):
-        user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
-        db = self.App.db()
-        if rse is None:             return 400, "RSE must be specified"
-        if None in (namespace, name):       return 400, "File namespace and name must be specified"
-        f = DBFile.get(db, namespace, name)
-        if not f:
-            return 404, "File not found"
-        r = f.get_replica(rse)
-        if r is None:
-            return 404, "Replica not found"
-        r.Available = False
-        r.save()
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-        
-    def file(self, request, relpath, namespace=None, name=None, **args):
-        if None in (namespace, name):
-            return 400, "File namespace and name must be specified"
-        db = self.App.db()
-        f = DBFile.get(db, namespace, name)
-        if f is None:
-            return 404, "File not found"
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-
     def next_file(self, request, relpath, project_id=None, worker_id=None, cpu_site=None, **args):
         #print("next_file...")
         user, error = self.authenticated_user()

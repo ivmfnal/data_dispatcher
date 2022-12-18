@@ -645,7 +645,6 @@ class ProjectMaster(PyThread, Logged):
             #nprojects = DBProject.purge(self.DB)       never purge projects
             nabandoned = DBProject.mark_abandoned(self.DB)
             nreplicas = DBReplica.purge(self.DB)
-            nfiles = DBFile.purge(self.DB)
             self.log("abandoned projects:", nabandoned, ", purged files:", nfiles, ", purged replicas:", nreplicas)
         except:
             self.error("Exception in ProjectMaster.clean():", "\n" + traceback.format_exc())
@@ -742,15 +741,11 @@ class RucioListener(PyThread, Logged):
         rse = replica_info["dst-rse"]
         if rse not in self.RSEConfig:
             return
-        f = DBFile.get(self.DB, scope, name)
-        if f is None:
-            return
         url = self.RSEConfig.fix_url(rse, replica_info["dst-url"])
         path = self.RSEConfig.url_to_path(rse, url)
-        preference = self.RSEConfig.preference(rse)
         available = not self.RSEConfig.is_tape(rse)         # do not trust dst-type from Rucio
-        f.create_replica(rse, path, url, preference, available)
-        #self.log("added replica:", scope, name, rse, url, path)
+        DBReplica.create(self.DB, scope, name, rse, path, url, available=available)
+        self.debug("added replica:", scope, name, rse, url, path)
 
     def run(self):
         broker_addr = (self.MessageBrokerConfig["host"], self.MessageBrokerConfig["port"])
