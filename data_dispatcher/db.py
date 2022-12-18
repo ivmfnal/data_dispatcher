@@ -765,7 +765,7 @@ class DBProject(DBObject, HasLogRecord):
     @transactioned
     def mark_abandoned(db, transaction=None):
         # assume every handle has at least one log record on creation
-        project_ids = [p.ID for DBProject.find_abandoned(db, transaction=transaction)]
+        project_ids = [p.ID for p in DBProject.find_abandoned(db, transaction=transaction)]
         n = 0
         if project_ids:
             p_table = DBProject.Table
