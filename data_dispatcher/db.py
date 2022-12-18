@@ -1172,8 +1172,8 @@ class DBReplica(DBObject, HasLogRecord):
                 where not exists (
                     select pp.id
                         from {p_table} pp, {h_table} hh
-                        where p.state = 'active'
-                            and p.id = hh.project_id
+                        where pp.state = 'active'
+                            and pp.id = hh.project_id
                             and hh.namespace = r.namespace and hh.name = r.name
                 )
         """)
