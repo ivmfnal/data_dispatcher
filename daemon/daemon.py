@@ -1,5 +1,5 @@
 import stompy, pprint, urllib, requests, json, time, traceback, textwrap
-from data_dispatcher.db import DBFile, DBProject, DBReplica, DBRSE, DBProximityMap
+from data_dispatcher.db import DBProject, DBReplica, DBRSE, DBProximityMap
 from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task
 from data_dispatcher.logs import Logged
 from daemon_web_server import DaemonWebServer

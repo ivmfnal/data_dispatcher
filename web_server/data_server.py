@@ -1,6 +1,6 @@
 from webpie import WPApp, WPHandler
 from wsdbtools import ConnectionPool
-from data_dispatcher.db import DBProject, DBFileHandle, DBFile, DBRSE, DBProximityMap
+from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap
 from data_dispatcher.logs import Logged, init_logger
 from data_dispatcher import Version
 from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, \
