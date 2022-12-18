@@ -5,7 +5,7 @@ from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
 import urllib, os, yaml, time, json
 from urllib.parse import quote, unquote, unquote_plus
 from wsdbtools import ConnectionPool
-from datetime import timezone
+from datetime import timezone, datetime
 
 class ___UsersHandler(BaseHandler):
 
@@ -101,12 +101,45 @@ class ___UsersHandler(BaseHandler):
                     
 class ProjectsHandler(BaseHandler):
     
+    def parse_datetime(self, dt):
+        dt = (dt or "").strip()
+        if not dt:  return None
+        utc = dt.endswith("UTC")
+        if utc:
+            dt = dt[:-3].strip()
+        date, time = None, None
+        if " " in dt:
+            dt = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+        else:
+            dt = datetime.strptime(dt, "%Y-%m-%d")
+        dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    
     def projects(self, request, relpath, message="", page=0, page_size=100, **args):
         db = self.App.db()
         page = int(page)
         page_size = int(page_size)
         istart = page*page_size
-        projects = list(DBProject.list(db, with_handle_counts=False, state='active'))
+        form_dict = request.POST
+        search_user = form_dict.get("search_user", "").strip() or None
+        search_created_after = self.parse_datetime(form_dict.get("search_created_after"))
+        search_created_before = self.parse_datetime(form_dict.get("search_created_before"))
+        search_active_only = form_dict.get("search_active_only", "off") == "on"
+        
+        state = "active" if search_active_only else None
+
+        do_search = request.POST.get("action") == "Search"
+
+        if do_search:
+            projects = DBProject.list(db, with_handle_counts=False, state=state, owner=search_user)
+            projects = [p for p in projects 
+                            if
+                                (search_created_after is None or p.CreatedTimestamp >= search_created_after) and
+                                (search_created_before is None or p.CreatedTimestamp <= search_created_before)
+                            ]
+        else:
+            projects = list(DBProject.list(db, with_handle_counts=False, state='active'))
+            
         nprojects = len(projects)
         npages = (nprojects + page_size - 1)//page_size
         projects = projects[istart:istart + page_size]
@@ -115,6 +148,8 @@ class ProjectsHandler(BaseHandler):
                 ntotal = sum(project.HandleCounts.values())
                 project._HandleShares = {state:float(count)/ntotal for state, count in project.HandleCounts.items()}
         if message:   message = urllib.parse.unquote_plus(message)
+
+        current_user, auth_error = self.authenticated_user()
         
         npages = (nprojects + page_size - 1)//page_size
         last_page = npages - 1
@@ -134,9 +169,19 @@ class ProjectsHandler(BaseHandler):
             if page != last_page: index_page_links[last_page] = last_page_link
             index_page_links[page] = None
             index_page_links = sorted(index_page_links.items())
+            
+        
+        if not do_search:
+            search_user = current_user.Username if current_user else ""
+            search_active_only = True
         
         return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates,
-                    page_index = index_page_links, message=message)
+                    page_index = index_page_links, message=message,
+                    search_user = search_user,
+                    search_created_before = None if search_created_before is None else search_created_before.strftime("%Y-%m-%d %H:%M:%S"),
+                    search_created_after = None if search_created_after is None else search_created_after.strftime("%Y-%m-%d %H:%M:%S"),
+                    search_active_only = search_active_only
+                    )
         
     def handle_logs(self, request, relpath, project_id=None):
         db = self.App.db()
@@ -216,9 +261,8 @@ class ProjectsHandler(BaseHandler):
             message = urllib.parse.quote_plus(f"Project {project_id} not found")
             self.redirect(f"./projects?message={message}")
 
-        all_handles = sorted(project.handles(with_replicas=True), 
+        all_handles = sorted(project.handles(with_replicas=True, reload=True), 
                 key=lambda h: (state_order.get(h.State, 100), h.Attempts, h.Namespace, h.Name))
-
         nhandles = len(all_handles)
         istart = page*page_size
         t0 = time.time()

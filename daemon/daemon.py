@@ -663,6 +663,7 @@ class ProjectMaster(PyThread, Logged):
                         self.add_project(project_id)
             except Exception as e:
                 self.error("exception in run():\n", traceback.format_exc())
+            self.debug("sleeping...")
             self.sleep(self.RunInterval)
 
     @synchronized

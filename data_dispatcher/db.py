@@ -623,9 +623,11 @@ class DBProject(DBObject, HasLogRecord):
 
     def handles(self, state=None, with_replicas=True, with_availability=True, reload=False):
         if reload or self.Handles is None:
+            #print("DBProject.handles(): getting handles with_replicas:", with_replicas, " with_availability:", with_availability)
             self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, 
                 with_replicas=with_replicas, with_availability=with_availability)
             )
+            #print("received", len(self.Handles))
         return (h for h in self.Handles if (state is None or h.State == state))
 
     def get_handles(self, dids, with_replicas=True):
@@ -1356,7 +1358,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                         order by h.namespace, h.name
             """
             #print("DBFileHandle.list: sql:", sql)
-            print(c.mogrify(sql, (project_id, namespace_names)).decode("utf-8"))
+            #print(c.mogrify(sql, (project_id, namespace_names)).decode("utf-8"))
             c.execute(sql, (project_id, namespace_names))
             h = None
             for tup in cursor_iterator(c):
@@ -1490,7 +1492,9 @@ class DBFileHandle(DBObject, HasLogRecord):
                 h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
                 if h is None:
                     h = DBFileHandle.from_tuple(db, h_tuple)
+                    h.Replicas = {}
                 h1 = DBFileHandle.from_tuple(db, h_tuple)
+                h1.Replicas = {}
                 if h1.Namespace != h.Namespace or h1.Name != h.Name:
                     if h:   
                         #print("    yield:", h)
@@ -1508,7 +1512,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                     if with_availability and rse_available and r.Available:
                         h.Availability = "available"
             if h is not None:
-                #print("    yield:", h)
+                #print("    yield:", h, len(h.Replicas))
                 yield h
         else:
             sql = f"""

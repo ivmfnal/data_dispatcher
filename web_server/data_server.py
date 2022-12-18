@@ -38,14 +38,14 @@ class Handler(BaseHandler):
             return "OK"
     
     def create_project(self, request, relpath, **args):
-        print("create_project()...")
+        #print("create_project()...")
         user, error = self.authenticated_user()
-        print("authenticated user:", user)
+        #print("authenticated user:", user)
         if user is None:
             print("returning 401", error)
             return 401, error
         specs = json.loads(to_str(request.body))
-        print("specs:", specs)
+        #print("specs:", specs)
         files = specs["files"]
         query = specs.get("query")
         worker_timeout = specs.get("worker_timeout")
@@ -55,9 +55,9 @@ class Handler(BaseHandler):
         if idle_timeout is not None:
             idle_timeout = timedelta(seconds=idle_timeout)
         attributes = specs.get("project_attributes", {})
-        print("opening DB...")
+        #print("opening DB...")
         db = self.App.db()
-        print("calling DBProject.create()...")
+        #print("calling DBProject.create()...")
         project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout,
                         idle_timeout=idle_timeout)
         files_converted = []

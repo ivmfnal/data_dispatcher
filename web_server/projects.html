@@ -82,6 +82,27 @@
     </p>
 {% endif %}
 
+<h3>Search</h3>
+<form action="" method="POST">
+    <table class="form">
+        <tr>
+            <th>User</th><td><input type="text" name="search_user" value="{{search_user or ''}}"/></td>
+        </tr>
+        <tr>
+            <th>Created after (UTC)</th><td><input type="text" name="search_created_after" value="{{search_created_after or ''}}"/> <span style="color:gray">YYYY-MM-DD[ HH:MM:SS]</span></td>
+        </tr>
+        <tr>
+            <th>Created before (UTC)</th><td><input type="text" name="search_created_before" value="{{search_created_before or ''}}"/> <span style="color:gray">YYYY-MM-DD[ HH:MM:SS]</span></td>
+        </tr>
+        <tr>
+            <th>Active projects only</th><td><input type="checkbox" name="search_active_only" {% if search_active_only %} checked="checked" {% endif %}/></td>
+        </tr>
+        <tr>
+            <td></td><td><input type="submit" name="action" value="Search"/></td>
+        </tr>
+    </table>
+</form>
+    
 <table class="data">
 	<tr>
 		<th rowspan=2>Project ID</th>
