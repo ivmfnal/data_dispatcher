@@ -31,7 +31,7 @@ def transactioned(method):
             transaction = first.DB.transaction()
         elif isinstance(first, type):
             # class method -- DB is second argument
-            transaction = params[0].DB.transaction()
+            transaction = params[0].transaction()
         else:
             transaction = first.transaction()       # static method
 
