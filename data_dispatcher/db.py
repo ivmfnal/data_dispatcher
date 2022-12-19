@@ -1524,23 +1524,17 @@ class DBFileHandle(DBObject, HasLogRecord):
             """
             c.execute(sql)
             yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
-                    
-    def save(self):
-        c = self.DB.cursor()
-        try:
-            c.execute("begin")
-            c.execute("""
+    
+    
+    @transactioned
+    def save(self, transaction=None):
+        transaction.execute("""
                 update file_handles set state=%s, worker_id=%s, attempts=%s, attributes=%s
                     where project_id=%s and namespace=%s and name=%s
             """, (self.State, self.WorkerID, self.Attempts, json.dumps(self.Attributes), 
                     self.ProjectID, self.Namespace, self.Name
                 )            
             )
-            #print("DBFileHandle.save: attempts:", self.Attempts)
-            self.DB.commit()
-        except Exception as e:
-            c.execute("rollback")
-            raise
             
     @property
     def project(self):

@@ -289,7 +289,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         else:
             return None
     
-    def list_projects(self, owner=None, state=None, not_state=None, attributes=None, with_files=True, with_replicas=False):
+    def list_projects(self, owner=None, state="active", not_state=None, attributes=None, with_files=True, with_replicas=False):
         """Lists existing projects
         
         Keyword Arguments:

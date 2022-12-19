@@ -311,12 +311,12 @@ class ListCommand(CLICommand):
     Usage = """[options]                            -- list projects
             -j                                          - JSON output
             -u <owner>                                  - filter by owner
-            -s <state>                                  - filter by state
+            -s <state>                                  - filter by state, default: active projects only
             -a "name=value name=value ..."              - filter by attributes
     """
 
     def __call__(self, command, client, opts, args):
-        state = opts.get("-s")
+        state = opts.get("-s", "active")
         attributes = None
         if "-a" in opts:
             attributes = parse_attrs(opts["-a"])
