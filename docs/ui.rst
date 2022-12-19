@@ -164,6 +164,13 @@ availability information for the project. Use ``-t`` option to specify this time
 
 Default value for the project idle timeout is 72 hours.
 
+To reactivate an abandoned project, use ``activate`` subcommand:
+
+    .. code-block:: shell
+    
+        $ dd project activate <project id>
+
+
 Project and project file attributes
 ...................................
 
