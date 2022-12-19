@@ -102,6 +102,23 @@ class Handler(BaseHandler):
         project.delete()
         return "null", "text/json"
         
+    def activate_project(self, request, relpath, project_id=None, **args):
+        if not project_id:
+            return 400, "Project id must be specified"
+        user, error = self.authenticated_user()
+        if user is None:
+            return 401, error
+           
+        project_id = int(project_id)
+        db = self.App.db()
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        if user.Username != project.Owner and not user.is_admin():
+            return 403, "Forbidden"
+        project.activate()
+        return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
+
     def restart_project(self, request, relpath, project_id=None, force="no", failed_only="yes", **args):
         force = force == "yes"
         failed_only = failed_only == "yes"
@@ -122,7 +139,6 @@ class Handler(BaseHandler):
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
     def restart_handles(self, request, relpath, **args):
-
         params = json.loads(to_str(request.body))
         project_id = params.get("project_id")
         if not project_id:

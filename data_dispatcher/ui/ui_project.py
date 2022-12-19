@@ -222,6 +222,18 @@ class RestartCommand(CLICommand):
             handle_states = {s:True for s in handle_states}
             client.restart_handles(project_id, **handle_states)
             
+class ActivateCommand(CLICommand):
+
+    MinArgs = 1
+    Opts = "j"
+    Usage = """[-j] <project_id>                    -- re-activate an abandoned project
+        -j                                              - print project info as JSON
+    """
+
+    def __call__(self, command, client, opts, args):
+        project_id = int(args[0])
+        client.activate_project(project_id)
+            
 class ShowCommand(CLICommand):
     
     Opts = "arjf:"
@@ -355,8 +367,9 @@ ProjectCLI = CLI(
     "copy",     CopyCommand(),
     "show",     ShowCommand(),
     "list",     ListCommand(),
+    "restart",  RestartCommand(),
+    "activate", ActivateCommand(),
     "cancel",   CancelCommand(),
-    "delete",   DeleteCommand(),
-    "restart",  RestartCommand()
+    "delete",   DeleteCommand()
 )
 

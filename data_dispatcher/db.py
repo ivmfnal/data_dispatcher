@@ -589,7 +589,12 @@ class DBProject(DBObject, HasLogRecord):
         self.EndTimestamp = datetime.now(timezone.utc)
         self.save()
         self.add_log("state", event="cancel", state="cancelled")
-        
+
+    def activate(self):
+        self.State = "active"
+        self.save()
+        self.add_log("state", event="activate", state="active")
+
     def restart_handles(self, states=None, dids=None):
         if states:
             states = set(states)

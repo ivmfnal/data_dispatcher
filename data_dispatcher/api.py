@@ -201,8 +201,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 }
             )
         )
-    
-        
+
     def restart_handles(self, project_id, done=False, failed=False, reserved=False, all=False, handles=[]):
         """Restart processing of project file handles
         
@@ -246,6 +245,12 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
         return self.get(f"cancel_project?project_id={project_id}")
         
+    def activate_project(self, project_id):
+        """
+        Resets the state of an abandoned project back to "active"
+        """
+        return self.get(f"activate_project?project_id={project_id}")
+
     def get_project(self, project_id, with_files=True, with_replicas=False):
         """Gets information about the project
         
