@@ -124,6 +124,9 @@ class CreateCommand(CLICommand):
         #print("files:", files)
         #print("calling API.client.create_project...")
         #print("")
+        if not files:
+            print("Empty file list", file=sys.stderr)
+            sys.exit(1)
         info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query, 
                     worker_timeout=worker_timeout, idle_timeout=idle_timeout)
         printout = opts.get("-p", "id")

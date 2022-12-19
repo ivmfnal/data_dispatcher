@@ -584,18 +584,21 @@ class DBProject(DBObject, HasLogRecord):
                 where id=%s
         """, (self.State, self.EndTimestamp, self.ID))
 
-    def cancel(self):
+    @transactioned
+    def cancel(self, transaction=None):
         self.State = "cancelled"
         self.EndTimestamp = datetime.now(timezone.utc)
-        self.save()
-        self.add_log("state", event="cancel", state="cancelled")
+        self.save(transaction=transaction)
+        self.add_log("state", event="cancel", state="cancelled", transaction=transaction)
 
-    def activate(self):
+    @transactioned
+    def activate(self, transaction=None):
         self.State = "active"
-        self.save()
-        self.add_log("state", event="activate", state="active")
+        self.save(transaction=transaction)
+        self.add_log("state", event="activate", state="active", transaction=transaction)
 
-    def restart_handles(self, states=None, dids=None):
+    @transactioned
+    def restart_handles(self, states=None, dids=None, transaction=None):
         if states:
             states = set(states)
         if dids:
@@ -621,10 +624,10 @@ class DBProject(DBObject, HasLogRecord):
             self.State = "active"
             log_data["state"] = self.State = "active"
             self.EndTimestamp = None
-            self.save()
-            self.add_log("state", log_data)
+            self.save(transaction=transaction)
+            self.add_log("state", log_data, transaction=transaction)
         else:
-            self.add_log("event", log_data)
+            self.add_log("event", log_data, transaction=transaction)
 
     def handles(self, state=None, with_replicas=True, with_availability=True, reload=False):
         if reload or self.Handles is None:
@@ -649,7 +652,7 @@ class DBProject(DBObject, HasLogRecord):
     @transactioned
     def release_handle(self, namespace, name, failed, retry, transaction=None):
         handle = self.handle(namespace, name)
-        if handle is None:
+        if handle is None or handle.State != "reserved":
             return None
 
         if failed:
@@ -657,7 +660,7 @@ class DBProject(DBObject, HasLogRecord):
         else:
             handle.done(transaction=transaction)
 
-        if not self.is_active(reload=True) and self.State == "active":
+        if self.State == "active" and not self.is_active(reload=True):
             failed_handles = [h.did() for h in self.handles() if h.State == "failed"]
 
             if failed_handles:

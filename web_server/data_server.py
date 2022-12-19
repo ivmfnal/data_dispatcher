@@ -229,6 +229,10 @@ class Handler(BaseHandler):
             return 404, "Project not found"
         if not user.is_admin() and user.Username != project.Owner:
             return 403, "Not authorized"
+        if project.State == "abandoned":
+            project.activate()
+        elif project.State != "active":
+            return 400, f"Inactive project. State={project.State}"
         handle, reason, retry = project.reserve_handle(worker_id, self.App.proximity_map(), cpu_site)
         if handle is None:
             out = {
@@ -270,8 +274,9 @@ class Handler(BaseHandler):
         
         handle = project.release_handle(namespace, name, failed, retry)
         if handle is None:
-            return 404, "Handle not found"
-        
+            return 404, "Handle not found or was not reserved"
+        if project.State == "abandoned":
+            project.activate()
         return json.dumps(handle.as_jsonable()), "text/json"
 
     def ______reset_file(self, request, relpath, handle_id=None, force="no", **args):
