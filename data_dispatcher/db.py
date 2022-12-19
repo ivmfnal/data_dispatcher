@@ -1620,11 +1620,11 @@ class DBFileHandle(DBObject, HasLogRecord):
     #
 
     @staticmethod
-    def release_reserved_before(db, project_id, reserved_before):
+    @transactioned
+    def release_reserved_before(db, project_id, reserved_before, transaction=None):
         if reserved_before is None:
             return 0
-        c = db.cursor()
-        c.execute("""
+        transaction.execute("""
             update file_handles h_new
                 set state = %s, worker_id = null
                 from file_handles h_old                     -- this is the trick to get the worker_id before it is updated to null
@@ -1639,8 +1639,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                 dict(event = "worker_timeout", state=DBFileHandle.ReadyState, worker=worker_id)
             ) for namespace, name, worker_id in c.fetchall()
         ]
-        c.execute("commit")
-        DBFileHandle.add_log_bulk(db, log_records)
+        DBFileHandle.add_log_bulk(db, log_records, transaction=transaction)
         return len(log_records)
 
     def is_available(self):
@@ -1662,27 +1661,31 @@ class DBFileHandle(DBObject, HasLogRecord):
         data["old_state"] = old_state
         self.add_log("state", data, transaction=transaction)
 
-    def set_state(self, state, **log_data):
+    @transactioned
+    def set_state(self, state, transaction=None, **log_data):
         assert state in self.States, "Unknown file handle state: "+new_state
         if self.State != state:
-            self.record_state_change(state, **log_data)
+            self.record_state_change(state, transaction=transaction, **log_data)
             self.State = state
             
-    def done(self):
-        self.set_state("done", event="done", worker=self.WorkerID)
+    @transactioned
+    def done(self, transaction=None):
+        self.set_state("done", event="done", worker=self.WorkerID, transaction=transaction)
         self.WorkerID = None
         self.save()
 
-    def failed(self, retry=True):
+    @transactioned
+    def failed(self, retry=True, transaction=None):
         state = self.ReadyState if retry else "failed"
-        self.set_state(state, event="failed", worker=self.WorkerID)
+        self.set_state(state, event="failed", worker=self.WorkerID, transaction=transaction)
         self.WorkerID = None
-        self.save()
+        self.save(transaction=transaction)
         
-    def reset(self):
-        self.set_state(self.ReadyState, event="reset", worker=self.WorkerID)
+    @transactioned
+    def reset(self, transaction=None):
+        self.set_state(self.ReadyState, event="reset", worker=self.WorkerID, transaction=transaction)
         self.WorkerID = None
-        self.save()
+        self.save(transaction=transaction)
 
 
 class DBRSE(DBObject):
