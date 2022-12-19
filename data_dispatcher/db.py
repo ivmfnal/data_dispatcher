@@ -1469,7 +1469,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                     select {h_columns}, {r_columns}, r.rse_available
                         from file_handles h
                             left outer join 
-                            (   select rr.* rr, rs.is_available as rse_available
+                            (   select rr.*, rs.is_available as rse_available
                                     from replicas rr, rses rs
                                         where rr.rse = rs.name
                             ) r on (r.name = h.name and r.namespace = h.namespace)
@@ -1490,24 +1490,18 @@ class DBFileHandle(DBObject, HasLogRecord):
             for tup in cursor_iterator(c):
                 #print("DBFileHandle.list:", tup)
                 h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
-                if h is None:
-                    h = DBFileHandle.from_tuple(db, h_tuple)
-                    h.Replicas = {}
+                #print("Handle.list: tuples:", h_tuple, r_tuple, rse_available)
                 h1 = DBFileHandle.from_tuple(db, h_tuple)
-                h1.Replicas = {}
-                if h1.Namespace != h.Namespace or h1.Name != h.Name:
-                    if h:   
-                        #print("    yield:", h)
+                if h is None or h1.Namespace != h.Namespace or h1.Name != h.Name:
+                    if h is not None:
                         yield h
                     h = h1
-                    if with_availability:
-                        h.Availability = "not found"
+                    h.Replicas = {}
+                    h.Availability = "not found" if with_availability else None
                 if r_tuple[0] is not None:
-                    if h.Availability == "not found":
-                        h.Availability = "found"
+                    h.Availability = "found"
                     r = DBReplica.from_tuple(db, r_tuple)
-                    r.RSEAvailable = rse_available
-                    h.Replicas = h.Replicas or {}
+                    r.RSEAvailable = bool(rse_available)
                     h.Replicas[r.RSE] = r
                     if with_availability and rse_available and r.Available:
                         h.Availability = "available"

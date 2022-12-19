@@ -387,7 +387,7 @@ class ListReplicasTask(Task):
 
 class ProjectMonitor(Primitive, Logged):
     
-    UpdateInterval = 30         # replica availability update interval
+    UpdateInterval = 120         # replica availability update interval
     NewRequestInterval = 5      # interval to check on new pin request
     SyncInterval = 600          # interval to re-sync replicas with Rucio
     
