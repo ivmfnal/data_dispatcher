@@ -170,6 +170,7 @@ To reactivate an abandoned project, use ``activate`` subcommand:
     
         $ dd project activate <project id>
 
+An abandoned project will also be re-activated if a worker releases or tries to reserve a file.
 
 Project and project file attributes
 ...................................
