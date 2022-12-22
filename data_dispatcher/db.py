@@ -11,7 +11,7 @@ def cursor_iterator(c):
 
 
 def json_literal(v):
-    if isinstance(v, str):       v = '"%s"' % (v,)
+    if isinstance(v, str):       v = '"%s"' % (v.replace("'", "''"),)
     elif isinstance(v, bool):    v = "true" if v else "false"
     elif v is None:              v = "null"
     else:   v = str(v)
@@ -439,10 +439,11 @@ class DBProject(DBObject, HasLogRecord):
 
     @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
-        wheres = ["true"]
-        if owner: wheres.append(f"p.owner='{owner}'")
-        if state: wheres.append(f"p.state='{state}'")
-        if not_state: wheres.append(f"p.state!='{not_state}'")
+        wheres = [
+            "(%(owner)s is null or p.owner=%(owner)s)",
+            "(%(state)s is null or p.state=%(state)s)",
+            "(%(not_state)s is null or p.state!=%(not_state)s)"
+        ]
         if attributes is not None:
             for name, value in attributes.items():
                 wheres.append("p.attributes @> '{\"%s\": %s}'::jsonb" % (name, json_literal(value)))
@@ -460,48 +461,6 @@ class DBProject(DBObject, HasLogRecord):
             #
             
             available_by_project = {}
-            saved = f"""
-                with 
-                    found_files as  
-                    (
-                        select distinct h.project_id, r.namespace, r.name, true as found
-                            from {rep_table} r, {h_table} h, {table} p
-                            where h.namespace = r.namespace
-                                and h.name = r.name
-                                and h.state = 'initial'
-                                and p.id = h.project_id
-                                and {p_wheres}
-                    ),
-                    available_files as 
-                    (
-                        select distinct ff.project_id, ff.namespace, ff.name, true as available
-                            from found_files ff, {rep_table} r, {rse_table} s
-                            where ff.namespace = r.namespace
-                                and ff.name = r.name
-                                and r.available
-                                and s.name = r.rse and s.is_available
-                    ),
-                    handle_states as
-                    (
-                        select h.project_id, h.namespace, h.name, 
-                                case
-                                    when af.available = true then 'available'
-                                    when ff.found = true then 'found'
-                                    else h.state
-                                end as state
-                            from {table} p, {h_table} h
-                                left outer join found_files ff on ff.namespace = h.namespace and ff.name = h.name
-                                left outer join available_files af on af.namespace = h.namespace and af.name = h.name
-                            where p.id = h.project_id
-                    )
-                    
-                select {columns}, hs.state, count(*)
-                    from handle_states hs, projects p
-                        where p.id = hs.project_id
-                        and {p_wheres}
-                    group by p.id, hs.state
-                    order by p.id, hs.state
-            """
             c.execute(f"""
                 with 
                     found_files as  
@@ -540,7 +499,7 @@ class DBProject(DBObject, HasLogRecord):
                         and {p_wheres}
                     group by p.id, hs.state
                     order by p.id, hs.state
-            """)
+            """, {"state":state, "not_state":not_state, "owner":owner})
 
             p = None
             for tup in cursor_iterator(c):
@@ -561,7 +520,7 @@ class DBProject(DBObject, HasLogRecord):
                 select {columns}
                     from {table} p
                     where {p_wheres}
-            """)
+            """, {"state":state, "not_state":not_state, "owner":owner})
             for tup in cursor_iterator(c):
                 yield DBProject.from_tuple(db, tup)
 
@@ -651,6 +610,17 @@ class DBProject(DBObject, HasLogRecord):
         DBFileHandle.create_many(self.DB, self.ID, files_descs)
         
     @transactioned
+    def reserve_handle(self, worker_id, transaction=None):
+        handle = DBFileHandle.reserve_for_worker(self.DB, self.ID, worker_id, transaction=transaction)
+        if handle is not None:
+            return handle, "ok", False
+            
+        if not self.is_active(reload=True):
+            return None, "project inactive", False
+        else:
+            return None, "retry", True
+
+    @transactioned
     def release_handle(self, namespace, name, failed, retry, transaction=None):
         handle = self.handle(namespace, name)
         if handle is None or handle.State != "reserved":
@@ -683,62 +653,6 @@ class DBProject(DBObject, HasLogRecord):
         p = self if not reload else DBProject.get(self.DB, self.ID)
         if p is None:   return False
         return p.State == "active" and not all(h.State in ("done", "failed") for h in p.handles())
-            
-    def ___reserve_handle(self, worker_id, proximity_map, cpu_site=None):
-
-        if not self.is_active(reload=True):
-            return None, "project inactive", False
-
-        handles = sorted(
-            self.handles(with_replicas=True, reload=True, state=DBFileHandle.ReadyState),
-            key = lambda h: h.Attempts
-        )
-    
-        #
-        # find the lowest attempt count among all available file handles
-        #
-        
-        handles_with_lowest_attempts = []
-        lowest_attempts = None
-
-        for h in handles:
-            if lowest_attempts is not None and h.Attempts > lowest_attempts:
-                break
-            replicas = {}
-            for r in h.replicas().values():
-                if r.is_available():
-                    rse = r.RSE
-                    proximity = proximity_map.proximity(cpu_site, rse)
-                    if proximity >= 0:
-                        r.Preference = proximity
-                        replicas[rse] = r
-
-            if replicas:
-                h.Replicas = replicas
-                lowest_attempts = h.Attempts
-                handles_with_lowest_attempts.append(h)
-
-        #
-        # reserve the most preferred handle
-        #
-
-        for h in sorted(handles_with_lowest_attempts, 
-                    key=lambda h: min(r.Preference for r in h.Replicas.values())
-                    ):
-            if h.reserve(worker_id):
-                return h, "ok", False
-
-        return None, "retry", True
-
-    def reserve_handle(self, worker_id, proximity_map, cpu_site):
-        handle = DBFileHandle.reserve_for_worker(self.DB, self.ID, worker_id, proximity_map, cpu_site)
-        if handle is not None:
-            return handle, "ok", False
-            
-        if not self.is_active(reload=True):
-            return None, "project inactive", False
-        else:
-            return None, "retry", True
 
     def file_state_counts(self):
         counts = {}
@@ -1544,7 +1458,7 @@ class DBFileHandle(DBObject, HasLogRecord):
 
     @staticmethod
     @transactioned
-    def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site, transaction=None):
+    def reserve_for_worker(db, project_id, worker_id, transaction=None):
         h_table = DBFileHandle.Table
         rep_table = DBReplica.Table
         rse_table = DBRSE.Table
@@ -1585,32 +1499,6 @@ class DBFileHandle(DBObject, HasLogRecord):
                 transaction=transaction)
         return reserved
         
-    def ____reserve(self, worker_id):
-        c = self.DB.cursor()
-        try:
-            c.execute("begin")
-            c.execute("""
-                update file_handles
-                    set state=%s, worker_id=%s, attempts = attempts+1, reserved_since = now()
-                    where namespace=%s and name=%s and project_id=%s and state = %s and worker_id is null
-                    returning attempts, worker_id;
-            """, (self.ReservedState, worker_id, self.Namespace, self.Name, self.ProjectID, self.ReadyState))
-            tup = c.fetchone()
-            if tup and tup[1] == worker_id:
-                attempts = tup[0]
-                self.WorkerID = worker_id
-                self.State = self.ReservedState
-                self.Attempts = attempts
-                c.execute("commit")
-                self.add_log("state", event="reserve", state="reserved", worker=worker_id)
-                return True
-            else:
-                c.execute("rollback")
-                return False
-        except:
-            c.execute("rollback")
-            raise
-
     #
     # workflow
     #
@@ -1799,7 +1687,7 @@ class DBProximityMap(DBObject):
         self.Defaults = defaults
         self.Overrides = overrides
         self.Default = default
-        self.Map = {}
+        self.Map = {}                   # {cpu -> {rse -> proximity}}
         if tuples is not None:
             self._load(tuples)
         else:
@@ -1808,7 +1696,7 @@ class DBProximityMap(DBObject):
         if rses is not None:
             rses = set(rses)
             for cpu, cpu_map in self.Map.items():
-                for rse in list(cpu_map.keys()):
+                for rse in list(cpu_map.keys()):        # need to convert to list because some keys may be deleted from inside the loop
                     if rse.upper() != "DEFAULT" and rse not in rses:
                         del cpu_map[rse]
 

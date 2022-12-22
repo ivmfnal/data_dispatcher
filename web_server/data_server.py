@@ -233,7 +233,7 @@ class Handler(BaseHandler):
             project.activate()
         elif project.State != "active":
             return 400, f"Inactive project. State={project.State}"
-        handle, reason, retry = project.reserve_handle(worker_id, self.App.proximity_map(), cpu_site)
+        handle, reason, retry = project.reserve_handle(worker_id)
         if handle is None:
             out = {
                 "handle": None,
@@ -241,8 +241,14 @@ class Handler(BaseHandler):
                 "retry": retry
             }
         else:
+            pmap = self.App.proximity_map()
             info = handle.as_jsonable(with_replicas=True)
             info["replicas"] = {rse:r for rse, r in info["replicas"].items() if r["available"] and r["rse_available"]}
+            for rse, r in info["replicas"].items():
+                try:    proximity = pmap.proximity(cpu_site, rse)
+                except KeyError:
+                    proximity = None
+                r["preference"] = proximity
             info["project_attributes"] = project.Attributes or {}
             out = {
                 "handle": info,
