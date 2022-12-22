@@ -402,12 +402,28 @@ class ProjectMonitor(Primitive, Logged):
         self.Master = master
         self.Scheduler = scheduler
         self.RucioClient = rucio_client
+        self.SincReplicasJonID = f"sync_{project_id}"
+        self.UpdateAvailabilityJobID = f"update_{project_id}"
+        self.CheckStateJobID = f"check_{project_id}"
+        
+    def schedule_jobs(self):
+        SyncScheduler.add(self.sync_replicas, id=self.SincReplicasJonID, t0=time.time(), interval=self.SyncInterval)
+        TaskScheduler.add(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
+            t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
+            interval=self.UpdateInterval)
+        TaskScheduler.add(self.check_project_state, id=self.CheckStateJobID, t0=time.time(), self.UpdateInterval)
+
+    def remove_jobs(self):
+        SyncScheduler.remove(self.SincReplicasJonID)
+        TaskScheduler.remove(self.UpdateAvailabilityJobID)
+        TaskScheduler.remove(self.CheckStateJobID)
 
     def remove_me(self, reason):
         self.log("remove me:", reason)
         for rse, pin_request in self.PinRequests.items():
             pin_request.delete()
             self.log("pin request for", rse, "deleted")
+        self.remove_jobs()
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
         self.log("removed:", reason)
@@ -428,6 +444,18 @@ class ProjectMonitor(Primitive, Logged):
                     #print("tape_replicas_by_rse(): Tape RSE:", rse)
                     tape_replicas_by_rse.setdefault(rse, {})[replica.did()] = replica
         return tape_replicas_by_rse
+        
+    @synchronized
+    def check_project_state(self):
+        self.debug("check_project_state...")
+        project = DBProject.get(self.DB, self.ProjectID)
+        if project is None or project.State != "active":
+            self.remove_me()
+            if project is not None:
+                self.log("project state=", project.State, "--> removed")
+            else:
+                self.log("project not found --> removed")                
+            return "stop"
 
     @synchronized
     def sync_replicas(self):
@@ -498,79 +526,6 @@ class ProjectMonitor(Primitive, Logged):
         except Exception as e:
             self.error("Error in create_pin_request:", traceback.format_exc())
             raise
-
-    PRESTAGE_LOW_WATER = 50
-    PRESTAGE_HIGH_WATER = 100
-
-    @synchronized
-    def _________prestage_replicas(self):
-        active_handles = self.active_handles()
-
-        navailable = 0
-        for h in active_handles():
-            for r in h.replicas():
-                if r.Available:
-                    navailable += 1
-        
-        if navailable < self.PRESTAGE_LOW_WATER:
-            tape_replicas = self.tape_replicas_by_rse(active_handles)
-            not_prestaged = []
-            for rse, replicas in sorted(tape_replicas.items()):
-                for did, r in sorted(replicas.items()):
-                    if not r.Available:
-                        not_prestaged.append(r)
-            n_to_prestage = min(len(not_prestaged), self.PRESTAGE_HIGH_WATER)
-            if n_to_prestage:
-                rng = random.Random(123)
-            
-                        
-        
-        self.debug("prestage_replicas(): active_handles:", None if active_handles is None else len(active_handles))
-
-        if active_handles is None:
-            self.remove_me("deleted")
-            return "stop"
-        elif not active_handles:
-            self.remove_me("done")
-            return "stop"
-
-        #
-        # Collect replica info on active replicas located in tape storages
-        #
-
-        tape_replicas_by_rse = self.tape_replicas_by_rse(active_handles)               # {rse -> {did -> path}}
-        
-        next_run = self.UpdateInterval
-
-        self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
-        for rse, replicas in tape_replicas_by_rse.items():
-            pin_request = self.PinRequests.get(rse)
-            if pin_request is None or pin_request.expired() or not pin_request.same_files(replicas):
-                self.create_pin_request(rse, replicas)
-                next_run = self.NewRequestInterval     # this is new pin request. Check it in 20 seconds
-            elif pin_request.complete():
-                self.debug("pin request COMPLETE")
-                DBReplica.update_availability_bulk(self.DB, True, rse, list(replicas.keys()))
-            elif pin_request.error():
-                self.debug("ERROR in pin request. Creating new one\n", pin_request.ErrorText)
-                self.create_pin_request(rse, replicas)
-                next_run = self.NewRequestInterval     # this is new pin request. Check it in 20 seconds
-            else:
-                poller = self.Pollers[rse]
-                dids_paths = [(did, path) for did, path in replicas.items()]
-                n = len(dids_paths)
-                self.log("sending", len(dids_paths), "dids/paths to poller for RSE", rse)
-                poller.submit(dids_paths)
-                
-        project = DBProject.get(self.DB, self.ProjectID)
-        if project is not None and project.WorkerTimeout is not None:
-            self.debug("releasing timed-out handles, timeout=", project.WorkerTimeout)
-            n = project.release_timed_out_handles()
-            if n:
-                self.log(f"released {n} timed-out handles")
-        self.debug("update_replicas_availability(): done")
-        return next_run
-
 
     @synchronized
     def update_replicas_availability(self):
@@ -675,18 +630,12 @@ class ProjectMaster(PyThread, Logged):
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.handles(with_replicas=False))
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.RucioClient)
-                SyncScheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", t0=time.time(), interval=ProjectMonitor.SyncInterval)
-                TaskScheduler.add(monitor.update_replicas_availability, id=f"update_{project_id}", 
-                    t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
-                    interval=ProjectMonitor.UpdateInterval)
-                
+                monitor.schedule_jobs()
             self.log("project added:", project_id)
 
     @synchronized
     def remove_project(self, project_id, reason):
         monitor = self.Monitors.pop(project_id, None)
-        SyncScheduler.remove(f"sync_{project_id}")
-        TaskScheduler.remove(f"update_{project_id}")
         self.log("project removed:", project_id, "  reason:", reason)
         
 
