@@ -2,7 +2,6 @@ drop table project_log;
 drop table file_handle_log;
 drop table replicas cascade;
 drop table file_handles;
-drop table files;
 drop table projects;
 drop table proximity_map;
 drop table replica_log;
@@ -16,17 +15,10 @@ create table projects
     end_timestamp       timestamp with time zone,
     state	            text,
     retry_count         int,
-    worker_timeout      int,
+    worker_timeout      interval,
+    idle_timeout        interval,
     attributes          jsonb  default '{}'::jsonb,
     query               text
-);
-
-create table files
-(
-    namespace text,
-    name text,
-    time_added  timestamp with time zone    default now(),
-    primary key(namespace, name)
 );
 
 create table rses
@@ -54,7 +46,6 @@ create table replicas
     available   boolean     default false,
     preference  int         default 0,
     primary key (namespace, name, rse),
-    foreign key (namespace, name) references files (namespace, name) on delete cascade,
     foreign key (rse) references rses (name) on delete cascade
 );
 
@@ -77,8 +68,7 @@ create table file_handles
     reserved_since  timestamp with time zone,
     attempts    int default 0,
     attributes  jsonb  default '{}'::jsonb,
-    primary key (project_id, namespace, name),
-    foreign key (namespace, name) references files (namespace, name)
+    primary key (project_id, namespace, name)
 );
 
 create unique index file_handles_project_id_filespec on file_handles(project_id, namespace, name);

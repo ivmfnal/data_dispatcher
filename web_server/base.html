@@ -310,7 +310,7 @@
     	    <td><a class=button href="{{GLOBAL_AppRootPath}}/P/projects">Projects</a></td>
     	    <td><a class=button href="{{GLOBAL_AppRootPath}}/R/index">RSEs</a></td>
     	    <td><a class=button href="{{GLOBAL_AppRootPath}}/R/proximity_map">CPU/RSE proximity map</a></td>
-            <td><span style="color:#AAA; padding-right: 10px"><i>All times in UTC</i></span></td>
+            <td><span style="color:#AAA; padding-right: 10px"><i>All times in UTC:&nbsp;<span id="current_utc"></span></i></span></td>
             <td style="width:100%"></td>
     		<td>
                         {% if G_User %}
@@ -339,6 +339,28 @@
 </div>	<!-- body -->
 
 <div id="version">Version: {{GLOBAL_Version}}</div>
+
+<script>
+    function update_utc()
+    {
+        function pad_zero(x)
+        {
+            return x < 10 ? "0" + x : "" + x;
+        }
+        const t = new Date();
+        const year = t.getUTCFullYear() % 100;
+        const month = pad_zero(t.getUTCMonth() + 1);
+        const day = pad_zero(t.getUTCDate());
+        const hour = pad_zero(t.getUTCHours());
+        const minute = pad_zero(t.getUTCMinutes());
+        const second = pad_zero(t.getUTCSeconds());
+        const utc = "" + month + "/" + day + "/" + year + " "
+            + hour + ":" + minute + ":" + second;
+        document.getElementById("current_utc").innerHTML = utc;
+    }
+    setInterval(update_utc, 250);
+</script>
+
 </body>
 
 </html>

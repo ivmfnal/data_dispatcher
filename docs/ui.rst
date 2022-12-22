@@ -137,6 +137,40 @@ the value of the ``-p`` option:
          ...
         }
 
+Project time-outs
+.................
+
+There are 2 parameters which control the behavior of the Data Dispatcher with respect to idle projects: *worker timeout* and *project idle timeout*.
+
+Worker timeout parameter tells the Data Dispatcher that if a worker reserves a file and does not release it for too long, the Data Dispatcher will 
+assume that the worker which holds the file has died witout releasing the file and the Data Dispatcher will
+release it and make available for another (or the same) worker to allocate. This parameter can be set using ``-w`` option when creating the project:
+
+    .. code-block:: shell
+    
+        $ dd project create -w (<worker timeout>[s|m|h|d] | none)
+        
+the timeout value is numeric with optional suffix ``s``, ``m``, ``h`` or ``d``. If a suffix is used, then the timeout is set to the specified
+number of seconds, minutes, hours or days respectively. ``none`` can be used to create a project without any worker timeout. Default worker timeout
+is 12 hours.
+
+Project idle timeout applies in the case, when a there is no worker file reserve/release activity for the project for the specified time interval.
+In this case, the Data Dispatcher moves the project into ``abandoned`` state. In this state, the Data Dispatcher stops updaitng file replica
+availability information for the project. Use ``-t`` option to specify this timeout:
+
+    .. code-block:: shell
+    
+        $ dd project create -t (<idle timeout>[s|m|h|d] | none)
+
+Default value for the project idle timeout is 72 hours.
+
+To reactivate an abandoned project, use ``activate`` subcommand:
+
+    .. code-block:: shell
+    
+        $ dd project activate <project id>
+
+An abandoned project will also be re-activated if a worker releases or tries to reserve a file.
 
 Project and project file attributes
 ...................................

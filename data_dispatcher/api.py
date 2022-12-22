@@ -1,5 +1,6 @@
 import requests, uuid, json, urllib.parse, os, time, random
 from metacat.auth import TokenLib, TokenAuthClientMixin
+from metacat.common import HTTPClient
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -44,93 +45,7 @@ def to_str(x):
     if isinstance(x, bytes):
         x = x.decode("utf-8")
     return x
-    
-class HTTPClient(object):
 
-    InitialRetry = 1.0
-    RetryExponent = 1.5
-    DefaultTimeout = 300.0
-
-    def __init__(self, server_url, timeout=None, token=None):
-        self.ServerURL = server_url
-        self.Token = token
-        self.Timeout = timeout or self.DefaultTimeout
-
-    def retry_request(self, method, url, timeout=None, **args):
-        """
-        Implements the functionality to retry on 503 response with random exponentially growing delay
-        """
-        if timeout is None:
-            timeout = self.Timeout
-        tend = time.time() + timeout
-        retry_interval = self.InitialRetry
-        response = None
-        while time.time() < tend:
-            if method == "get":
-                response = requests.get(url, timeout=self.Timeout, **args)
-            else:
-                response = requests.post(url, timeout=self.Timeout, **args)
-            #print("retry_request: response:", response)
-            if response.status_code != 503:
-                break
-            sleep_time = min(random.random() * retry_interval, tend-time.time())
-            retry_interval *= self.RetryExponent
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-        return response
-
-    def get(self, uri_suffix, none_if_not_found=False):
-        if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
-        url = "%s%s" % (self.ServerURL, uri_suffix)
-        #print("url:", url)
-        headers = {}
-        if self.Token is not None:
-            headers["X-Authentication-Token"] = self.Token.encode()
-        response = self.retry_request("get", url, headers=headers)
-        if response.status_code != 200:
-            if none_if_not_found and response.status_code == 404:
-                return None
-            elif response.status_code == 404:
-                raise NotFoundError(url, response.text)
-            else:
-                raise APIError(url, response.status_code, response.text)
-        if response.headers.get("Content-Type", "").startswith("text/json"):
-            data = json.loads(response.text)
-        else:
-            data = response.text
-        #print("   data:", data)
-        return data
-
-    def post(self, uri_suffix, data):
-        #print("post_json: data:", type(data), data)
-        
-        if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
-        
-        if data is None or isinstance(data, (dict, list)):
-            data = json.dumps(data)
-        else:
-            data = to_bytes(data)
-        #print("post_json: data:", type(data), data)
-            
-        url = "%s%s" % (self.ServerURL, uri_suffix)
-        
-        headers = {}
-        if self.Token is not None:
-            headers["X-Authentication-Token"] = self.Token.encode()
-
-        response = self.retry_request("post", url, data=data, headers=headers)
-        if response.status_code != 200:
-            if response.status_code == 404:
-                raise NotFoundError(url, response.text)
-            else:
-                raise APIError(url, response.status_code, response.text)
-        #print("response.text:", response.text)
-        if response.headers.get("Content-Type", "").startswith("text/json"):
-            data = json.loads(response.text)
-        else:
-            data = response.text
-        return data
-        
 class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     
     DefaultWorkerIDFile = ".data_dispatcher_worker_id"
@@ -213,7 +128,11 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     #
     # projects
     #
-    def create_project(self, files, common_attributes={}, project_attributes={}, query=None, worker_timeout=None):
+    
+    DEFAULT_IDLE_TIMEOUT = 72*3600      # 72 hors
+    
+    def create_project(self, files, common_attributes={}, project_attributes={}, query=None, worker_timeout=None,
+            idle_timeout = DEFAULT_IDLE_TIMEOUT):
         """Creates new project
         
         Parameters
@@ -253,7 +172,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     "files":                file_list,
                     "project_attributes":   project_attributes,
                     "query":                query,
-                    "worker_timeout":       worker_timeout
+                    "worker_timeout":       worker_timeout,
+                    "idle_timeout":         idle_timeout
                 }
             )
         )
@@ -281,8 +201,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 }
             )
         )
-    
-        
+
     def restart_handles(self, project_id, done=False, failed=False, reserved=False, all=False, handles=[]):
         """Restart processing of project file handles
         
@@ -326,6 +245,12 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
         return self.get(f"cancel_project?project_id={project_id}")
         
+    def activate_project(self, project_id):
+        """
+        Resets the state of an abandoned project back to "active"
+        """
+        return self.get(f"activate_project?project_id={project_id}")
+
     def get_project(self, project_id, with_files=True, with_replicas=False):
         """Gets information about the project
         
@@ -364,7 +289,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         else:
             return None
     
-    def list_projects(self, owner=None, state=None, not_state=None, attributes=None, with_files=True, with_replicas=False):
+    def list_projects(self, owner=None, state="active", not_state=None, attributes=None, with_files=True, with_replicas=False):
         """Lists existing projects
         
         Keyword Arguments:

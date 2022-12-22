@@ -1,6 +1,5 @@
 import stompy, pprint, urllib, requests, json, time, traceback, textwrap
-
-from data_dispatcher.db import DBFile, DBProject, DBReplica, DBRSE, DBProximityMap
+from data_dispatcher.db import DBProject, DBReplica, DBRSE, DBProximityMap
 from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task
 from data_dispatcher.logs import Logged
 from daemon_web_server import DaemonWebServer
@@ -80,7 +79,6 @@ class ProximityMapDownloader(PyThread, Logged):
             if not self.Stop:
                 time.sleep(self.Interval)
 
-
 class RSEListLoader(PyThread, Logged):
 
     def __init__(self, db, rucio_client, interval=30):
@@ -108,8 +106,6 @@ class RSEListLoader(PyThread, Logged):
                 pass
             if not self.Stop:
                 self.sleep(self.Interval)
-
-
 
 class RSEConfig(Logged):
     
@@ -242,7 +238,7 @@ class ListReplicasTask(Task):
             
 class ProjectMonitor(Primitive, Logged):
     
-    UpdateInterval = 30         # replica availability update interval
+    UpdateInterval = 120         # replica availability update interval
     NewRequestInterval = 5      # interval to check on new pin request
     SyncInterval = 600          # interval to re-sync replicas with Rucio
     
@@ -421,9 +417,10 @@ class ProjectMaster(PyThread, Logged):
     def clean(self):
         self.debug("cleaner...")
         try:
-            nprojects = DBProject.purge(self.DB)
-            nfiles = DBFile.purge(self.DB)
-            self.log("purged projects:", nprojects, ", files:", nfiles)
+            #nprojects = DBProject.purge(self.DB)       never purge projects
+            nabandoned = DBProject.mark_abandoned(self.DB)
+            nreplicas = DBReplica.purge(self.DB)
+            self.log("abandoned projects:", nabandoned, ", purged replicas:", nreplicas)
         except:
             self.error("Exception in ProjectMaster.clean():", "\n" + traceback.format_exc())
         return self.PurgeInterval
@@ -441,6 +438,7 @@ class ProjectMaster(PyThread, Logged):
                         self.add_project(project_id)
             except Exception as e:
                 self.error("exception in run():\n", traceback.format_exc())
+            self.debug("sleeping...")
             self.sleep(self.RunInterval)
 
     @synchronized
@@ -449,7 +447,7 @@ class ProjectMaster(PyThread, Logged):
             # check if new project
             project = DBProject.get(self.DB, project_id)
             if project is not None:
-                files = ({"namespace":f.Namespace, "name":f.Name} for f in project.files())
+                files = ({"namespace":f.Namespace, "name":f.Name} for f in project.handles(with_replicas=False))
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.Pinners, self.RucioClient)
                 SyncScheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", t0=time.time(), interval=ProjectMonitor.SyncInterval)
@@ -519,15 +517,11 @@ class RucioListener(PyThread, Logged):
         rse = replica_info["dst-rse"]
         if rse not in self.RSEConfig:
             return
-        f = DBFile.get(self.DB, scope, name)
-        if f is None:
-            return
         url = self.RSEConfig.fix_url(rse, replica_info["dst-url"])
         path = self.RSEConfig.url_to_path(rse, url)
-        preference = self.RSEConfig.preference(rse)
         available = not self.RSEConfig.is_tape(rse)         # do not trust dst-type from Rucio
-        f.create_replica(rse, path, url, preference, available)
-        #self.log("added replica:", scope, name, rse, url, path)
+        DBReplica.create(self.DB, scope, name, rse, path, url, available=available)
+        self.debug("added replica:", scope, name, rse, url, path)
 
     def run(self):
         broker_addr = (self.MessageBrokerConfig["host"], self.MessageBrokerConfig["port"])

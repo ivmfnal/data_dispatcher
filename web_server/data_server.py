@@ -1,6 +1,6 @@
 from webpie import WPApp, WPHandler
 from wsdbtools import ConnectionPool
-from data_dispatcher.db import DBProject, DBFileHandle, DBFile, DBRSE, DBProximityMap
+from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap
 from data_dispatcher.logs import Logged, init_logger
 from data_dispatcher import Version
 from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, \
@@ -8,6 +8,7 @@ from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatu
 from metacat.auth.server import BaseHandler, BaseApp, AuthHandler
 import json, urllib.parse, yaml, secrets, hashlib
 import requests
+from datetime import datetime, timedelta
 
 
 def to_bytes(x):
@@ -39,18 +40,26 @@ class Handler(BaseHandler):
     def create_project(self, request, relpath, **args):
         #print("create_project()...")
         user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
         #print("authenticated user:", user)
+        if user is None:
+            print("returning 401", error)
+            return 401, error
         specs = json.loads(to_str(request.body))
+        #print("specs:", specs)
         files = specs["files"]
         query = specs.get("query")
         worker_timeout = specs.get("worker_timeout")
+        if worker_timeout is not None:
+            worker_timeout = timedelta(seconds=worker_timeout)
+        idle_timeout = specs.get("idle_timeout")
+        if idle_timeout is not None:
+            idle_timeout = timedelta(seconds=idle_timeout)
         attributes = specs.get("project_attributes", {})
-        #print(specs.get("files"))
+        #print("opening DB...")
         db = self.App.db()
         #print("calling DBProject.create()...")
-        project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout)
+        project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout,
+                        idle_timeout=idle_timeout)
         files_converted = []
         for f in files:
             if isinstance(f, str):
@@ -93,6 +102,23 @@ class Handler(BaseHandler):
         project.delete()
         return "null", "text/json"
         
+    def activate_project(self, request, relpath, project_id=None, **args):
+        if not project_id:
+            return 400, "Project id must be specified"
+        user, error = self.authenticated_user()
+        if user is None:
+            return 401, error
+           
+        project_id = int(project_id)
+        db = self.App.db()
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        if user.Username != project.Owner and not user.is_admin():
+            return 403, "Forbidden"
+        project.activate()
+        return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
+
     def restart_project(self, request, relpath, project_id=None, force="no", failed_only="yes", **args):
         force = force == "yes"
         failed_only = failed_only == "yes"
@@ -113,7 +139,6 @@ class Handler(BaseHandler):
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
     def restart_handles(self, request, relpath, **args):
-
         params = json.loads(to_str(request.body))
         project_id = params.get("project_id")
         if not project_id:
@@ -190,49 +215,6 @@ class Handler(BaseHandler):
         project.cancel()
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
-    def replica_available(self, request, relpath, namespace=None, name=None, rse=None, **args):
-        user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
-        data = request.json
-        db = self.App.db()
-        if rse is None:             return 400, "RSE must be specified"
-        if None in (namespace, name):       return 400, "File namespace and name must be specified"
-        preference = data.get("preference", 0)
-        url = data.get("url")
-        path = data.get("path")
-        f = DBFile.get(db, namespace, name)
-        if not f:
-            return 404, "File not found"
-        f.create_replica(rse, path, url, preference=preference, available=True)
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-            
-    def replica_unavailable(self, request, relpath, namespace=None, name=None, rse=None, **args):
-        user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
-        db = self.App.db()
-        if rse is None:             return 400, "RSE must be specified"
-        if None in (namespace, name):       return 400, "File namespace and name must be specified"
-        f = DBFile.get(db, namespace, name)
-        if not f:
-            return 404, "File not found"
-        r = f.get_replica(rse)
-        if r is None:
-            return 404, "Replica not found"
-        r.Available = False
-        r.save()
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-        
-    def file(self, request, relpath, namespace=None, name=None, **args):
-        if None in (namespace, name):
-            return 400, "File namespace and name must be specified"
-        db = self.App.db()
-        f = DBFile.get(db, namespace, name)
-        if f is None:
-            return 404, "File not found"
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-
     def next_file(self, request, relpath, project_id=None, worker_id=None, cpu_site=None, **args):
         #print("next_file...")
         user, error = self.authenticated_user()
@@ -247,6 +229,10 @@ class Handler(BaseHandler):
             return 404, "Project not found"
         if not user.is_admin() and user.Username != project.Owner:
             return 403, "Not authorized"
+        if project.State == "abandoned":
+            project.activate()
+        elif project.State != "active":
+            return 400, f"Inactive project. State={project.State}"
         handle, reason, retry = project.reserve_handle(worker_id, self.App.proximity_map(), cpu_site)
         if handle is None:
             out = {
@@ -288,8 +274,9 @@ class Handler(BaseHandler):
         
         handle = project.release_handle(namespace, name, failed, retry)
         if handle is None:
-            return 404, "Handle not found"
-        
+            return 404, "Handle not found or was not reserved"
+        if project.State == "abandoned":
+            project.activate()
         return json.dumps(handle.as_jsonable()), "text/json"
 
     def ______reset_file(self, request, relpath, handle_id=None, force="no", **args):
