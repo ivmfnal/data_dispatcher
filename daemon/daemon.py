@@ -161,11 +161,11 @@ class DCachePoller(PyThread, Logged):
                         data = response.json()
                         available = "ONLINE" in data.get("fileLocality", "").upper()
                         if available:
-                            self.log("Replica available:", did, path)
+                            self.debug("Replica available:", did, path)
                             available_dids.append(did)
                         else:
                             unavailable_dids.append(did)
-                            self.log("Replica unavailable:", did, path)
+                            self.debug("Replica unavailable:", did, path)
                 DBReplica.update_availability_bulk(self.DB, True, self.RSE, available_dids)
                 DBReplica.update_availability_bulk(self.DB, False, self.RSE, unavailable_dids)
                 DBReplica.remove_bulk(self.DB, self.RSE, remove_dids)
