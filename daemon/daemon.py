@@ -253,11 +253,26 @@ class ProjectMonitor(Primitive, Logged):
         self.Master = master
         self.Scheduler = scheduler
         self.RucioClient = rucio_client
+        self.SyncReplicasJobID = f"sync_{project_id}"
+        self.UpdateAvailabilityJobID = f"update_{project_id}"
+        self.CheckStateJobID = f"check_{project_id}"
+        
+    def schedule_jobs(self):
+        SyncScheduler.add(self.sync_replicas, id=self.SyncReplicasJobID, t0=time.time(), interval=self.SyncInterval)
+        TaskScheduler.add(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
+            t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
+            interval=self.UpdateInterval)
+        TaskScheduler.add(self.check_project_state, id=self.CheckStateJobID, t0=time.time(), interval=self.UpdateInterval)
+
+    def remove_jobs(self):
+        SyncScheduler.remove(self.SyncReplicasJobID)
+        TaskScheduler.remove(self.UpdateAvailabilityJobID)
+        TaskScheduler.remove(self.CheckStateJobID)
 
     def remove_me(self, reason):
         self.log("remove me:", reason)
         for pinner in self.Pinners.values():
-            del pinner[self.ProjectID]
+            pinner.unpin_project(self.ProjectID)
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
         self.log("removed:", reason)
@@ -279,6 +294,18 @@ class ProjectMonitor(Primitive, Logged):
                     replica.Handle = h
                     tape_replicas_by_rse.setdefault(rse, {})[replica.did()] = replica
         return tape_replicas_by_rse
+        
+    @synchronized
+    def check_project_state(self):
+        self.debug("check_project_state...")
+        project = DBProject.get(self.DB, self.ProjectID)
+        if project is None or project.State != "active":
+            self.remove_me("project inactive")
+            if project is not None:
+                self.log("project state=", project.State, "--> removed")
+            else:
+                self.log("project not found --> removed")                
+            return "stop"
 
     @synchronized
     def sync_replicas(self):
@@ -332,8 +359,6 @@ class ProjectMonitor(Primitive, Logged):
             self.error("exception in sync_replicas:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
  
-    LOW_WATER_PRESTAGE = 10     # unreserved files to keep prestaged per tape RSE
-
     @synchronized
     def update_replicas_availability(self):
         
@@ -365,7 +390,6 @@ class ProjectMonitor(Primitive, Logged):
 
         self.debug("tape_replicas_by_rse:", len(tape_replicas_by_rse))
         for rse, replicas in tape_replicas_by_rse.items():
-            
             reserved_replicas = [
                     (did, r.Path) 
                     for did, r in replicas.items() 
@@ -383,8 +407,7 @@ class ProjectMonitor(Primitive, Logged):
             
             self.debug("sending %d reserved and %d ready replicas out of %d replicas to %s pinner" % 
                     (len(reserved_replicas), len(ready_replicas), len(replicas), rse))
-            self.Pinners[rse][self.ProjectID] = replicas_to_pin
-        
+            self.Pinners[rse].pin_project(self.ProjectID, replicas_to_pin)
         #
         # Release timed-out handles
         #
@@ -450,18 +473,12 @@ class ProjectMaster(PyThread, Logged):
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.handles(with_replicas=False))
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, self.Scheduler, project_id, self.DB, 
                     self.RSEConfig, self.Pollers, self.Pinners, self.RucioClient)
-                SyncScheduler.add(monitor.sync_replicas, id=f"sync_{project_id}", t0=time.time(), interval=ProjectMonitor.SyncInterval)
-                TaskScheduler.add(monitor.update_replicas_availability, id=f"update_{project_id}", 
-                    t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
-                    interval=ProjectMonitor.UpdateInterval)
-                
+                monitor.schedule_jobs()
             self.log("project added:", project_id)
 
     @synchronized
     def remove_project(self, project_id, reason):
         monitor = self.Monitors.pop(project_id, None)
-        SyncScheduler.remove(f"sync_{project_id}")
-        TaskScheduler.remove(f"update_{project_id}")
         self.log("project removed:", project_id, "  reason:", reason)
         
 
