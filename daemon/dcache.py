@@ -184,10 +184,12 @@ class DCachePinner(PyThread, Logged):
     
     @synchronized
     def pin_project(self, project_id, replicas):
+        self.debug(f"pin_project({project_id})", len(replicas))
         self.FilesPerProject[project_id] = replicas.copy()
 
     @synchronized
     def unpin_project(self, project_id):
+        self.debug(f"unpin_project({project_id})")
         self.FilesPerProject.pop(project_id)
 
     def run(self):
