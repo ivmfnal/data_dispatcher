@@ -359,6 +359,9 @@ class ProjectMonitor(Primitive, Logged):
             self.error("exception in sync_replicas:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
  
+ 
+    LOW_WATER_PRESTAGE = 20             # number of unreserved files to keep prestaged per project per RSE
+
     @synchronized
     def update_replicas_availability(self):
         
