@@ -1519,7 +1519,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                 (project_id, namespace, name),
                 "state",
                 dict(event = "worker_timeout", state=DBFileHandle.ReadyState, worker=worker_id)
-            ) for namespace, name, worker_id in c.fetchall()
+            ) for namespace, name, worker_id in transaction.fetchall()
         ]
         DBFileHandle.add_log_bulk(db, log_records, transaction=transaction)
         return len(log_records)
