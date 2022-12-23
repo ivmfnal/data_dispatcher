@@ -166,7 +166,8 @@ class PinRequest(Logged):
 
 class DCachePinner(PyThread, Logged):
     
-    UpdateInterval = 5         # replica availability update interval
+    InitialSleepInterval = 30
+    UpdateInterval = 10         # replica availability update interval
 
     def __init__(self, rse, db, url, prefix, ssl_config, poller):
         PyThread.__init__(self, name=f"DCachePinner({rse})")
@@ -193,7 +194,7 @@ class DCachePinner(PyThread, Logged):
         self.FilesPerProject.pop(project_id)
 
     def run(self):
-        time.sleep(self.UpdateInterval*10)          # initial sleep so pprojects have a chance to send their pin requests
+        time.sleep(self.InitialSleepInterval)          # initial sleep so pprojects have a chance to send their pin requests
         while not self.Stop:
             next_run = self.UpdateInterval
             try:
