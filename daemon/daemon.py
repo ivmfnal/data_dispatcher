@@ -402,19 +402,19 @@ class ProjectMonitor(Primitive, Logged):
         self.Master = master
         self.Scheduler = scheduler
         self.RucioClient = rucio_client
-        self.SincReplicasJonID = f"sync_{project_id}"
+        self.SyncReplicasJobID = f"sync_{project_id}"
         self.UpdateAvailabilityJobID = f"update_{project_id}"
         self.CheckStateJobID = f"check_{project_id}"
         
     def schedule_jobs(self):
-        SyncScheduler.add(self.sync_replicas, id=self.SincReplicasJonID, t0=time.time(), interval=self.SyncInterval)
+        SyncScheduler.add(self.sync_replicas, id=self.SyncReplicasJobID, t0=time.time(), interval=self.SyncInterval)
         TaskScheduler.add(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
             t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
             interval=self.UpdateInterval)
         TaskScheduler.add(self.check_project_state, id=self.CheckStateJobID, t0=time.time(), self.UpdateInterval)
 
     def remove_jobs(self):
-        SyncScheduler.remove(self.SincReplicasJonID)
+        SyncScheduler.remove(self.SyncReplicasJobID)
         TaskScheduler.remove(self.UpdateAvailabilityJobID)
         TaskScheduler.remove(self.CheckStateJobID)
 
