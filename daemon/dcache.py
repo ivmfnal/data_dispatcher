@@ -209,6 +209,7 @@ class DCachePinner(PyThread, Logged):
 
                     if all_files:       # anything to pin ??
                         if self.PinRequest is None:
+                            self.debug("sending pin request for", len(all_paths), "replicas...")
                             self.PinRequest = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
                             self.PinRequest.send()
                             self.debug("new pin request created for %d files" % (len(all_paths),))
@@ -228,7 +229,8 @@ class DCachePinner(PyThread, Logged):
                                 self.debug("sending", len(dids_paths), "dids/paths to poller")
                                 self.Poller.submit(dids_paths)
                     else:
-                        self.debug("no files to pin")
+                        #self.debug("no files to pin")
+                        pass
             except Exception as e:
                 self.error("exception in run:\n", traceback.format_exc())
             time.sleep(next_run)
