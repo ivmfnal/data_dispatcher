@@ -193,7 +193,9 @@ class DCachePinner(PyThread, Logged):
         self.FilesPerProject.pop(project_id)
 
     def run(self):
+        next_run = self.UpdateInterval
         while not self.Stop:
+            time.sleep(next_run)        # sleep first so projects have a chance to send pin requests
             next_run = self.UpdateInterval
             try:
                 with self:
@@ -233,7 +235,6 @@ class DCachePinner(PyThread, Logged):
                         pass
             except Exception as e:
                 self.error("exception in run:\n", traceback.format_exc())
-            time.sleep(next_run)
         
         
         
