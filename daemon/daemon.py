@@ -450,7 +450,7 @@ class ProjectMonitor(Primitive, Logged):
         self.debug("check_project_state...")
         project = DBProject.get(self.DB, self.ProjectID)
         if project is None or project.State != "active":
-            self.remove_me()
+            self.remove_me("project inactive")
             if project is not None:
                 self.log("project state=", project.State, "--> removed")
             else:
