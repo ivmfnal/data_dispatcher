@@ -43,7 +43,7 @@ class DCachePoller(PyThread, Logged):
                 for did, path in burst:
                     url = self.BaseURL + path + "?locality=true"
                     cert = None if self.Cert is None else (self.Cert, self.Key)
-                    self.debug("dCache poll URL:", url)
+                    #self.debug("dCache poll URL:", url)
                     response = requests.get(url, headers=headers, cert=cert, verify=False)
                     #self.debug("response:", response.status_code, response.text)
                     if response.status_code == 404:
@@ -201,7 +201,7 @@ class DCachePinner(PyThread, Logged):
                     all_paths = set(all_files.values())
 
                     if self.PinRequest is not None and not self.PinRequest.same_files(all_paths):
-                        self.log("file set changed -- deleting pin request")
+                        self.debug("file set changed -- deleting pin request")
                         self.PinRequest.delete()
                         self.PinRequest = None
 
@@ -209,10 +209,10 @@ class DCachePinner(PyThread, Logged):
                         if self.PinRequest is None:
                             self.PinRequest = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
                             self.PinRequest.send()
-                            self.log("new pin request created for %d files" % (len(all_paths),))
+                            self.debug("new pin request created for %d files" % (len(all_paths),))
                         else:
                             if self.PinRequest.error():
-                                self.log("error in pin request -- deleting pin request")
+                                self.error("error in pin request -- deleting pin request")
                                 self.PinRequest.delete()
                                 self.PinRequest = None
                             elif self.PinRequest.complete():
@@ -223,7 +223,7 @@ class DCachePinner(PyThread, Logged):
                                 # pin request is still not done, poll files individually
                                 dids_paths = list(all_files.items())
                                 n = len(dids_paths)
-                                self.log("sending", len(dids_paths), "dids/paths to poller")
+                                self.debug("sending", len(dids_paths), "dids/paths to poller")
                                 self.Poller.submit(dids_paths)
                     else:
                         self.debug("no files to pin")
