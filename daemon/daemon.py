@@ -411,7 +411,7 @@ class ProjectMonitor(Primitive, Logged):
         TaskScheduler.add(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
             t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
             interval=self.UpdateInterval)
-        TaskScheduler.add(self.check_project_state, id=self.CheckStateJobID, t0=time.time(), self.UpdateInterval)
+        TaskScheduler.add(self.check_project_state, id=self.CheckStateJobID, t0=time.time(), interval=self.UpdateInterval)
 
     def remove_jobs(self):
         SyncScheduler.remove(self.SyncReplicasJobID)
