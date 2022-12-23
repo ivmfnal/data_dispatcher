@@ -247,7 +247,6 @@ class PinRequest(Logged):
             return "ERROR"
         r.raise_for_status()
         self.debug("delete: my URL:", self.URL, "   response:", r.text)
-        return r.json()
 
     def status(self):
         return self.query()["status"]
