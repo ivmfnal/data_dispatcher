@@ -90,7 +90,7 @@ class PinRequest(Logged):
         self.ErrorText = True
         self.Complete = False
         self.Expiration = None
-        self.debug("created with base url:", self.BaseURL)
+        self.debug("created for", len(paths),"replicas")
 
     def send(self):
         headers = { "accept" : "application/json",
