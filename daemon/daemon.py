@@ -606,7 +606,7 @@ class ProjectMaster(PyThread, Logged):
 
     def run(self):
         self.clean()
-        self.Scheduler.add(self.clean, id="cleaner", t0 = self.PurgeInterval)
+        self.Scheduler.add(self.clean, id="cleaner", t0 = time.time() + self.PurgeInterval)
         while not self.Stop:
             try:
                 active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
