@@ -591,7 +591,7 @@ class ProjectMaster(PyThread, Logged):
         self.RSEConfig = rse_config
         self.Pollers = pollers
         self.RucioClient = rucio_client
-        self.Scheduler.add(self.clean, id="cleaner")
+        #self.Scheduler.add(self.clean, id="cleaner")
 
     def clean(self):
         self.debug("cleaner...")
@@ -605,6 +605,8 @@ class ProjectMaster(PyThread, Logged):
         return self.PurgeInterval
 
     def run(self):
+        self.clean()
+        self.Scheduler.add(self.clean, id="cleaner", t0 = self.PurgeInterval)
         while not self.Stop:
             try:
                 active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
