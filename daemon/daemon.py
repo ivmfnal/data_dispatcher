@@ -481,7 +481,8 @@ class ProjectMonitor(Primitive, Logged):
                 nchunk = len(chunk)
                 with self.Master:
                     # locked, in case the client needs to refresh the token
-                    rucio_replicas = self.RucioClient.list_replicas(chunk, all_states=False, ignore_availability=False)
+                    rucio_replicas = self.RucioClient.list_replicas(chunk, schemes=["https", "root", "http"],
+                                            all_states=False, ignore_availability=False)
                 rucio_replicas = list(rucio_replicas)
                 n = len(rucio_replicas)
                 total_replicas += n
