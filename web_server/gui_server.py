@@ -140,6 +140,8 @@ class ProjectsHandler(BaseHandler):
         else:
             projects = list(DBProject.list(db, with_handle_counts=False, state='active'))
             
+        projects = sorted(projects, key=lambda p: p.ID)
+            
         nprojects = len(projects)
         npages = (nprojects + page_size - 1)//page_size
         projects = projects[istart:istart + page_size]
