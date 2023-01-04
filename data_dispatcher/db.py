@@ -437,6 +437,12 @@ class DBProject(DBObject, HasLogRecord):
         return project
 
     @staticmethod
+    def from_sql(db, sql):
+        c = db.cursor()
+        c.execute(sql)
+        return (DBProject.from_tuple(db, tup) for tup in cursor_iterator(c))
+
+    @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
         wheres = [
             "(%(owner)s is null or p.owner=%(owner)s)",

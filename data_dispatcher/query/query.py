@@ -1,11 +1,15 @@
 from lark import Lark
-from grammar import ProjectQueryGrammar
-from trees import Converter, Node
-
-Parser = Lark(ProjectQueryGrammar, start="metadata_expression")
+from .grammar import ProjectQueryGrammar
+from metacat.common.trees import Converter, Node
+from metacat.common import MetaExpressionDNF
+from metacat.util import insert_sql
+from data_dispatcher.db import DBProject
 
 class ProjectQueryConverter(Converter):
     
+    def __default__(self, typ, children, meta):
+        return Node(typ, children, _meta=meta)
+
     def int_constant(self, args):
         v = args[0]
         return Node("int", value=int(v.value))
@@ -70,7 +74,58 @@ class ProjectQueryConverter(Converter):
         return Node("cmp_op",
             [Node("array_any", name=args[1].value), args[0]], op="=", neg=True
         )
+
+    def constant_in_attr(self, args):
+        const_arg = args[0]
+        const_type = const_arg.T
+        const_value = const_arg["value"]
+        assert const_type == "string"
+        return Node("cmp_op", 
+                    [
+                        Node("object_attribute", name=args[1].value), 
+                        Node("string", value=".*%s.*" % (const_value,))
+                    ], op="~", neg=False
+        )
+
+
+    def constant_not_in_attr(self, args):
+        out = self.constant_in_attr(args)
+        return out.clone(neg = not out["neg"])
+
+    def constant_in_meta(self, args):
+        const_arg = args[0]
+        const_type = const_arg.T
+        const_value = const_arg["value"]
+        array_in = Node("cmp_op", [Node("array_any", name=args[1].value), const_arg], op="=", neg=False)
+        if const_type == "string":
+            return Node("meta_or",
+                [   array_in,
+                    Node("cmp_op", [
+                        Node("meta_attribute", name=args[1].value), 
+                        Node("string", value=".*%s.*" % (const_value,))
+                    ], op="~", neg=False)
+                ]
+            )
+        else:
+            return array_in
         
+    def constant_not_in_meta(self, args):
+        const_arg = args[0]
+        const_type = const_arg.T
+        const_value = const_arg["value"]
+        array_not_in = Node("cmp_op", [Node("array_any", name=args[1].value), const_arg], op="=", neg=True)
+        if const_type == "string":
+            return Node("meta_and",
+                [   array_not_in,
+                    Node("cmp_op", [
+                        Node("meta_attribute", name=args[1].value), 
+                        Node("string", value=".*%s.*" % (const_value,))
+                    ], op="~", neg=True)
+                ]
+            )
+        else:
+            return array_in
+
     def in_range(self, args):
         assert len(args) == 3 and args[1].T in ("string", "int", "float") and args[2].T in ("string", "int", "float")
         assert args[1].T == args[2].T, "Range ends must be of the same type"
@@ -168,11 +223,16 @@ class ProjectQueryConverter(Converter):
         assert len(children) == 1
         return self._apply_not(children[0])
         
-    def attribute(self, args):
+    def meta_attribute(self, args):
         assert len(args) == 1
         word = args[0].value
-        assert word in ("_owner", "_state", "_created", "_ended", "_id", "_query")
-        return Node("attribute", name=word)
+        return Node("meta_attribute", name=word)
+
+    def object_attribute(self, args):
+        assert len(args) == 1
+        word = args[0].value
+        assert word in ("owner", "state", "created", "ended", "id", "query")
+        return Node("object_attribute", name=word)
 
     def _convert_array_all(self, node):
         left = node.C[0]
@@ -203,3 +263,31 @@ class ProjectQueryConverter(Converter):
             node["neg"] = not node["neg"]
         #print("_convert_array_all: returning:", node.pretty())
         return node
+
+class ProjectQuery(object):
+    
+    QueryParser = Lark(ProjectQueryGrammar, start="metadata_expression")
+
+    def __init__(self, text):
+        self.Text = text
+        self.Parsed = self.Converted = None
+        
+    def parse(self):
+        self.Parsed = self.QueryParser.parse(self.Text)
+        return self.Parsed
+        
+    def convert(self):
+        self.Converted = ProjectQueryConverter()(self.parse())
+        print("converted:", self.Converted.pretty())
+        return self.Converted
+        
+    def sql(self):
+        table = DBProject.Table
+        columns = DBProject.columns(table)
+        meta_sql = MetaExpressionDNF(self.convert()).sql(table, "attributes")
+        return insert_sql(f"""
+            select {columns} 
+                from {table} --
+                where 
+                    $meta_sql
+        """, meta_sql=meta_sql)

@@ -6,6 +6,7 @@ import urllib, os, yaml, time, json
 from urllib.parse import quote, unquote, unquote_plus
 from wsdbtools import ConnectionPool
 from datetime import timezone, datetime
+from data_dispatcher.query import ProjectQuery
 
 class ___UsersHandler(BaseHandler):
 
@@ -131,7 +132,18 @@ class ProjectsHandler(BaseHandler):
         do_search = request.POST.get("action") == "Search"
 
         if do_search:
-            projects = DBProject.list(db, with_handle_counts=False, state=state, owner=search_user)
+            query_text = form_dict.get("query")
+            if query_text:
+                query = ProjectQuery(query_text)
+                sql = query.sql()
+                print("projects: sql:", sql)
+                projects = list(DBProject.from_sql(db, sql))
+                projects = [p for p in projects 
+                    if (not search_user or p.Owner == search_user)
+                        and (not search_active_only or p.State == "active")
+                ]
+            else:
+                projects = DBProject.list(db, with_handle_counts=False, state=state, owner=search_user)
             projects = [p for p in projects 
                             if
                                 (search_created_after is None or p.CreatedTimestamp >= search_created_after) and
@@ -182,7 +194,8 @@ class ProjectsHandler(BaseHandler):
                     search_user = search_user,
                     search_created_before = None if search_created_before is None else search_created_before.strftime("%Y-%m-%d %H:%M:%S"),
                     search_created_after = None if search_created_after is None else search_created_after.strftime("%Y-%m-%d %H:%M:%S"),
-                    search_active_only = search_active_only
+                    search_active_only = search_active_only,
+                    query_text = query_text
                     )
         
     def handle_logs(self, request, relpath, project_id=None):

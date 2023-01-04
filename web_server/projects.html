@@ -2,6 +2,12 @@
 
 {% block html_head %}
 <script src="{{GLOBAL_AppTopPath}}/static/js/request.js"></script>
+<style type="text/css">
+    .query_text {
+        font-family:  source_code, monospace;
+        
+    }
+</style>
 {% endblock %}
 
 {% block headline %}Projects{% endblock %}
@@ -96,6 +102,10 @@
         </tr>
         <tr>
             <th>Active projects only</th><td><input type="checkbox" name="search_active_only" {% if search_active_only %} checked="checked" {% endif %}/></td>
+        </tr>
+        <tr>
+            <td>Query</td>
+            <td><textarea class="query_text" name="query" cols=80 rows=10>{{query}}</textarea></td>
         </tr>
         <tr>
             <td></td><td><input type="submit" name="action" value="Search"/></td>
