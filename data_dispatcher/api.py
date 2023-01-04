@@ -147,7 +147,10 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             query used to create the file list, optional. If specified, the query string will be added to the project as the attribute
         worker_timeout : int or float
             If not None, all file handles will be automatically released if allocated by same worker for longer than the ``worker_timeout`` seconds
-            
+        idle_timeout : int or float
+            If there is no file reserve/release activity for the specified time interval, the project goes into "abandoned" state.
+            Default is 72 hours (3 days). If set to None, the project remains active until complete.
+
         Returns
         -------
         dict
