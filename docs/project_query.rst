@@ -3,7 +3,7 @@
 Searching Projects by Metadata
 ==============================
 
-Each project has the following attributes:
+Each Data Dispatcher project has the following attributes:
 
     * owner - string - username of the user who created the project
     * state - string - current state of the project. Can be ``active``, ``abandoned``, ``cancelled``, ``done``, ``failed``
