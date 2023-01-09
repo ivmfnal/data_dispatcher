@@ -128,7 +128,7 @@ Query Examples
 
         state = failed and "dc4:dc4" in query
 
-        query ~ "files .*from .* dune:run[A-Z][0-9]+"
+        query ~ "files .*from .* dune:run[A-Z][0-9]+ .*"
         
         owner in ("alice", "bob", "carl") 
             and state in ("active", "cancelled")
