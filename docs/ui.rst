@@ -268,7 +268,7 @@ When the worker gets next file to process, the JSON representation of file inofr
         }
 
         
-Viewing projects
+Listing projects
 ................
 
     .. code-block:: shell
@@ -277,6 +277,11 @@ Viewing projects
             -j                                              - JSON output
             -u <owner>                                      - filter by project owner
             -a "name1=value1 name2=value2 ..."              - filter by project attributes
+
+Viewing projects
+................
+
+    .. code-block:: shell
 
         $ dd project show [options] <project_id>            - show project info (-j show as JSON)
                 -a                                          - show project attributes only
@@ -290,6 +295,22 @@ Viewing projects
                    reserved  - reserved files only
                    failed    - failed files only
                    done      - done files only
+
+Searching projects
+..................
+
+    .. code-block:: shell
+
+        $ dd project search [oprions] -q -              - read search query from stdin
+        $ dd project search [oprions] -q <file path>    - read search query from a file
+        $ dd project search [oprions] <search query>    - inline search query
+        
+        Options:
+            -j                                          - JSON output
+            -u <owner>                                  - filter by owner
+            -s (<state>|all)                            - filter by state, default: active projects only
+
+See :ref:`Searching Projects <SearchQL>` for details on search query language
 
 Copying project
 ...............

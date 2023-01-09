@@ -8,4 +8,5 @@ Data Dispatcher Documentation
    install
    ui
    webapi
+   project_query
 
