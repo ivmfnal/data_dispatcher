@@ -131,7 +131,7 @@ Query Examples
         query ~ "files .*from.* dune:run[A-Z][0-9]+ .*"
         
         owner in ("alice", "bob", "carl")
-            and (
+            and ! (
                 app_version >= "1.5" and debug = true
                 or app_version >= "1.4"
             )
