@@ -11,7 +11,7 @@ Each Data Dispatcher project has the following attributes:
     * id - integer - project id
     * query - string - MetaCat query used to select files for the project
 
-In addition, a project may have an arbitrary disctiopnary with user-defined project metadata. For example:
+In addition, a project may have an arbitrary disctionary with user-defined project metadata. For example:
 
    .. code-block::
    
@@ -22,9 +22,10 @@ In addition, a project may have an arbitrary disctiopnary with user-defined proj
            "MaxE": 3.14
        }
 
-Project metadata can be any JSON dictionary. There are no restrictions on the metadata field names or complexity of the project metadata disctionary.
 Data Dispatcher does not use project metadata in any way except passing it as is to the worker, when asked for the next file to process
 for the project.
+Therefore, project metadata can be any JSON dictionary. 
+There are no restrictions on the project metadata field names or complexity of the project metadata disctionary.
 
 Data Dispatcher provides a way to search projetcs by their attributes and metadata.
 
