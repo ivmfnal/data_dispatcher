@@ -128,9 +128,11 @@ Query Examples
 
         state = failed and "dc4:dc4" in query
 
-        query ~ "files .*from .* dune:run[A-Z][0-9]+ .*"
+        query ~ "files .*from.* dune:run[A-Z][0-9]+ .*"
         
-        owner in ("alice", "bob", "carl") 
+        owner in ("alice", "bob", "carl")
+            and app_version >= "1.5"
+            and debug = true
             and state in ("active", "cancelled")
 
 
