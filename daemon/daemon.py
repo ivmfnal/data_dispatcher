@@ -1,4 +1,5 @@
 import stompy, pprint, urllib, requests, json, time, traceback, textwrap
+from urllib.parse import urlparse
 from data_dispatcher.db import DBProject, DBReplica, DBRSE, DBProximityMap
 from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task
 from data_dispatcher.logs import Logged
@@ -329,7 +330,7 @@ class RSEConfig(Logged):
         return self[rse].get("add_prefix", "")
 
     def url_to_path(self, rse, url):
-        parts = urllib.parse.urlparse(url)
+        parts = urlparse(url)
         path = parts.path
         while "//" in path:
             path = path.replace("//", "/")
@@ -480,7 +481,8 @@ class ProjectMonitor(Primitive, Logged):
                 nchunk = len(chunk)
                 with self.Master:
                     # locked, in case the client needs to refresh the token
-                    rucio_replicas = self.RucioClient.list_replicas(chunk, all_states=False, ignore_availability=False)
+                    rucio_replicas = self.RucioClient.list_replicas(chunk, schemes=["https", "root", "http"],
+                                            all_states=False, ignore_availability=False)
                 rucio_replicas = list(rucio_replicas)
                 n = len(rucio_replicas)
                 total_replicas += n
@@ -494,7 +496,15 @@ class ProjectMonitor(Primitive, Logged):
                         if rse in self.RSEConfig:
                             preference = self.RSEConfig.preference(rse)
                             available = not self.RSEConfig.is_tape(rse)
-                            url = self.RSEConfig.fix_url(rse, urls[0])           # assume there is only one
+                            for url in urls:
+                                parsed = urlparse(url)
+                                scheme = parsed.scheme.lower()
+                                if scheme in ("root", "xroot", "xrootd"):
+                                    break
+                            else:
+                                # xrootd not found - use first URL on the list, assuming it's most preferred for the RSE
+                                url = urls[0]
+                            url = self.RSEConfig.fix_url(rse, url)
                             path = self.RSEConfig.url_to_path(rse, url)          
                             by_namespace_name_rse.setdefault((namespace, name), {})[rse] = dict(path=path, url=url, available=available, preference=preference)
                         else:
