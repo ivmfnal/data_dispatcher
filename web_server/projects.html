@@ -104,8 +104,8 @@
             <th>Active projects only</th><td><input type="checkbox" name="search_active_only" {% if search_active_only %} checked="checked" {% endif %}/></td>
         </tr>
         <tr>
-            <td>Query</td>
-            <td><textarea class="query_text" name="query" cols=80 rows=10>{{query}}</textarea></td>
+            <th>Search expression</th>
+            <td><textarea class="query_text" name="query" cols=80 rows=10>{{query_text}}</textarea></td>
         </tr>
         <tr>
             <td></td><td><input type="submit" name="action" value="Search"/></td>

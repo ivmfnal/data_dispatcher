@@ -318,6 +318,30 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         args = "?" + "&".join(args) if args else ""
         return self.get(f"projects{args}")
 
+    def search_projects(self, search_query, owner=None, state="active", with_files=True, with_replicas=False):
+        """Lists existing projects
+        
+        Arguments:
+            search_query (str): project search query in subset of MQL
+        
+        Keyword Arguments:
+            owner (str): Include only projects owned by the specified user. Default: all users
+            with_files (boolean): Include information about files. Default: True
+            with_replicas (boolean): Include information about file replics. Default: False
+    
+        Returns:
+            list of dictionaries with information about projects found
+        """
+        
+        info = {
+            "query":    search_query,
+            "with_handles": with_files,
+            "with_replicas": with_replicas,
+        }
+        if state != "all":  info["state"] = state
+        if owner:   info["owner"] = owner
+        return self.post("search_projects", json.dumps(info))
+
     def __next_file(self, project_id, cpu_site, worker_id):
         if worker_id is None:
             raise ValueError("DataDispatcherClient must be initialized with Worker ID")

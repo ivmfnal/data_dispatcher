@@ -278,7 +278,7 @@ class ProjectQuery(object):
         
     def convert(self):
         self.Converted = ProjectQueryConverter()(self.parse())
-        print("converted:", self.Converted.pretty())
+        #print("converted:", self.Converted.pretty())
         return self.Converted
         
     def sql(self):

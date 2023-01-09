@@ -122,21 +122,28 @@ class ProjectsHandler(BaseHandler):
         page_size = int(page_size)
         istart = page*page_size
         form_dict = request.POST
-        search_user = form_dict.get("search_user", "").strip() or None
-        search_created_after = self.parse_datetime(form_dict.get("search_created_after"))
-        search_created_before = self.parse_datetime(form_dict.get("search_created_before"))
-        search_active_only = form_dict.get("search_active_only", "off") == "on"
+        user, _ = self.authenticated_user()
+        
+        search_user = None
+        search_active_only = True
+        search_created_after = search_created_before = None
+        
+        form_posted = request.method == "POST"
+        if form_posted:
+            search_user = form_dict.get("search_user", "").strip() or None
+            search_active_only = form_dict.get("search_active_only", "off") == "on"
+            search_created_after = self.parse_datetime(form_dict.get("search_created_after"))
+            search_created_before = self.parse_datetime(form_dict.get("search_created_before"))
         
         state = "active" if search_active_only else None
 
         do_search = request.POST.get("action") == "Search"
-
+        query_text = ""
         if do_search:
             query_text = form_dict.get("query")
             if query_text:
                 query = ProjectQuery(query_text)
                 sql = query.sql()
-                print("projects: sql:", sql)
                 projects = list(DBProject.from_sql(db, sql))
                 projects = [p for p in projects 
                     if (not search_user or p.Owner == search_user)
@@ -189,6 +196,7 @@ class ProjectsHandler(BaseHandler):
             search_user = current_user.Username if current_user else ""
             search_active_only = True
         
+        search_user = search_user if form_posted else (search_user or user and user.Username or "")
         return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates,
                     page_index = index_page_links, message=message,
                     search_user = search_user,

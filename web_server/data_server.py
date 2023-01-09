@@ -1,5 +1,4 @@
 from webpie import WPApp, WPHandler
-from wsdbtools import ConnectionPool
 from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap
 from data_dispatcher.logs import Logged, init_logger
 from data_dispatcher import Version
@@ -9,6 +8,7 @@ from metacat.auth.server import BaseHandler, BaseApp, AuthHandler
 import json, urllib.parse, yaml, secrets, hashlib
 import requests
 from datetime import datetime, timedelta
+from data_dispatcher.query import ProjectQuery
 
 
 def to_bytes(x):
@@ -355,8 +355,24 @@ class Handler(BaseHandler):
         db = self.App.db()
         projects = DBProject.list(db, state=state, not_state=not_state, owner=owner, attributes=attributes)
         return json.dumps([p.as_jsonable(with_handles=with_handles, with_replicas=with_replicas) for p in projects]), "text/json"
-        
-        
+
+    def search_projects(self, request, relpath, **args):
+        specs = json.loads(to_str(request.body))
+        query_text = specs.get("query")
+        owner = specs.get("owner")
+        with_handles = specs.get("with_handles", False)
+        with_replicas = specs.get("with_replicas", False)
+        state = specs.get("state")
+        query = ProjectQuery(query_text)
+        sql = query.sql()
+        db = self.App.db()
+        projects = DBProject.from_sql(db, sql)
+        projects = (project for project in projects 
+            if (not owner or project.Owner == owner)
+                and (not state or project.State == state)
+        )
+        return json.dumps([p.as_jsonable(with_handles=with_handles, with_replicas=with_replicas) for p in projects]), "text/json"
+
     def file_handle(self, request, relpath, handle_id=None, project_id=None, file_id=None, name=None, namespace=None, **args):
         db = self.App.db()
         if handle_id:
