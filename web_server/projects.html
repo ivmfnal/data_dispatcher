@@ -63,7 +63,7 @@
                 var o = document.getElementById("handle_state_count:" + project_id + ":" + state);
                 if( o != null )
                     o.innerHTML = "" + counts[state];
-                o.className = state;
+                o.className = state.replace(" ", "_");
             }
         }
     }

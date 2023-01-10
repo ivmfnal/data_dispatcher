@@ -27,7 +27,7 @@ for the project.
 Therefore, project metadata can be any JSON dictionary. 
 There are no restrictions on the project metadata field names or complexity of the project metadata disctionary.
 
-Data Dispatcher provides a way to search projetcs by their attributes and metadata.
+Data Dispatcher provides a way to search projects by their attributes and metadata.
 
 Project Search Queries
 ----------------------

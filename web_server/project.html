@@ -50,14 +50,14 @@
                 <span id="count_display"></span><br/>
                 <svg id="project_history_svg" height=100 width=800 onmouseout="display_count()"></svg>
                 <script type="text/javascript">
-                    function display_count(label, n)
+                    function display_count(label, n, t)
                     {
                         var d = document.getElementById("count_display");
                         if( label == null )
                             d.innerHTML = "";
                         else
                         {
-                            d.innerHTML = label + ": " + n;
+                            d.innerHTML = t + ": " + label + ": " + n;
                             d.className = label;
                         }
                     }
@@ -70,7 +70,7 @@
                 <table class="placement dense">
                     <tr>
                     {% for state in states -%}
-                        <td class="{{state}}">
+                        <td class="{{state|replace(' ', '_')}}">
                             {% if state in state_index %}
                                 <a href="{{state_index[state]}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</a>
                             {% else %}
@@ -105,9 +105,9 @@
                         <tr id="state:{{wf_state}}">
                             <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
                             {% set file_state = handle.file_state() %}
-                            <td class="{{file_state}}">{{file_state}}</td>
+                            <td class="{{file_state|replace(' ', '_')}}">{{file_state}}</td>
                             <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
-                            <td class="{{wf_state}}">{{wf_state}}</td>
+                            <td class="{{wf_state|replace(' ', '_')}}">{{wf_state}}</td>
                             <td>{{handle.WorkerID or ""}}</td>
                             <td>{{handle.Attempts}}</td>
                         </tr>
@@ -205,7 +205,7 @@
                             rect.setAttribute("height", h);
                             rect.setAttribute("style", "stroke-width:0;" + "fill:"+color+";");
                             
-                            rect.setAttribute("onmouseover", "display_count('"+label+"',"+n+")");
+                            rect.setAttribute("onmouseover", "display_count('"+label+"',"+n+", '" + r.t_display + "')");
                             canvas.appendChild(rect);
                             y += h;
                         }

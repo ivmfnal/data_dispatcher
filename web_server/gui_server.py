@@ -249,6 +249,7 @@ class ProjectsHandler(BaseHandler):
         n_ready = n_reserved = n_failed = n_done = 0
         last_t = None
         counts = {"initial":0, "reserved":0, "done":0, "failed":0}
+        entry = None
         for entry in log_records:
             t = int((entry.T.timestamp()-tmin)/bin)
             if last_t is None:
@@ -256,6 +257,7 @@ class ProjectsHandler(BaseHandler):
             if t != last_t:
                 data = counts.copy()
                 data["t"] = last_t
+                data["t_display"] = entry.T.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
                 history.append(data)
                 last_t = t
             state = entry["state"]
@@ -267,6 +269,7 @@ class ProjectsHandler(BaseHandler):
         if not history or history[-1]["t"] != last_t:
             data = counts.copy()
             data["t"] = last_t
+            data["t_display"] = entry.T.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S") if entry is not None else ""
             history.append(data)
         return json.dumps(history), "text/json"
 
