@@ -104,8 +104,9 @@
             <th>Active projects only</th><td><input type="checkbox" name="search_active_only" {% if search_active_only %} checked="checked" {% endif %}/></td>
         </tr>
         <tr>
-            <th>Search expression</th>
-            <td><textarea class="query_text" name="query" cols=80 rows=10>{{query_text}}</textarea></td>
+            <th>Search projects</th>
+            <td><textarea class="query_text" name="query" cols=60 rows=5>{{query_text}}</textarea></td>
+            <td><a href="https://data-dispatcher.readthedocs.io/en/latest/project_query.html">help</a></td>
         </tr>
         <tr>
             <td></td><td><input type="submit" name="action" value="Search"/></td>

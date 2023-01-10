@@ -28,12 +28,7 @@
     </tr>
 
     <tr>    <th>Status</th>             <td><span class="{{project.State}}" style="padding: 3px">{{project.State}}</span></td> </tr>
-    <tr>    <th>Query</th>              <td><pre>{{project.Query or ""}}</pre></td>
-            {#
-                {% if project.Query or False and not GLOBAL_MetaCatURL is none %}
-                <td><a href="{{GLOBAL_MetaCatURL}}/gui/query?query={{project.quoted_query()}}&run=yes">run query</a></td>
-                {% endif %}
-            #}
+    <tr>    <th>Project query</th>              <td><pre>{{project.Query or ""}}</pre></td>
     </tr>
     <tr>    <th>Project attributes</th>         <td class="nopadding">
             {% if project.Attributes|length %}
