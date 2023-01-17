@@ -1,7 +1,6 @@
 import getopt, json, time, pprint, textwrap, sys
 from datetime import datetime
 from metacat.webapi import MetaCatClient
-from metacat.db import DBFile
 from .ui_lib import pretty_json, parse_attrs, print_handles
 
 from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
@@ -30,6 +29,9 @@ class CreateCommand(CLICommand):
         -p (json|pprint|id)                             - print created project info as JSON, 
                                                           pprint or just project id (default)
     """
+    
+    FileProperties = "fid,namespace,name,checksums,size,creator,created_timestamp,parents,children,datasets".split(',') # from metacat.dbobjects2
+
     
     def __call__(self, command, client, opts, args):
         if sum([len(args) > 0, "-l" in opts, "-j" in opts, "-q" in opts]) != 1:
@@ -73,7 +75,7 @@ class CreateCommand(CLICommand):
                     #print(info["metadata"])
                     attrs = {}
                     for k in fields:
-                        if '.' not in k and k in DBFile.Properties:
+                        if '.' not in k and k in self.FileProperties:
                             attrs[k] = info.get(k)
                         else:
                             attrs[k] = info["metadata"].get(k)

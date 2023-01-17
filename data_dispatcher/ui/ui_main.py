@@ -33,6 +33,10 @@ class LoginCommand(CLICommand):
         else:
             raise InvalidArguments(f"Unknown authentication mechanism {mech}\n")
 
+        if not client.tokens_saved():
+            print("Authentication token not saved. Can not access/create token library", sys.stderr)
+            sys.exit(1)
+
         print ("User:   ", user)
         print ("Expires:", time.ctime(expiration))
         

@@ -50,7 +50,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     
     DefaultWorkerIDFile = ".data_dispatcher_worker_id"
     
-    def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, token = None, token_file = None,
+    def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, 
+            token = None, token_file = None, token_library = None, 
             cpu_site="DEFAULT", timeout=300):
         
         """Initializes the DataDispatcherClient object
@@ -67,7 +68,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         
         server_url = server_url or os.environ.get("DATA_DISPATCHER_URL")
         auth_server_url = auth_server_url or os.environ.get("DATA_DISPATCHER_AUTH_URL")
-        TokenAuthClientMixin.__init__(self, server_url, token, token_file, auth_url=auth_server_url)
+        TokenAuthClientMixin.__init__(self, server_url, auth_server_url, token=token, token_file=token_file, token_library=token_library)
 
         #print("DataDispatcherClient: url:", server_url)
 
