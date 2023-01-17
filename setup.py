@@ -24,7 +24,7 @@ setup(
     keywords = "workflow management, data management, web service",
     url = "https://github.com/ivmfnal/data_dispatcher",
     packages=['data_dispatcher', 'data_dispatcher.logs', 'data_dispatcher.ui', 'data_dispatcher.query', 'data_dispatcher.ui.cli'],
-    install_requires=["metacat>=3.24.1", "requests"],
+    install_requires=["metacat>=3.26.0", "requests"],
     zip_safe = False,
     classifiers=[
     ],
