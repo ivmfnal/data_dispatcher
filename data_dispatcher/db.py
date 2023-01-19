@@ -1575,6 +1575,31 @@ class DBFileHandle(DBObject, HasLogRecord):
         self.WorkerID = None
         self.save(transaction=transaction)
 
+    LOG_EVENTS = "reserve,worker_timeout,reset,failed,done,create".split(",")
+
+    @staticmethod
+    def event_counts(db, t0, bin):
+        t_begin = datetime.fromtimestamp(t0, timezone.utc)
+        t1 = time.time()
+        t1 = int((t1 + bin - 1)/bin) * bin
+        t_end = datetime.fromtimestamp(t1, timezone.utc)
+        c = db.cursor()
+        c.execute(f"""
+            select (extract(epoch from t)/{bin}::int)*{bin}, data->'event', count(*) 
+                from file_handle_log 
+                where t >= %s and t < %s
+                group by data->'event', (extract(epoch from t)/{bin}::int)*{bin}
+                order by data->'event', (extract(epoch from t)/{bin}::int)*{bin};
+        """, (t_begin, t_end))
+        n_times = int((t1 - t0)/bin)
+        zeros = [0] * n_times
+        counts = {
+            event: zeros[:] for event in DBFileHandle.LOG_EVENTS
+        }
+        for t, event, count in c.fetchall():
+            i = int((float(t)-t0)/bin)
+            counts[event][i] += 1
+        return t0, t1, DBFileHandle.LOG_EVENTS, counts
 
 class DBRSE(DBObject):
     

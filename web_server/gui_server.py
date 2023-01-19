@@ -375,6 +375,39 @@ class ProjectsHandler(BaseHandler):
             entry._RestOfData = data
         return self.render_to_response("handle.html", project_id=project_id, handle=handle, handle_log = handle_log)
 
+    def cvt_time_delta(self, delta):
+        if delta[-1] in "smhd":
+            unit = delta[-1]
+            unit = {
+                's':    1,
+                'm':    60,
+                'h':    3600,
+                'd':    24*3600
+            }[unit]
+            return unit * float(delta[:-1])
+        else:
+            return float(delta)
+        
+    def handle_event_counts(self, request, relpath, t0=None, window=None, bin=None, **_):
+        db = self.App.db()
+        if t0 is None:
+            t0 = time.time() - self.cvt_time_delta(window)
+        else:
+            t0 = float(t0)
+        bin = self.cvt_time_delta(bin)
+        t0 = int(t0/bin)*bin
+        t0, t1, events, counts = DBFileHandle.event_counts(db, t0, bin)
+        return json.dumps({
+            "t0": t0,
+            "t1": t1,
+            "events": events,
+            "counts": counts,
+            "bin": bin
+        }), "application/json"
+        
+    def stats(self, request, relpath, **_):
+        return self.render_to_response("stats.html")
+
 class RSEHandler(BaseHandler):
     
     def proximity_map(self, request, relpath, message="", **args):
