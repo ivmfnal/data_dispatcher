@@ -40,11 +40,11 @@ class LocationsCommand(CLICommand):
             raise InvalidArguments("No query given")
         
         metacat_client = MetaCatClient()
-        rucio_client = RucioRe
+        rucio_client = ReplicaClient()
         files = list(metacat_client.query(query))
         for chunk in chunked(files, 100):
             dids = [{"scope":f["namespace"], "name":f["name"]} for f in chunk]
-            rucio_replicas = self.RucioClient.list_replicas(dids, schemes=["https", "root", "http"],
+            rucio_replicas = rucio_client.list_replicas(dids, schemes=["https", "root", "http"],
                                     all_states=False, ignore_availability=False)
             for r in rucio_replicas:
                 namespace = r["scope"]
@@ -59,8 +59,8 @@ DD_SAM_CLI = CLI(
 )
 
 def main():
-    cli = DD_SAM_CLI()
-    cli.run(sys.argv, argv0="esam")
+    cli = DD_SAM_CLI
+    cli.run(sys.argv, argv0="ddsam")
         
 if __name__ == "__main__":
     main()
