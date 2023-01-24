@@ -60,7 +60,7 @@ DD_SAM_CLI = CLI(
 
 def main():
     cli = DD_SAM_CLI
-    cli.run(sys.argv, argv0="ddsam")
+    cli.run(sys.argv, argv0="dd-sam")
         
 if __name__ == "__main__":
     main()
