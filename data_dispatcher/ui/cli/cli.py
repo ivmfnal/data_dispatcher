@@ -71,7 +71,8 @@ class CLIInterpreter(object):
         try:
             opts, args = getopt.getopt(argv, short_opts, long_opts)
             #print(self, ".getopt(): opts, args:", opts, args)
-        except getopt.GetoptError:
+        except getopt.GetoptError as e:
+            print(e)
             raise InvalidOptions()
         if len(args) < self.MinArgs:
             raise InvalidArguments()
