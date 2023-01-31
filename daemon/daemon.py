@@ -274,7 +274,6 @@ class RSEConfig(Logged):
         #print("RSEConfig: config:")
         #pprint.pprint(config)
         self.DB = db
-        self.Schemes = config.get("schemes")
 
     def unview(self, rse):
         cfg = self.Config[rse]
@@ -482,7 +481,7 @@ class ProjectMonitor(Primitive, Logged):
                 nchunk = len(chunk)
                 with self.Master:
                     # locked, in case the client needs to refresh the token
-                    rucio_replicas = self.RucioClient.list_replicas(chunk, schemes=self.RSEConfig.Schemes,
+                    rucio_replicas = self.RucioClient.list_replicas(chunk, schemes=self.Master.URLSchemes,
                                             all_states=False, ignore_availability=False)
                 rucio_replicas = list(rucio_replicas)
                 n = len(rucio_replicas)
@@ -592,7 +591,7 @@ class ProjectMaster(PyThread, Logged):
     RunInterval = 10        # seconds       - new project discovery latency
     PurgeInterval = 30*60
     
-    def __init__(self, db, scheduler, rse_config, pollers, rucio_client):
+    def __init__(self, db, scheduler, rse_config, pollers, rucio_client, url_schemes):
         Logged.__init__(self, "ProjectMaster")
         PyThread.__init__(self, name="ProjectMaster")
         self.DB = db
@@ -602,6 +601,7 @@ class ProjectMaster(PyThread, Logged):
         self.RSEConfig = rse_config
         self.Pollers = pollers
         self.RucioClient = rucio_client
+        self.URLSchemes = url_schemes or None
         #self.Scheduler.add(self.clean, id="cleaner")
 
     def clean(self):
@@ -813,7 +813,9 @@ def main():
     rucio_listener = RucioListener(connection_pool, rucio_config, rse_config)
     rucio_listener.start()
 
-    project_master = ProjectMaster(connection_pool, scheduler, rse_config, pollers, replica_client)
+    schemes = config.get("replica_url_schemes")
+
+    project_master = ProjectMaster(connection_pool, scheduler, rse_config, pollers, replica_client, schemes)
     project_master.start()
 
     server_config = config.get("daemon_server", {})
