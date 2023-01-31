@@ -271,6 +271,12 @@
         padding: 3px 5px;  
     }
     
+    img.copy_button {
+        vertical-align:bottom;
+        height: 13;
+        width: 13;
+    }
+    
     </style>
     
     
@@ -288,6 +294,11 @@
                 "failed":     "#F44",
                 "notfound":   "#AAA", 
                 "not found":   "#AAA", 
+        };
+        
+        function copy(text)
+        {
+            navigator.clipboard.writeText(text);
         };
     </script>
 

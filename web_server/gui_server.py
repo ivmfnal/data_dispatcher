@@ -262,6 +262,8 @@ class ProjectsHandler(BaseHandler):
                 last_t = t
             state = entry["state"]
             old_state = entry.get("old_state")
+            if not old_state and entry.get("event") == "worker_timeout":
+                old_state = "reserved"
             assert state in counts and (old_state is None or old_state in counts)
             counts[state] += 1
             if old_state:

@@ -28,7 +28,7 @@
     </tr>
 
     <tr>    <th>Status</th>             <td><span class="{{project.State}}" style="padding: 3px">{{project.State}}</span></td> </tr>
-    <tr>    <th>Project query</th>              <td><pre>{{project.Query or ""}}</pre></td>
+    <tr>    <th>Project query</th>              <td><pre>{{project.Query or ""}}</pre>
     </tr>
     <tr>    <th>Project attributes</th>         <td class="nopadding">
             {% if project.Attributes|length %}
@@ -42,7 +42,7 @@
     </tr>
     <tr>    <th>Project history</th>         
             <td>
-                <span id="count_display"></span><br/>
+                <span id="count_display" style="border: solid white 1px; padding: 1px; margin:1"></span><br/>
                 <svg id="project_history_svg" height=100 width=800 onmouseout="display_count()"></svg>
                 <script type="text/javascript">
                     function display_count(label, n, t)
@@ -128,7 +128,22 @@
     </tr>
 </table>
 
+<div id="file_count_display" style="display:none; position:absolute"></div>
+
 <script type="text/javascript">
+    
+    function display_count_event(event)
+    {
+        var d = document.getElementById("count_display");
+        if( event == null )
+            d.innerHTML = "";
+        else
+        {
+            const the_rect = event.target;
+            d.innerHTML = the_rect.__t + ": " + the_rect.__label + ": " + the_rect.__count;
+            d.className = the_rect.__label;
+        }
+    }
     
     function project_history_received(data, param)
     {
@@ -199,8 +214,12 @@
                             rect.setAttribute("width", w);
                             rect.setAttribute("height", h);
                             rect.setAttribute("style", "stroke-width:0;" + "fill:"+color+";");
+
+                            rect.__count = n;
+                            rect.__label = label;
+                            rect.__t = r.t_display;
                             
-                            rect.setAttribute("onmouseover", "display_count('"+label+"',"+n+", '" + r.t_display + "')");
+                            rect.onmouseover = display_count_event;
                             canvas.appendChild(rect);
                             y += h;
                         }
