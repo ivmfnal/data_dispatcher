@@ -363,7 +363,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
 
         Returns:
             Dictionary or boolean.
-            If dictionary, the dictionary contains the reserved file information.
+            If dictionary, the dictionary contains the reserved file information. "replicas" field will be a dictionary will contain a subdictionary with replicas information
+                indexed by RSE name.
             If ``True``: the request timed out, but can be retried.
             If ``False``: the project has ended.
         """

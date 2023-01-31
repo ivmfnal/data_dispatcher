@@ -18,7 +18,6 @@ def chunked(iterable, n):
         if chunk:
             yield chunk
 
-
 class LocationsCommand(CLICommand):
     
     Opts = "qs:r:jp query= schemes= rses= json pprint"

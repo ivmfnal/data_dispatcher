@@ -274,6 +274,7 @@ class RSEConfig(Logged):
         #print("RSEConfig: config:")
         #pprint.pprint(config)
         self.DB = db
+        self.Schemes = config.get("schemes")
 
     def unview(self, rse):
         cfg = self.Config[rse]
@@ -481,7 +482,7 @@ class ProjectMonitor(Primitive, Logged):
                 nchunk = len(chunk)
                 with self.Master:
                     # locked, in case the client needs to refresh the token
-                    rucio_replicas = self.RucioClient.list_replicas(chunk, schemes=["https", "root", "http"],
+                    rucio_replicas = self.RucioClient.list_replicas(chunk, schemes=self.RSEConfig.Schemes,
                                             all_states=False, ignore_availability=False)
                 rucio_replicas = list(rucio_replicas)
                 n = len(rucio_replicas)
