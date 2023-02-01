@@ -33,7 +33,8 @@ create table rses
     remove_prefix   text    default '',
     add_prefix      text    default '',
     pin_prefix      text    default '',
-    preference      int     default 0
+    preference      int     default 0,
+    type            text
 );
 
 create table replicas

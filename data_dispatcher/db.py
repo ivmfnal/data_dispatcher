@@ -551,16 +551,18 @@ class DBProject(DBObject, HasLogRecord):
 
     @transactioned
     def cancel(self, transaction=None):
-        self.State = "cancelled"
-        self.EndTimestamp = datetime.now(timezone.utc)
-        self.save(transaction=transaction)
-        self.add_log("state", event="cancel", state="cancelled", transaction=transaction)
+        if self.State != "cancelled":
+            self.State = "cancelled"
+            self.EndTimestamp = datetime.now(timezone.utc)
+            self.save(transaction=transaction)
+            self.add_log("state", event="cancel", state="cancelled", transaction=transaction)
 
     @transactioned
     def activate(self, transaction=None):
-        self.State = "active"
-        self.save(transaction=transaction)
-        self.add_log("state", event="activate", state="active", transaction=transaction)
+        if self.State != "active":
+            self.State = "active"
+            self.save(transaction=transaction)
+            self.add_log("state", event="activate", state="active", transaction=transaction)
 
     @transactioned
     def restart_handles(self, states=None, dids=None, transaction=None):
@@ -1608,7 +1610,7 @@ class DBRSE(DBObject):
     Table = "rses"
 
     def __init__(self, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
-                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0, type=None):
         self.DB = db
         self.Name = name
         self.Description = description
@@ -1621,6 +1623,7 @@ class DBRSE(DBObject):
         self.AddPrefix = add_prefix
         self.PinPrefix = pin_prefix
         self.Preference = preference
+        self.Type = type                            # "dcache", "eos", etc.
 
     def as_dict(self):
         return dict(
@@ -1634,31 +1637,24 @@ class DBRSE(DBObject):
             add_prefix      =   self.AddPrefix,
             pin_prefix      =   self.PinPrefix,
             preference      =   self.Preference,
-            is_enabled      =   self.Enabled
+            is_enabled      =   self.Enabled,
+            type            =   self.Type
         )
 
     as_jsonable = as_dict
 
     @classmethod
+    @transactioned
     def create(cls, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
-                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
-        c = db.cursor()
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0, type=None, transaction=None):
         table = cls.Table
         columns = cls.columns(as_text=True)
-        try:
-            c.execute("begin")
-            c.execute(f"""
-                begin;
+        transaction.execute(f"""
                 insert into {table}({columns})
-                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    on conflict(name) do nothing;
-                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, pin_prefix, preference)
+                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict(name) do nothing
+                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, pin_prefix, preference, type)
             )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
-        
         return DBRSE.get(db, name)
 
     @classmethod
@@ -1672,39 +1668,24 @@ class DBRSE(DBObject):
         """)
         return (cls.from_tuple(db, tup) for tup in cursor_iterator(c))
 
-    def save(self):
-        c = self.DB.cursor()
-        try:
-            #print("saving urls:", self.PinURL, self.PollURL)
-            c.execute("begin")
-            c.execute("""
-                begin;
-                update rses 
-                    set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, pin_prefix=%s, preference=%s
-                    where name=%s
-                """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
-                    self.AddPrefix, self.PinPrefix, self.Preference,
-                    self.Name)
-            )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
+    @transactioned
+    def save(self, transaction=None):
+        transaction.execute("""
+            update rses 
+                set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, pin_prefix=%s, preference=%s,
+                        type=%s
+                where name=%s
+            """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
+                self.AddPrefix, self.PinPrefix, self.Preference, self.Type
+                self.Name)
+        )
 
 
     @staticmethod
-    def create_many(db, names):
-        c = db.cursor()
-        table = DBRSE.Table
-        try:
-            c.execute("begin")
-            c.executemany(f"""insert into {table}(name) values(%s) on conflict(name) do nothing""",
-                [(name,) for name in names]
-            )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
+    @transactioned
+    def create_many(db, names, transaction=None):
+        for name in names:
+            DBRSE.create(db, name, transaction=transaction)
 
 class DBProximityMap(DBObject):
 
