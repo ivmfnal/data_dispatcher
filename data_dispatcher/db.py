@@ -1605,7 +1605,7 @@ class DBFileHandle(DBObject, HasLogRecord):
 
 class DBRSE(DBObject):
     
-    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference"]
+    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference", "type"]
     PK = ["name"]
     Table = "rses"
 
@@ -1676,7 +1676,7 @@ class DBRSE(DBObject):
                         type=%s
                 where name=%s
             """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
-                self.AddPrefix, self.PinPrefix, self.Preference, self.Type
+                self.AddPrefix, self.PinPrefix, self.Preference, self.Type,
                 self.Name)
         )
 
