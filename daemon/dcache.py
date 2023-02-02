@@ -242,13 +242,13 @@ class DCacheInterface(Primitive, Logged):
         Primitive.__init__(self, name=f"DCacheInterface({rse})")
         Logged.__init__(self, name=f"DCacheInterface({rse})")
         self.Poller = DCachePoller(rse, db, rse_config.poll_url(rse), rse_config.max_burst(rse), rse_config.ssl_config(rse))
-        self.Pinner = DCachePinner(rse, db, self.RSEConfig.pin_url(rse), self.RSEConfig.pin_prefix(rse), rse_config.ssl_config(rse), self.Poller)
+        self.Pinner = DCachePinner(rse, db, rse_config.pin_url(rse), rse_config.pin_prefix(rse), rse_config.ssl_config(rse), self.Poller)
         self.Poller.start()
         self.Pinner.start()
 
     def pin_project(self, project_id, files):
         # files: {did -> path}
-        return self.Pinner.pin_project(files)
+        return self.Pinner.pin_project(project_id, files)
 
     def unpin_project(self, project_id):
         return self.Pinner.unpin_project(project_id)

@@ -354,9 +354,9 @@ class ProjectMonitor(Primitive, Logged):
                     namespace = r["scope"]
                     name = r["name"]
                     for rse, urls in r["rses"].items():
-                        self.debug(namespace, name, rse, urls)
+                        #self.debug(namespace, name, rse, urls)
                         if rse in self.RSEConfig:
-                            self.debug(f"RSE {rse} in config")
+                            #self.debug(f"RSE {rse} in config")
                             preference = self.RSEConfig.preference(rse)
                             available = not self.RSEConfig.is_tape(rse)
                             for url in urls:
@@ -367,7 +367,6 @@ class ProjectMonitor(Primitive, Logged):
                             else:
                                 # xrootd not found - use first URL on the list, assuming it's most preferred for the RSE
                                 url = urls[0]
-                            #self.debug("fix_url..")
                             url = self.RSEConfig.fix_url(rse, url)
                             path = self.RSEConfig.url_to_path(rse, url)
                             data = dict(path=path, url=url, available=available, preference=preference)
