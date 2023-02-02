@@ -47,8 +47,8 @@ class DCachePoller(PyThread, Logged):
                     response = requests.get(url, headers=headers, cert=cert, verify=False)
                     #self.debug("response:", response.status_code, response.text)
                     if response.status_code == 404:
-                        #self.debug(f"file not found (status 404): {did} - removing")
-                        self.log("Replica not found:", path)
+                        self.debug(f"file not found (status 404): {did} {path} - removing")
+                        #self.log("Replica not found:", path)
                         remove_dids.append(did)
                     elif response.status_code//100 != 2:
                         continue
@@ -56,11 +56,11 @@ class DCachePoller(PyThread, Logged):
                         data = response.json()
                         available = "ONLINE" in data.get("fileLocality", "").upper()
                         if available:
-                            self.log("Replica available:", did, path)
+                            #self.log("Replica available:", did, path)
                             available_dids.append(did)
                         else:
                             unavailable_dids.append(did)
-                            self.log("Replica unavailable:", did, path)
+                            #self.log("Replica unavailable:", did, path)
                 DBReplica.update_availability_bulk(self.DB, True, self.RSE, available_dids)
                 DBReplica.update_availability_bulk(self.DB, False, self.RSE, unavailable_dids)
                 DBReplica.remove_bulk(self.DB, self.RSE, remove_dids)
