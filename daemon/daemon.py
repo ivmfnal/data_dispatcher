@@ -384,6 +384,7 @@ class ProjectMonitor(Primitive, Logged):
         schedule_task(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
             t = 0,
             interval=self.UpdateInterval)
+        self.debug("update_replicas_availability task schduled")
         self.debug("sync_replicas done")
 
     def update_replicas_availability(self):
