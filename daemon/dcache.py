@@ -107,7 +107,7 @@ class PinRequest(Logged):
         }
         if self.PinPrefix:
             data["target-prefix"] = self.PinPrefix
-        self.debug("request data:", json.dumps(data, indent="  "))
+        #self.debug("request data:", json.dumps(data, indent="  "))
         r = requests.post(self.BaseURL, data = json.dumps(data), headers=headers, 
                 verify=False, cert = self.CertTuple)
 
