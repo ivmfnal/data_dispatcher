@@ -32,7 +32,7 @@ class DCachePoller(PyThread, Logged):
                 with self:
                     items = list(self.Files.items())
                     n = len(items)
-                    nburst = min(self.MaxBurst, max(10, n//10))
+                    nburst = min(self.MaxBurst, n)
                     burst, items = items[:nburst], items[nburst:]
                     self.Files = dict(items)
                 headers = { "accept" : "application/json",

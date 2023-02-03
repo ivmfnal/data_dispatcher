@@ -311,7 +311,7 @@ class ProjectMonitor(Primitive, Logged):
         
     @synchronized
     def check_project_state(self):
-        self.debug("check_project_state...")
+        #self.debug("check_project_state...")
         project = DBProject.get(self.DB, self.ProjectID)
         if project is None or project.State != "active":
             self.remove_me("project inactive")
@@ -377,9 +377,8 @@ class ProjectMonitor(Primitive, Logged):
                             #self.debug("added replica:", data)
                         else:
                             pass
-                self.debug("calling DBReplica.sync_replicas...")
                 DBReplica.sync_replicas(self.DB, by_namespace_name_rse)
-            self.log(f"sync_replicas(): done: {total_replicas} replicas found for {ndids} dids")
+            self.log(f"sync_replicas(): {total_replicas} replicas found for {ndids} dids")
         except Exception as e:
             print("Exception in sync_replicas:", e, file=sys.stderr)
             traceback.print_exc()
