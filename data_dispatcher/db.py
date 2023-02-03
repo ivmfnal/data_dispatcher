@@ -1429,7 +1429,8 @@ class DBFileHandle(DBObject, HasLogRecord):
                     h.Replicas = {}
                     h.Availability = "not found" if with_availability else None
                 if r_tuple[0] is not None:
-                    h.Availability = "found"
+                    if h.Availability != "available":
+                        h.Availability = "found"
                     r = DBReplica.from_tuple(db, r_tuple)
                     r.RSEAvailable = bool(rse_available)
                     h.Replicas[r.RSE] = r

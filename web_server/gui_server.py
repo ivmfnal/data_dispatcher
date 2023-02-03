@@ -2,7 +2,7 @@ from webpie import WPApp, WPHandler, WPStaticHandler
 from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap       # , DBUser
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
-import urllib, os, yaml, time, json
+import urllib, os, yaml, time, json, pprint
 from urllib.parse import quote, unquote, unquote_plus
 from wsdbtools import ConnectionPool
 from datetime import timezone, datetime
@@ -222,7 +222,7 @@ class ProjectsHandler(BaseHandler):
         if project is None:
             return 404, "Project not found"
         counts = {state:0 for state in DBFileHandle.DerivedStates}
-        for state in project.handle_states().values():
+        for did, state in project.handle_states().items():
             counts[state] = counts.get(state, 0) + 1
         return json.dumps(counts), "text/json"
 
