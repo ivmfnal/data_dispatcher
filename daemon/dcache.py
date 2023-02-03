@@ -61,6 +61,9 @@ class DCachePoller(PyThread, Logged):
                         else:
                             unavailable_dids.append(did)
                             #self.log("Replica unavailable:", did, path)
+                self.log("out of %d replicas: available: %d, unavailable: %d, not found:%d" % 
+                    (len(burst), len(available_dids), len(unavailable_dids), len(remove_dids))
+                )
                 DBReplica.update_availability_bulk(self.DB, True, self.RSE, available_dids)
                 DBReplica.update_availability_bulk(self.DB, False, self.RSE, unavailable_dids)
                 DBReplica.remove_bulk(self.DB, self.RSE, remove_dids)
@@ -200,6 +203,7 @@ class DCachePinner(PyThread, Logged):
 
     def run(self):
         time.sleep(self.InitialSleepInterval)          # initial sleep so pprojects have a chance to send their pin requests
+        self.debug("run...")
         while not self.Stop:
             next_run = self.UpdateInterval
             try:

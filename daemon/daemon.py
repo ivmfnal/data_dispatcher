@@ -456,6 +456,7 @@ class ProjectMaster(PyThread, Logged):
         self.clean()
         schedule_task(self.clean, id="cleaner", t0 = time.time() + self.PurgeInterval)
         while not self.Stop:
+            self.debug("run...")
             try:
                 active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
                 #self.debug("run: active projects:", len(active_projects),"   known projects:", len(monitor_projects))
@@ -467,7 +468,7 @@ class ProjectMaster(PyThread, Logged):
                         self.add_project(project_id)
             except Exception as e:
                 self.error("exception in run():\n", traceback.format_exc())
-            self.debug("sleeping...")
+            #self.debug("sleeping...")
             self.sleep(self.RunInterval)
 
     @synchronized
