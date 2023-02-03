@@ -263,6 +263,7 @@ class ProjectMonitor(Primitive, Logged):
         self.UpdateAvailabilityJobID = f"update_availability_{project_id}"
         self.CheckStateJobID = f"check_state_{project_id}"
         self.TapeRSEInterfaces = {}
+        self.UpdateScheduled = False
         
     def tape_rse_interface(self, rse):
         interface = self.TapeRSEInterfaces.get(rse)
@@ -381,9 +382,9 @@ class ProjectMonitor(Primitive, Logged):
             traceback.print_exc()
             self.error("exception in sync_replicas:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
-        schedule_task(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
-            t = 0,
-            interval=self.UpdateInterval)
+        if not self.UpdateScheduled:
+            schedule_task(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, t = 0, interval=self.UpdateInterval)
+            self.UpdateScheduled = True
         self.debug("update_replicas_availability task schduled")
         self.debug("sync_replicas done")
 
