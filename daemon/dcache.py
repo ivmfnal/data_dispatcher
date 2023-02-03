@@ -161,7 +161,9 @@ class PinRequest(Logged):
         return self.Expiration is None or time.time() >= self.Expiration - self.SafetyInterval
 
     def same_files(self, paths):
-        return set(paths) == self.Paths
+        paths = set(paths)
+        same = paths == self.Paths
+        return same
 
 class DCachePinner(PyThread, Logged):
 
@@ -205,6 +207,14 @@ class DCachePinner(PyThread, Logged):
 
                     if self.PinRequest is not None and not self.PinRequest.same_files(all_paths):
                         self.debug("file set changed -- deleting pin request")
+                        # debug
+                        added = all_paths - self.PinRequest.Paths
+                        if added:
+                            for path in sorted(added):
+                                self.debug("   added:  ", path)
+                        removed = self.PinRequest.Paths - all_paths
+                            for path in sorted(removed):
+                                self.debug("   removed:", path)
                         self.PinRequest.delete()
                         self.PinRequest = None
 

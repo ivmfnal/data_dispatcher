@@ -21,7 +21,13 @@ class InterfaceLibrary(Primitive):
             self.Interfaces[rse] = interface
         return interface
 
+    def interfaces(self):
+        return self.Interfaces
+
 _Library = InterfaceLibrary()
 
 def get_interface(rse, rse_config, db):
     return _Library.get_interface(rse, rse_config, db)
+    
+def interfaces():
+    return _Library.interfaces()
