@@ -112,7 +112,11 @@ class PinRequest(Logged):
                 verify=False, cert = self.CertTuple)
 
         #print("send(): response:", r)
-        self.debug("response text:", r.text)
+        self.debug("response headers:")
+        for name, value in r.headers.items():
+            self.debug("  %s: %s" % (name, value))
+        self.debug("response text:")
+        self.debug(r.text)
         r.raise_for_status()
         self.URL = r.headers['request-url']
         self.Expiration = time.time() + self.PinLifetime
