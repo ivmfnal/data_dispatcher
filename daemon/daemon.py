@@ -1,7 +1,7 @@
 import stompy, pprint, urllib, requests, json, time, traceback, textwrap
 from urllib.parse import urlparse
 from data_dispatcher.db import DBProject, DBReplica, DBRSE, DBProximityMap
-from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task
+from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task, schedule_task, unschedule_task
 from data_dispatcher.logs import Logged
 from daemon_web_server import DaemonWebServer
 from tape_interfaces import get_interface
@@ -39,16 +39,18 @@ class JobDelegate(object):
 
 delegate = JobDelegate()
 
-TaskScheduler = Scheduler(name="TaskScheduler", delegate=delegate)
+#TaskScheduler = Scheduler(name="TaskScheduler", delegate=delegate)
 SyncScheduler = Scheduler(5, name="SyncScheduler", delegate=delegate)
 
 
-def print_jobs():
-    print("------- tasks scheduled")
-    for job in TaskScheduler.jobs():
-        print("   ", job.ID, job.NextT - time.time())
+if False:
+    # debug
+    def print_jobs():
+        print("------- global tasks scheduled")
+        for job in global_scheduler().jobs():
+            print("   ", job.ID, job.NextT - time.time())
 
-TaskScheduler.add(print_jobs, interval=30, id="print_tasks")
+    schedule_task(print_jobs, interval=30, id="print_tasks")
 
 Queue = TaskQueue(10, stagger=0.1)
 
@@ -270,15 +272,15 @@ class ProjectMonitor(Primitive, Logged):
         
     def schedule_jobs(self):
         SyncScheduler.add(self.sync_replicas, id=self.SyncReplicasJobID, t0=time.time(), interval=self.SyncInterval)
-        TaskScheduler.add(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
-            t0 = time.time() + 10,          # run a bit after first sync, but it's ok to run before
+        schedule_task(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
+            t = 10,             # ideally run shortly after first sync, but it's ok to run before
             interval=self.UpdateInterval)
-        TaskScheduler.add(self.check_project_state, id=self.CheckStateJobID, t0=time.time(), interval=self.UpdateInterval)
+        schedule_task(self.check_project_state, id=self.CheckStateJobID, t=0, interval=self.UpdateInterval)
 
     def remove_jobs(self):
         SyncScheduler.remove(self.SyncReplicasJobID)
-        TaskScheduler.remove(self.UpdateAvailabilityJobID)
-        TaskScheduler.remove(self.CheckStateJobID)
+        unschedule_task(self.UpdateAvailabilityJobID)
+        unschedule_task(self.CheckStateJobID)
 
     def remove_me(self, reason):
         self.log("remove me:", reason)
@@ -452,7 +454,7 @@ class ProjectMaster(PyThread, Logged):
 
     def run(self):
         self.clean()
-        TaskScheduler.add(self.clean, id="cleaner", t0 = time.time() + self.PurgeInterval)
+        schedule_task(self.clean, id="cleaner", t0 = time.time() + self.PurgeInterval)
         while not self.Stop:
             try:
                 active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())

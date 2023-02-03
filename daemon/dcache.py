@@ -171,8 +171,8 @@ class PinRequest(Logged):
 
 class DCachePinner(PyThread, Logged):
 
-    InitialSleepInterval = 30
-    UpdateInterval = 10         # replica availability update interval
+    InitialSleepInterval = 60
+    UpdateInterval = 30         # replica availability update interval
 
     def __init__(self, rse, db, url, prefix, ssl_config, poller):
         PyThread.__init__(self, name=f"DCachePinner({rse})")
