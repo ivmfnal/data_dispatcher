@@ -208,13 +208,10 @@ class DCachePinner(PyThread, Logged):
                     if self.PinRequest is not None and not self.PinRequest.same_files(all_paths):
                         self.debug("file set changed -- deleting pin request")
                         # debug
-                        added = all_paths - self.PinRequest.Paths
-                        if added:
-                            for path in sorted(added):
-                                self.debug("   added:  ", path)
-                        removed = self.PinRequest.Paths - all_paths
-                            for path in sorted(removed):
-                                self.debug("   removed:", path)
+                        for path in sorted(all_paths - self.PinRequest.Paths):
+                            self.debug(" +", path)
+                        for path in sorted(self.PinRequest.Paths - all_paths):
+                            self.debug(" -", path)
                         self.PinRequest.delete()
                         self.PinRequest = None
 
