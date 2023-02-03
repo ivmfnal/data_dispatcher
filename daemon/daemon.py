@@ -259,9 +259,9 @@ class ProjectMonitor(Primitive, Logged):
         self.PinRequests = {}       # {rse -> PinRequest}
         self.Master = master
         self.RucioClient = rucio_client
-        self.SyncReplicasJobID = f"sync_{project_id}"
-        self.UpdateAvailabilityJobID = f"update_{project_id}"
-        self.CheckStateJobID = f"check_{project_id}"
+        self.SyncReplicasJobID = f"sync_replicas_{project_id}"
+        self.UpdateAvailabilityJobID = f"update_availability_{project_id}"
+        self.CheckStateJobID = f"check_state_{project_id}"
         self.TapeRSEInterfaces = {}
         
     def tape_rse_interface(self, rse):
@@ -272,9 +272,6 @@ class ProjectMonitor(Primitive, Logged):
         
     def schedule_jobs(self):
         SyncScheduler.add(self.sync_replicas, id=self.SyncReplicasJobID, t0=time.time(), interval=self.SyncInterval)
-        schedule_task(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
-            t = 10,             # ideally run shortly after first sync, but it's ok to run before
-            interval=self.UpdateInterval)
         schedule_task(self.check_project_state, id=self.CheckStateJobID, t=0, interval=self.UpdateInterval)
 
     def remove_jobs(self):
@@ -384,6 +381,9 @@ class ProjectMonitor(Primitive, Logged):
             traceback.print_exc()
             self.error("exception in sync_replicas:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
+        schedule_task(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, 
+            t = 0,
+            interval=self.UpdateInterval)
         self.debug("sync_replicas done")
 
     def update_replicas_availability(self):
