@@ -76,7 +76,6 @@ class PinRequest(Logged):
     # see https://docs.google.com/document/d/14sdrRmJts5JYBFKSvedKCxT1tcrWtWchR-PJhxdunT8/edit?usp=sharing
     
     PinLifetime = 3600
-    SafetyInterval = 600            # if the expiration time is too close, consider the request expired
     
     def __init__(self, rse, url, pin_prefix, ssl_config, paths):
         Logged.__init__(self, f"PinRequest({rse})")
@@ -93,6 +92,9 @@ class PinRequest(Logged):
         self.Complete = False
         self.Expiration = None
         self.debug("created for", len(paths),"replicas")
+
+    def __len__(self):
+        return len(self.Paths)
 
     def send(self):
         headers = { "accept" : "application/json",
@@ -123,8 +125,7 @@ class PinRequest(Logged):
         r.raise_for_status()
         self.URL = r.headers['request-url']
         self.Expiration = time.time() + self.PinLifetime
-        self.log("Pin request created. URL:", self.URL)
-
+        
     def query(self):
         assert self.URL is not None
         headers = { "accept" : "application/json" }
@@ -164,8 +165,8 @@ class PinRequest(Logged):
             self.Complete = info.get("status").upper() == "COMPLETED" and len(info.get("failures", {}).get("failures",{})) == 0
         return self.Complete
         
-    def expired(self):
-        return self.Expiration is None or time.time() >= self.Expiration - self.SafetyInterval
+    def will_expire(self, t):
+        return self.Expiration is None or time.time() >= self.Expiration - t
 
     def same_files(self, paths):
         paths = set(paths)
@@ -213,22 +214,29 @@ class DCachePinner(PyThread, Logged):
                         all_files.update(project_files)
                     all_paths = set(all_files.values())
 
-                    if self.PinRequest is not None and not self.PinRequest.same_files(all_paths):
-                        self.debug("file set changed -- deleting pin request")
-                        # debug
-                        for path in sorted(all_paths - self.PinRequest.Paths):
-                            self.debug(" +", path)
-                        for path in sorted(self.PinRequest.Paths - all_paths):
-                            self.debug(" -", path)
-                        self.PinRequest.delete()
-                        self.PinRequest = None
+                    if self.PinRequest is not None:
+                        if not self.PinRequest.same_files(all_paths):
+                            self.log("file set changed -- deleting pin request")
+                            self.debug("file set changed -- deleting pin request")
+                            # debug
+                            for path in sorted(all_paths - self.PinRequest.Paths):
+                                self.debug(" +", path)
+                            for path in sorted(self.PinRequest.Paths - all_paths):
+                                self.debug(" -", path)
+                            self.PinRequest.delete()
+                            self.PinRequest = None
+                        elif self.PinRequest.will_expire(self.UpdateInterval*3):
+                            self.debug("pin request is about to expire -- deleting pin request")
+                            self.log("pin request is about to expire -- deleting pin request")
+                            self.PinRequest.delete()
+                            self.PinRequest = None
 
                     if all_files:       # anything to pin ??
                         if self.PinRequest is None:
                             self.debug("sending pin request for", len(all_paths), "replicas...")
                             self.PinRequest = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
                             self.PinRequest.send()
-                            self.debug("new pin request created for %d files" % (len(all_paths),))
+                            self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
                         else:
                             if self.PinRequest.error():
                                 self.error("error in pin request -- deleting pin request")
@@ -236,7 +244,7 @@ class DCachePinner(PyThread, Logged):
                                 self.PinRequest = None
                             elif self.PinRequest.complete():
                                 all_dids = list(all_files.keys())
-                                self.log("pin request complete for %d files" % (len(all_dids),))
+                                self.log("pin request complete for %d files" % (len(self.PinRequest),))
                                 DBReplica.update_availability_bulk(self.DB, True, self.RSE, all_dids)
                             else:
                                 # pin request is still not done, poll files individually

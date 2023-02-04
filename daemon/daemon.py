@@ -56,7 +56,7 @@ Queue = TaskQueue(10, stagger=0.1)
 
 class ProximityMapDownloader(PyThread, Logged):
 
-    def __init__(self, db, url, interval=30):
+    def __init__(self, db, url, interval=300):
         PyThread.__init__(self, name="ProximityMapDownloader", daemon=True)
         Logged.__init__(self, "ProximityMapDownloader")
         self.DB = db
