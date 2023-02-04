@@ -132,9 +132,12 @@ class PinRequest(Logged):
         r = requests.get(self.URL, headers=headers, verify=False, cert = self.CertTuple)
         #self.debug("status(): response:", r)
         if r.status_code // 100 == 4:
+            self.log("query: HTTP status:", r.status_code, " -- ERROR")
             self.Error = True
             self.ErrorText = r.text
             return "ERROR"
+        data = r.json()
+        self.log("request status:", data["status"], "  targets:", data["targets"], "  processed:", data["processed"])
         r.raise_for_status()
         self.debug("query: my URL:", self.URL, "   response:", r.text)
         return r.json()
