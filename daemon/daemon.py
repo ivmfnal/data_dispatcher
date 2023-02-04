@@ -451,11 +451,9 @@ class ProjectMaster(PyThread, Logged):
             self.log("abandoned projects:", nabandoned, ", purged replicas:", nreplicas)
         except:
             self.error("Exception in ProjectMaster.clean():", "\n" + traceback.format_exc())
-        return self.PurgeInterval
 
     def run(self):
-        self.clean()
-        schedule_task(self.clean, id="cleaner", t0 = time.time() + self.PurgeInterval)
+        schedule_task(self.clean, id="cleaner", t=0, interval = self.PurgeInterval)
         while not self.Stop:
             self.debug("run...")
             try:
