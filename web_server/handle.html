@@ -23,8 +23,15 @@
                                     src="{{GLOBAL_AppTopPath}}/static/copy.png"/></a></td></tr>
     <tr>    <th>File name</th> <td class="code">{{handle.Name}}&nbsp;<a title="copy" href="javascript:copy('{{handle.Namespace}}')"><img class="copy_button"
                                     src="{{GLOBAL_AppTopPath}}/static/copy.png"/></a></td></tr>
-    <tr>    <th>State</th> <td>{{handle.State}}</td></tr>
-    <tr>    <th>Worker</th> <td>{{handle.WorkerID or ""}}</td></tr>
+    {% set state = handle.state() %}
+    <tr>    <th>State</th> <td class="{{state}}">{{state}}</td></tr>
+    <tr>    <th>Worker</th> 
+            <td>{% if handle.WorkerID %}
+                    {{handle.WorkerID}}&nbsp;<a title="copy" href="javascript:copy('{{handle.WorkerID}}')"><img class="copy_button"
+                                        src="{{GLOBAL_AppTopPath}}/static/copy.png"/></a>
+                {% endif %}
+            </td>
+    </tr>
     <tr>    <th>Attempts</th> <td>{{handle.Attempts}}</td></tr>
     <tr>    <th>Attributes</th> 
             <td class="nopadding">
@@ -60,12 +67,17 @@
                 <table class="data">
                     <tr><th>Time</th><th>Event</th><th>Old state</th><th>State</th><th>Worker</th></tr>
                     {% for log_record in handle_log %}
+                        {% set worker_id = log_record.Data["worker"] or None %}
                         <tr>
                             <td>{{log_record.T|as_dt_utc}}</td>
                             <td>{{log_record.Data["event"]|none_as_blank}}</td>
                             <td class="{{log_record.Data['old_state']}}">{{log_record.Data["old_state"]|none_as_blank}}</td>
                             <td class="{{log_record.Data['state']}}">{{log_record.Data["state"]|none_as_blank}}</td>
-                            <td>{{log_record.Data["worker"]|none_as_blank}}</td>
+                            <td>{% if worker_id %}
+                                    {{worker_id}}&nbsp;<a title="copy" href="javascript:copy('{{worker_id}}')"><img class="copy_button"
+                                        src="{{GLOBAL_AppTopPath}}/static/copy.png"/>
+                                {% endif %}
+                            </td>
                             <td style="text-align:left">{{ log_record._RestOfData|format_log_data }}</td>
                         </tr>
                     {% endfor %}

@@ -60,31 +60,32 @@
             </td> 
     </tr>
     <tr>    
-            <th>Files</th>
+            <th></th>
             <td class="nopadding">
                 <table class="placement dense">
                     <tr>
-                    {% for state in states -%}
-                        <td class="{{state|replace(' ', '_')}}">
-                            {% if state in state_index %}
-                                <a href="{{state_index[state]}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</a>
-                            {% else %}
-                                {{state}}:&nbsp{{handle_counts_by_state[state]}}
-                            {% endif %}
-                        </td>
-                    {% endfor %}
+                        {% if page_index %}
+                            <td style="white-space:pre">page:{%- for p, link in page_index -%}
+                                        {%- if link is not none -%}
+                                            &nbsp;&nbsp;<a href="{{link}}">{{p}}</a>
+                                        {%- else -%}
+                                            &nbsp;&nbsp;{{p}}
+                                        {%- endif -%}
+                                    {%- endfor -%}
+                            </td>
+                        {% endif %}
+                        {% for state in states -%}
+                            <td class="{{state|replace(' ', '_')}}">
+                                {% if state in state_index %}
+                                    <a href="{{state_index[state]}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</a>
+                                {% else %}
+                                    {{state}}:&nbsp{{handle_counts_by_state[state]}}
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                        <td><a href="./project_handles_log?project_id={{project.ID}}">handles log</a></td>
                     </tr>
                 </table>
-                {% if not page_index is none %}
-                    <p>page:{%- for p, link in page_index -%}
-                                {%- if link is not none -%}
-                                    &nbsp;&nbsp;<a href="{{link}}">{{p+1}}</a>
-                                {%- else -%}
-                                    &nbsp;&nbsp;{{p+1}}
-                                {%- endif -%}
-                            {%- endfor -%}
-                    </p>
-                {% endif %}
                 <table class="data replicas">
                     <tr>
                         <th>File</th>
@@ -96,14 +97,19 @@
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
-                        {% set wf_state = handle.State %}
+                        {% set wf_state = handle.state() %}
                         <tr id="state:{{wf_state}}">
-                            <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
+                            <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a>&nbsp;<a title="copy" href="javascript:copy('{{did}}')"><img class="copy_button"
+                                    src="{{GLOBAL_AppTopPath}}/static/copy.png"/></a></td>
                             {% set file_state = handle.file_state() %}
                             <td class="{{file_state|replace(' ', '_')}}">{{file_state}}</td>
                             <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
                             <td class="{{wf_state|replace(' ', '_')}}">{{wf_state}}</td>
-                            <td>{{handle.WorkerID or ""}}</td>
+                            <td>{% if handle.WorkerID %}
+                                    {{handle.WorkerID}}&nbsp;<a title="copy" href="javascript:copy('{{handle.WorkerID}}')"><img class="copy_button"
+                                        src="{{GLOBAL_AppTopPath}}/static/copy.png"/></a>
+                                {% endif %}
+                            </td>
                             <td>{{handle.Attempts}}</td>
                         </tr>
                     {% endfor %}

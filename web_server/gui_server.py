@@ -8,6 +8,39 @@ from wsdbtools import ConnectionPool
 from datetime import timezone, datetime
 from data_dispatcher.query import ProjectQuery
 
+
+def page_index(page, npages, page_size, url_prefix):
+    last_page = npages - 1
+    next_page = page + 1
+    prev_page = page - 1
+    if "?" not in url_prefix:
+        url_prefix = url_prefix + "?"
+    else:
+        url_prefix = url_prefix + "&"
+    first_page_link = f"{url_prefix}page=0&page_size={page_size}"
+    prev_page_link = f"{url_prefix}page={prev_page}&page_size={page_size}"
+    next_page_link = f"{url_prefix}page={next_page}&page_size={page_size}"
+    last_page_link = f"{url_prefix}page={last_page}&page_size={page_size}"
+
+    index_page_links = None
+    if npages > 1:
+        index_page_links = []
+        if page > 1:
+            index_page_links.append((1, first_page_link))
+        if page > 2:
+            index_page_links.append(("...", None))
+        if prev_page >= 0:
+            index_page_links.append((prev_page+1, prev_page_link))
+        index_page_links.append((page+1, None))
+        if page < last_page:
+            index_page_links.append((next_page+1, next_page_link))
+        if next_page < last_page - 1:
+            index_page_links.append(("...", None))
+        if next_page < last_page:
+            index_page_links.append((last_page+1, last_page_link))
+    #print(f"page_index({page}, {npages}) -> ", index_page_links)
+    return index_page_links
+
 class ___UsersHandler(BaseHandler):
 
     def users(self, request, relpath, error="", **args):
@@ -102,6 +135,17 @@ class ___UsersHandler(BaseHandler):
                     
 class ProjectsHandler(BaseHandler):
     
+    HandleStateOrder = {
+        state:i for i, state in enumerate([
+            "available", 
+            "reserved",
+            "not found",
+            "found",
+            "done",
+            "failed"
+        ])
+    }
+    
     def parse_datetime(self, dt):
         dt = (dt or "").strip()
         if not dt:  return None
@@ -115,8 +159,8 @@ class ProjectsHandler(BaseHandler):
             dt = datetime.strptime(dt, "%Y-%m-%d")
         dt = dt.replace(tzinfo=timezone.utc)
         return dt
-    
-    def projects(self, request, relpath, message="", page=0, page_size=100, **args):
+
+    def projects(self, request, relpath, message="", page=0, page_size=1000, **args):
         db = self.App.db()
         page = int(page)
         page_size = int(page_size)
@@ -173,32 +217,15 @@ class ProjectsHandler(BaseHandler):
         current_user, auth_error = self.authenticated_user()
         
         npages = (nprojects + page_size - 1)//page_size
-        last_page = npages - 1
-        next_page = page + 1
-        prev_page = page - 1
-        next_page_link = f"projects?page={next_page}&page_size={page_size}"
-        prev_page_link = f"projects?page={prev_page}&page_size={page_size}"
-        first_page_link = f"projects?page=0&page_size={page_size}"
-        last_page_link = f"projects?page={last_page}&page_size={page_size}"
 
-        index_page_links = None
-        if npages > 1:
-            index_page_links = {}
-            if page != first_page_link: index_page_links[0] = first_page_link
-            if prev_page >= 0: index_page_links[prev_page] = prev_page_link
-            if next_page < npages: index_page_links[next_page] = next_page_link
-            if page != last_page: index_page_links[last_page] = last_page_link
-            index_page_links[page] = None
-            index_page_links = sorted(index_page_links.items())
-            
-        
         if not do_search:
             search_user = current_user.Username if current_user else ""
             search_active_only = True
         
         search_user = search_user if form_posted else (search_user or user and user.Username or "")
         return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates,
-                    page_index = index_page_links, message=message,
+                    page_index = page_index(page, npages, page_size, "projects"), 
+                    message=message,
                     search_user = search_user,
                     search_created_before = None if search_created_before is None else search_created_before.strftime("%Y-%m-%d %H:%M:%S"),
                     search_created_after = None if search_created_after is None else search_created_after.strftime("%Y-%m-%d %H:%M:%S"),
@@ -275,11 +302,9 @@ class ProjectsHandler(BaseHandler):
             history.append(data)
         return json.dumps(history), "text/json"
 
-    def project(self, request, relpath, project_id=None, page=0, page_size=100, **args):
-
+    def project(self, request, relpath, project_id=None, page=0, page_size=1000, **args):
         page = int(page)
         page_size = int(page_size)
-        state_order = {state:i for i, state in enumerate(DBFileHandle.DerivedStates)}
 
         db = self.App.db()
         project_id = int(project_id)
@@ -290,30 +315,14 @@ class ProjectsHandler(BaseHandler):
             self.redirect(f"./projects?message={message}")
 
         all_handles = sorted(project.handles(with_replicas=True, reload=True), 
-                key=lambda h: (state_order.get(h.State, 100), h.Attempts, h.Namespace, h.Name))
+                key=lambda h: (self.HandleStateOrder.get(h.state(), 100), h.Attempts, h.Namespace, h.Name))
+
         nhandles = len(all_handles)
         istart = page*page_size
         t0 = time.time()
         handles = all_handles[istart:istart+page_size]
         #handles = list(project.get_handles([h.did() for h in all_handles[istart:istart+page_size]]))
         npages = (nhandles + page_size - 1)//page_size
-        last_page = npages - 1
-        next_page = page + 1
-        prev_page = page - 1
-        next_page_link = f"project?project_id={project_id}&page={next_page}&page_size={page_size}"
-        prev_page_link = f"project?project_id={project_id}&page={prev_page}&page_size={page_size}"
-        first_page_link = f"project?project_id={project_id}&page=0&page_size={page_size}"
-        last_page_link = f"project?project_id={project_id}&page={last_page}&page_size={page_size}"
-
-        index_page_links = None
-        if npages > 1:
-            index_page_links = {}
-            if page != first_page_link: index_page_links[0] = first_page_link
-            if prev_page >= 0: index_page_links[prev_page] = prev_page_link
-            if next_page < npages: index_page_links[next_page] = next_page_link
-            if page != last_page: index_page_links[last_page] = last_page_link
-            index_page_links[page] = None
-            index_page_links = sorted(index_page_links.items())
             
         available_handles = 0
         handle_counts_by_state = {state:0 for state in DBFileHandle.DerivedStates}     # {state -> count}
@@ -327,8 +336,7 @@ class ProjectsHandler(BaseHandler):
             handle_counts_by_state[state] = handle_counts_by_state.get(state, 0) + 1
 
             if not state in state_index:
-                page = i//page_size
-                state_index[state] = page
+                state_index[state] = i//page_size
 
         state_page_links = {s: f"project?project_id={project_id}&page={p}&page_size={page_size}#state:{s}" for s, p in state_index.items()}
 
@@ -359,7 +367,43 @@ class ProjectsHandler(BaseHandler):
             available_handles=available_handles,
             handle_counts_by_state=handle_counts_by_state, states=DBFileHandle.DerivedStates,
             project_log = project.get_log(),
-            page = page, page_index = index_page_links, state_index = state_page_links
+            page = page, 
+            page_index = page_index(page, npages, page_size, f"project?project_id={project_id}"), 
+            state_index = state_page_links
+        )
+
+    def project_handles_log(self, request, relpath, project_id=None, page=0, page_size=1000, **args):
+        page = int(page)
+        page_size = int(page_size)
+
+        db = self.App.db()
+        project_id = int(project_id)
+        project = DBProject.get(db, project_id)
+        
+        if project is None:
+            message = urllib.parse.quote_plus(f"Project {project_id} not found")
+            self.redirect(f"./projects?message={message}")
+
+        all_records = [record for record in project.handles_log() if record.Data.get("event") != "create"]
+        all_records = sorted(all_records, key=lambda r:r.T)
+        nrecords = len(all_records)
+        npages = (nrecords + page_size - 1)//page_size
+        istart = page*page_size
+        records = all_records[istart:istart+page_size]
+
+        for record in records:
+            data = record.Data.copy()
+            data.pop("old_state", None)
+            data.pop("state", None)
+            data.pop("event", None)
+            data.pop("worker", None)
+            record._RestOfData = data
+
+        t0 = time.time()
+
+        return self.render_to_response("project_handles_log.html", project=project,
+            records=records,
+            page = page, page_index = page_index(page, npages, page_size,f"project_handles_log?project_id={project_id}")
         )
 
     def handle(self, request, relpath, project_id=None, namespace=None, name=None, **args):
