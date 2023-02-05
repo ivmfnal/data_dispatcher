@@ -24,7 +24,7 @@
     <tr>    <th>File name</th> <td class="code">{{handle.Name}}&nbsp;<a title="copy" href="javascript:copy('{{handle.Namespace}}')"><img class="copy_button"
                                     src="{{GLOBAL_AppTopPath}}/static/copy.png"/></a></td></tr>
     {% set state = handle.state() %}
-    <tr>    <th>State</th> <td class="{{state}}">{{state}}</td></tr>
+    <tr>    <th>State</th> <td><span class="{{state}}" style="padding:3px">{{state}}</span></td></tr>
     <tr>    <th>Worker</th> 
             <td>{% if handle.WorkerID %}
                     {{handle.WorkerID}}&nbsp;<a title="copy" href="javascript:copy('{{handle.WorkerID}}')"><img class="copy_button"
