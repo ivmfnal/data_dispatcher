@@ -47,11 +47,10 @@
     <tr>    <th>Replicas</th>
             <td class="nopadding">
                 <table class="data">
-                    <tr><th>RSE</th><th>Preference</th><th>RSE available</th><th>Staged</th><th>URL</th>
+                    <tr><th>RSE</th><th>RSE available</th><th>Staged</th><th>URL</th>
                     {% for r in handle.replicas().values() %}
                         <tr>
                             <td>{{r.RSE}}</td>
-                            <td>{{r.Preference}}</td>
                             <td class="{{'available' if r.RSEAvailable else 'unavailable'}}">{{"yes" if r.RSEAvailable else "no"}}</td>
                             <td class="{{'available' if r.Available else 'unavailable'}}">{{"yes" if r.Available else "no"}}</td>
                             <td class="code" style="text-align:left">{{r.URL}}&nbsp;<a title="copy" href="javascript:copy('{{r.URL}}')"><img class="copy_button"
