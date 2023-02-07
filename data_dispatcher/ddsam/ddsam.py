@@ -30,7 +30,7 @@ class LocationsCommand(CLICommand):
         
         Options:
             -s|--schemes <schema>[,...]     - list of URL schemes. Default: all
-            -r|--rses <rse>[,...]           - list if RSEs. Default: all
+            -r|--rses <rse>[,...]           - list of RSEs. Default: all
             -j|--json                       - print results as JSON
             -p|--pprint                     - print results as pprint
     """
