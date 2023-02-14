@@ -440,7 +440,7 @@ class ProjectMaster(PyThread, Logged):
             self.error("Exception in ProjectMaster.clean():", "\n" + traceback.format_exc())
 
     def run(self):
-        schedule_task(self.clean, id="cleaner", t=0, interval = self.PurgeInterval)
+        GeneralTaskQueue.append(self.clean, interval = self.PurgeInterval)
         while not self.Stop:
             self.debug("run...")
             try:
