@@ -6,10 +6,11 @@ from daemon_web_server import DaemonWebServer
 from tape_interfaces import get_interface
 
 import pythreader
-if pythreader.__version__ < "2.10":
-    print("Pythreader version 2.10 or newer is required", file=sys.stderr)
+if pythreader.version_info < (2,10,0):
+    print("Pythreader version 2.10 or newer is required. Installed:", pythreader.__version__, file=sys.stderr)
     sys.exit(1)
-from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task, schedule_task, unschedule_task
+
+from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
