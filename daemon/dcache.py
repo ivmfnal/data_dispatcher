@@ -127,7 +127,7 @@ class PinRequest(Logged):
         self.debug(r.text)
         self.URL = r.headers.get('request-url')
         result = True
-        if r.status_code != 200:
+        if r.status_code//100 != 2:
             self.Error = f"Bad HTTP status code: {r.status_code}"
             self.error("Error sendig pin request:\n    HTTP status:", r.status_code, "\n    response headers:", r.headers,"\n    response text:", r.text)
             result = False
