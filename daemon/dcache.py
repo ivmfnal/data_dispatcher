@@ -87,8 +87,6 @@ class PinRequest(Logged):
         self.Cert = self.SSLConfig.get("cert")
         self.Key = self.SSLConfig.get("key")
         self.CertTuple = (self.Cert, self.Key) if self.Cert else None
-        self.Error = False
-        self.ErrorText = True
         self.Complete = False
         self.Expiration = None
         self.Error = None
@@ -127,7 +125,8 @@ class PinRequest(Logged):
         self.debug(r.text)
         self.URL = r.headers.get('request-url')
         result = True
-        if r.status_code//100 != 2:
+
+        if r.status_code // 100 != 2:
             self.Error = f"Bad HTTP status code: {r.status_code}"
             self.error("Error sendig pin request:\n    HTTP status:", r.status_code, "\n    response headers:", r.headers,"\n    response text:", r.text)
             result = False
@@ -145,8 +144,7 @@ class PinRequest(Logged):
         #self.debug("status(): response:", r)
         if r.status_code // 100 == 4:
             self.log("query: HTTP status:", r.status_code, " -- ERROR")
-            self.Error = True
-            self.ErrorText = r.text
+            self.Error = r.text
             return "ERROR"
         data = r.json()
         self.log("request status:", data["status"], "  targets:", data["targets"], "  processed:", data["processed"])
@@ -160,8 +158,7 @@ class PinRequest(Logged):
         r = requests.delete(self.URL, headers=headers, verify=False, cert = self.CertTuple)
         #self.debug("status(): response:", r)
         if r.status_code // 100 == 4:
-            self.Error = True
-            self.ErrorText = r.text
+            self.Error = r.text
             return "ERROR"
         r.raise_for_status()
         self.debug("delete: my URL:", self.URL, "   response:", r.text)
@@ -169,9 +166,6 @@ class PinRequest(Logged):
 
     def status(self):
         return self.query()["status"]
-
-    def error(self):
-        return self.Error
 
     def complete(self):
         self.debug("previous complete status:", self.Complete)
@@ -257,7 +251,7 @@ class DCachePinner(PyThread, Logged):
                             else:
                                 self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
                         else:
-                            if self.PinRequest.error():
+                            if self.PinRequest.Error:
                                 self.error("error in pin request -- deleting pin request")
                                 self.PinRequest.delete()
                                 self.PinRequest = None
