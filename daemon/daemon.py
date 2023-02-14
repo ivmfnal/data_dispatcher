@@ -7,7 +7,7 @@ from tape_interfaces import get_interface
 
 import pythreader
 if pythreader.version_info < (2,10,0):
-    print("Pythreader version 2.10 or newer is required. Installed:", pythreader.__version__, file=sys.stderr)
+    print("Pythreader version 2.10 or newer is required. Installed:", pythreader.version_info, file=sys.stderr)
     sys.exit(1)
 
 from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task
