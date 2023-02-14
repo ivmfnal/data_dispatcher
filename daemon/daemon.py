@@ -1,10 +1,15 @@
 import stompy, pprint, urllib, requests, json, time, traceback, textwrap
 from urllib.parse import urlparse
 from data_dispatcher.db import DBProject, DBReplica, DBRSE, DBProximityMap
-from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task, schedule_task, unschedule_task
 from data_dispatcher.logs import Logged
 from daemon_web_server import DaemonWebServer
 from tape_interfaces import get_interface
+
+import pythreader
+if pythreader.__version__ < "2.10":
+    print("Pythreader version 2.10 or newer is required", file=sys.stderr)
+    sys.exit(1)
+from pythreader import PyThread, Primitive, Scheduler, synchronized, TaskQueue, Task, schedule_task, unschedule_task
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -27,32 +32,16 @@ def chunked(iterable, n):
                 return
             yield chunk
 
-class JobDelegate(object):
-    
-    def jobFailed(self, scheduler, job_id, exc_type, exc_value, tb):
-        print(f"{scheduler}: job failed:", job_id)
-        traceback.print_exception(exc_type, exc_value, tb)
-        
-    def jobEnded(self, scheduler, job_id):
-        print(f"{scheduler}: job ended:", job_id)
-        
+class TaskQueueDelegate(object):
 
-delegate = JobDelegate()
+    def taskFailed(self, queue, task, exc_type, exc_value, tb):
+        print(f"{queue}: task failed:", task, file=sys.stderr)
+        traceback.print_exception(exc_type, exc_value, tb, file=sys.stderr)
 
-#TaskScheduler = Scheduler(name="TaskScheduler", delegate=delegate)
-SyncScheduler = Scheduler(5, name="SyncScheduler", delegate=delegate)
+delegate = TaskQueueDelegate()
 
-
-if False:
-    # debug
-    def print_jobs():
-        print("------- global tasks scheduled")
-        for job in global_scheduler().jobs():
-            print("   ", job.ID, job.NextT - time.time())
-
-    schedule_task(print_jobs, interval=30, id="print_tasks")
-
-Queue = TaskQueue(10, stagger=0.1)
+SyncTaskQueue = TaskQueue(5, name="SyncTaskQueue", delegate=delegate)
+GeneralTaskQueue = TaskQueue(100, name="GeneralTaskQueue", delegate=delegate)
 
 class ProximityMapDownloader(PyThread, Logged):
 
@@ -263,29 +252,27 @@ class ProjectMonitor(Primitive, Logged):
         self.UpdateAvailabilityJobID = f"update_availability_{project_id}"
         self.CheckStateJobID = f"check_state_{project_id}"
         self.TapeRSEInterfaces = {}
-        self.UpdateScheduled = False
-        
+
+        self.SyncTask = SyncTaskQueue.add(self.sync_replicas, interval=self.SyncInterval)
+        self.CheckProjectTask = GeneralTaskQueue.add(self.check_project_state, interval=self.UpdateInterval)
+        self.UpdateAvailabilityTask = None
+
     def tape_rse_interface(self, rse):
         interface = self.TapeRSEInterfaces.get(rse)
         if interface is None:
             self.TapeRSEInterfaces[rse] = interface = get_interface(rse, self.RSEConfig, self.DB)
         return interface
         
-    def schedule_jobs(self):
-        SyncScheduler.add(self.sync_replicas, id=self.SyncReplicasJobID, t0=time.time(), interval=self.SyncInterval)
-        schedule_task(self.check_project_state, id=self.CheckStateJobID, t=0, interval=self.UpdateInterval)
-
-    def remove_jobs(self):
-        SyncScheduler.remove(self.SyncReplicasJobID)
-        unschedule_task(self.UpdateAvailabilityJobID)
-        unschedule_task(self.CheckStateJobID)
-
     def remove_me(self, reason):
         self.log("remove me:", reason)
         for rse_interface in self.TapeRSEInterfaces.values():
             rse_interface.unpin_project(self.ProjectID)
             self.log("unpinned files in:", rse)
-        self.remove_jobs()
+        self.SyncTask.cancel()
+        self.CheckProjectTask.cancel()
+        self.SyncTask.promise.wait()        # to make sure SyncTask ended before we cancel UpdateAvailabilityTask
+        if self.UpdateAvailabilityTask is not None:
+            self.UpdateAvailabilityTask.cancel()
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
         self.log("removed:", reason)
@@ -382,9 +369,8 @@ class ProjectMonitor(Primitive, Logged):
             traceback.print_exc()
             self.error("exception in sync_replicas:", e)
             self.error(textwrap.indent(traceback.format_exc()), "  ")
-        if not self.UpdateScheduled:
-            schedule_task(self.update_replicas_availability, id=self.UpdateAvailabilityJobID, t = 0, interval=self.UpdateInterval)
-            self.UpdateScheduled = True
+        if self.UpdateAvailabilityTask is None:
+            self.UpdateAvailabilityTask = GeneralTaskQueue.add(self.update_replicas_availability, interval=self.UpdateInterval)
         self.debug("update_replicas_availability task schduled")
         self.debug("sync_replicas done")
 
@@ -478,7 +464,6 @@ class ProjectMaster(PyThread, Logged):
             if project is not None:
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.handles(with_replicas=False))
                 monitor = self.Monitors[project_id] = ProjectMonitor(self, project_id, self.DB, self.RSEConfig, self.RucioClient)
-                monitor.schedule_jobs()
             self.log("project added:", project_id)
 
     @synchronized
