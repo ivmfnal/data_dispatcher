@@ -91,12 +91,14 @@ class PinRequest(Logged):
         self.ErrorText = True
         self.Complete = False
         self.Expiration = None
+        self.Error = None
         self.debug("created for", len(paths),"replicas")
 
     def __len__(self):
         return len(self.Paths)
 
     def send(self):
+        self.Expiration = time.time() + self.PinLifetime
         headers = { "accept" : "application/json",
                     "content-type" : "application/json"}
         data =  {
@@ -117,14 +119,24 @@ class PinRequest(Logged):
                 verify=False, cert = self.CertTuple)
 
         #print("send(): response:", r)
+        self.debug("response:", r)
         self.debug("response headers:")
         for name, value in r.headers.items():
             self.debug("  %s: %s" % (name, value))
         self.debug("response text:")
         self.debug(r.text)
-        r.raise_for_status()
-        self.URL = r.headers['request-url']
-        self.Expiration = time.time() + self.PinLifetime
+        self.URL = r.headers.get('request-url')
+        result = True
+        if r.status_code != 200:
+            self.Error = f"Bad HTTP status code: {r.status_code}"
+            self.error("Error sendig pin request:\n    HTTP status:", r.status_code, "\n    response headers:", r.headers,"\n    response text:", r.text)
+            result = False
+        elif not self.URL:
+            self.Error = f"No pin request URL provided in the response headers"
+            self.error("Error sendig pin request. No URL returned.\n    response headers:", r.headers)
+            result = False
+        self.debug("send() result -> ", result, "  error:", self.Error or "(no error)")
+        return result
         
     def query(self):
         assert self.URL is not None
@@ -238,8 +250,12 @@ class DCachePinner(PyThread, Logged):
                         if self.PinRequest is None:
                             self.debug("sending pin request for", len(all_paths), "replicas...")
                             self.PinRequest = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
-                            self.PinRequest.send()
-                            self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
+                            if not self.PinRequest.send():
+                                self.log("error sending pin request:", self.PinRequest.Error)
+                                self.error("error sending pin request:", self.PinRequest.Error)
+                                self.PinRequest = None
+                            else:
+                                self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
                         else:
                             if self.PinRequest.error():
                                 self.error("error in pin request -- deleting pin request")
