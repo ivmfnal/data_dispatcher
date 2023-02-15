@@ -147,7 +147,7 @@ class PinRequest(Logged):
         data = r.json()
         self.debug("query response:", r)
         self.debug("response text:", "\n"+r.text)
-        self.log("request status:", data["status"], "  targets:", data.get("targets"), "  processed:", data.get("processed"))
+        self.debug("request status:", data["status"], "  targets:", data.get("targets"))
         r.raise_for_status()
         self.debug("query: my URL:", self.URL, "   response:", r.text)
         return r.json()
@@ -256,6 +256,7 @@ class DCachePinner(PyThread, Logged):
                             else:
                                 if created:
                                     self.PinRequest = pin_request
+                                    self.debug("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
                                     self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
                                 else:
                                     self.log("error sending pin request:", pin_request.Error)
