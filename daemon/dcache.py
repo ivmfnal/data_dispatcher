@@ -114,8 +114,7 @@ class PinRequest(Logged):
             data["target-prefix"] = self.PinPrefix
         #self.debug("request data:", json.dumps(data, indent="  "))
         r = requests.post(self.BaseURL, data = json.dumps(data), headers=headers, 
-                verify=False, cert = self.CertTuple)
-
+            verify=False, cert = self.CertTuple)
         #print("send(): response:", r)
         self.debug("response:", r)
         self.debug("response headers:")
@@ -237,19 +236,27 @@ class DCachePinner(PyThread, Logged):
                         elif self.PinRequest.will_expire(self.UpdateInterval*3):
                             self.debug("pin request is about to expire -- deleting pin request")
                             self.log("pin request is about to expire -- deleting pin request")
-                            self.PinRequest.delete()
+                            try:    self.PinRequest.delete()
+                            except Exception as e:
+                                self.error("Exception deleting pin request:", e, "   -- ignoring, the pin request will expire")
+                                self.debug("Exception deleting pin request:", e, "   -- ignoring, the pin request will expire")
                             self.PinRequest = None
-
                     if all_files:       # anything to pin ??
                         if self.PinRequest is None:
                             self.debug("sending pin request for", len(all_paths), "replicas...")
-                            self.PinRequest = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
-                            if not self.PinRequest.send():
-                                self.log("error sending pin request:", self.PinRequest.Error)
-                                self.error("error sending pin request:", self.PinRequest.Error)
-                                self.PinRequest = None
+                            pin_request = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
+                            try:
+                                created = self.PinRequest.send()
+                            except Exception as e:
+                                self.error("exception sending pin request: " + traceback.format_exc())
+                                self.log("Failed to create pin request because of exception:", e)
                             else:
-                                self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
+                                if created:
+                                    self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
+                                    self.PinRequest = pin_request
+                                else:
+                                    self.log("error sending pin request:", pin_request.Error)
+                                    self.error("error sending pin request:", pin_request.Error)
                         else:
                             if self.PinRequest.Error:
                                 self.error("error in pin request -- deleting pin request")
