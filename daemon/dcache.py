@@ -112,10 +112,9 @@ class PinRequest(Logged):
         }
         if self.PinPrefix:
             data["target-prefix"] = self.PinPrefix
-        #self.debug("request data:", json.dumps(data, indent="  "))
+        self.debug("request data:", json.dumps(data, indent="  "))
         r = requests.post(self.BaseURL, data = json.dumps(data), headers=headers, 
-            verify=False, cert = self.CertTuple)
-        #print("send(): response:", r)
+                    verify=False, cert = self.CertTuple)
         self.debug("response:", r)
         self.debug("response headers:")
         for name, value in r.headers.items():
@@ -246,7 +245,7 @@ class DCachePinner(PyThread, Logged):
                             self.debug("sending pin request for", len(all_paths), "replicas...")
                             pin_request = PinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
                             try:
-                                created = self.PinRequest.send()
+                                created = pin_request.send()
                             except Exception as e:
                                 self.error("exception sending pin request: " + traceback.format_exc())
                                 self.log("Failed to create pin request because of exception:", e)
