@@ -145,11 +145,9 @@ class PinRequest(Logged):
             self.Error = r.text
             return "ERROR"
         data = r.json()
-        self.debug("query response:", r)
+        self.debug("My URL:", self.URL, "   query response:", r)
         self.debug("response text:", "\n"+r.text)
-        self.debug("request status:", data["status"], "  targets:", data.get("targets"))
         r.raise_for_status()
-        self.debug("query: my URL:", self.URL, "   response:", r.text)
         return r.json()
 
     def delete(self):
