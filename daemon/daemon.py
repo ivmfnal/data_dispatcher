@@ -442,7 +442,6 @@ class ProjectMaster(PyThread, Logged):
     def run(self):
         GeneralTaskQueue.append(self.clean, interval = self.PurgeInterval)
         while not self.Stop:
-            self.debug("run...")
             try:
                 active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
                 #self.debug("run: active projects:", len(active_projects),"   known projects:", len(monitor_projects))
@@ -451,6 +450,7 @@ class ProjectMaster(PyThread, Logged):
                     #for project_id in monitor_projects - active_projects:
                     #    self.remove_project(project_id, "inactive")
                     for project_id in active_projects - monitor_projects:
+                        self.log("new project discovered:", project_id)
                         self.add_project(project_id)
             except Exception as e:
                 self.error("exception in run():\n", traceback.format_exc())

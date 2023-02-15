@@ -220,7 +220,9 @@ class DCachePinner(PyThread, Logged):
                     for project_files in self.FilesPerProject.values():
                         all_files.update(project_files)
                     all_paths = set(all_files.values())
-
+                    
+                    self.debug("existing pin request:", None if self.PinRequest is None else self.PinRequest.URL)
+                    
                     if self.PinRequest is not None:
                         if not self.PinRequest.same_files(all_paths):
                             self.log("file set changed -- deleting pin request")
@@ -251,8 +253,8 @@ class DCachePinner(PyThread, Logged):
                                 self.log("Failed to create pin request because of exception:", e)
                             else:
                                 if created:
-                                    self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
                                     self.PinRequest = pin_request
+                                    self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
                                 else:
                                     self.log("error sending pin request:", pin_request.Error)
                                     self.error("error sending pin request:", pin_request.Error)
