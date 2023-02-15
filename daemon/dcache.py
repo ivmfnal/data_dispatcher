@@ -145,6 +145,8 @@ class PinRequest(Logged):
             self.Error = r.text
             return "ERROR"
         data = r.json()
+        self.debug("query response:", r)
+        self.bdeug("response text:", "\n"+r.text)
         self.log("request status:", data["status"], "  targets:", data["targets"], "  processed:", data["processed"])
         r.raise_for_status()
         self.debug("query: my URL:", self.URL, "   response:", r.text)
