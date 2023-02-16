@@ -236,7 +236,7 @@ class ListReplicasTask(Task):
 
 class ProjectMonitor(Primitive, Logged):
     
-    UpdateInterval = 120         # replica availability update interval
+    UpdateInterval = 120        # replica availability update interval
     NewRequestInterval = 5      # interval to check on new pin request
     SyncInterval = 600          # interval to re-sync replicas with Rucio
     
@@ -485,7 +485,6 @@ class ProjectMaster(PyThread, Logged):
     def remove_project(self, project_id, reason):
         monitor = self.Monitors.pop(project_id, None)
         self.log("project removed:", project_id, "  reason:", reason)
-        
 
 """
 Sample message from Rucio
