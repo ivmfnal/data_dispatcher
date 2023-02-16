@@ -376,7 +376,7 @@ class ProjectMonitor(Primitive, Logged):
         self.debug("sync_replicas done")
 
     def update_replicas_availability(self):
-        #self.debug("update_replicas_availability(): waiting...")
+        self.debug("update_replicas_availability() ...")
         with self:
             #self.debug("update_replicas_availability(): entered")
             
