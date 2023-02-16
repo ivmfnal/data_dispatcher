@@ -297,15 +297,15 @@ class ProjectMonitor(Primitive, Logged):
         
     @synchronized
     def check_project_state(self):
-        #self.debug("check_project_state...")
+        self.debug("check_project_state...")
         project = DBProject.get(self.DB, self.ProjectID)
         if project is None or project.State != "active":
-            self.remove_me("project inactive")
-            if project is not None:
-                self.log("project state=", project.State, "--> removed")
+            if project is None:
+                reason = "project disappeared"
             else:
-                self.log("project not found --> removed")                
-            return "stop"
+                reason = f"project inactive ({project.State})"
+            self.log("removing project:", reason)
+            self.remove_me(reason)          # this will cancel this and other repeating task
 
     @synchronized
     def sync_replicas(self):
