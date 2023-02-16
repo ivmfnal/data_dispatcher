@@ -243,6 +243,7 @@ class ProjectMonitor(Primitive, Logged):
     def __init__(self, master, project_id, db, rse_config, rucio_client):
         Logged.__init__(self, f"ProjectMonitor({project_id})")
         Primitive.__init__(self, name=f"ProjectMonitor({project_id})")
+        self.Removed = False
         self.ProjectID = project_id
         self.DB = db
         self.RSEConfig = rse_config
@@ -258,7 +259,6 @@ class ProjectMonitor(Primitive, Logged):
         self.CheckProjectTask = GeneralTaskQueue.add(self.check_project_state, interval=self.UpdateInterval)
         self.UpdateAvailabilityTask = None
         
-        self.Removed = False
 
     def tape_rse_interface(self, rse):
         interface = self.TapeRSEInterfaces.get(rse)
