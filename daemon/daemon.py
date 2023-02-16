@@ -257,6 +257,8 @@ class ProjectMonitor(Primitive, Logged):
         self.SyncTask = SyncTaskQueue.add(self.sync_replicas, interval=self.SyncInterval)
         self.CheckProjectTask = GeneralTaskQueue.add(self.check_project_state, interval=self.UpdateInterval)
         self.UpdateAvailabilityTask = None
+        
+        self.Removed = False
 
     def tape_rse_interface(self, rse):
         interface = self.TapeRSEInterfaces.get(rse)
@@ -264,19 +266,22 @@ class ProjectMonitor(Primitive, Logged):
             self.TapeRSEInterfaces[rse] = interface = get_interface(rse, self.RSEConfig, self.DB)
         return interface
         
+    @synchronized
     def remove_me(self, reason):
         self.log("remove me:", reason)
+        self.Removed = True
+        self.CheckProjectTask.cancel()
+        self.SyncTask.cancel()
+        if self.UpdateAvailabilityTask is not None:
+            self.UpdateAvailabilityTask.cancel()
+
         for rse_interface in self.TapeRSEInterfaces.values():
             rse_interface.unpin_project(self.ProjectID)
             self.log("unpinned files in:", rse)
-        self.SyncTask.cancel()
-        self.CheckProjectTask.cancel()
-        self.SyncTask.promise.wait()        # to make sure SyncTask ended before we cancel UpdateAvailabilityTask
-        if self.UpdateAvailabilityTask is not None:
-            self.UpdateAvailabilityTask.cancel()
+
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
-        self.log("removed:", reason)
+        self.log("Project Monitor removed")
 
     def active_handles(self, as_dids = True):
         # returns {did -> handle} for all active handles, or None if the project is not found
@@ -297,6 +302,9 @@ class ProjectMonitor(Primitive, Logged):
         
     @synchronized
     def check_project_state(self):
+        if self.Removed:
+            self.debug("check_project_state: already removed. skipping")
+            return              # alredy removed
         self.debug("check_project_state...")
         project = DBProject.get(self.DB, self.ProjectID)
         if project is None or project.State != "active":
@@ -309,6 +317,9 @@ class ProjectMonitor(Primitive, Logged):
 
     @synchronized
     def sync_replicas(self):
+        if self.Removed:
+            self.debug("sync_replicas: already removed. skipping")
+            return              # alredy removed
         active_handles = self.active_handles()
         self.debug("sync_replicas(): active_handles:", None if active_handles is None else len(active_handles))
 
@@ -375,7 +386,11 @@ class ProjectMonitor(Primitive, Logged):
         self.debug("update_replicas_availability task schduled")
         self.debug("sync_replicas done")
 
+    @synchronized
     def update_replicas_availability(self):
+        if self.Removed:
+            self.debug("update_replicas_availability: already removed. skipping")
+            return              # alredy removed
         self.debug("update_replicas_availability() ...")
         with self:
             #self.debug("update_replicas_availability(): entered")
