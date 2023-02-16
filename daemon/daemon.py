@@ -267,7 +267,7 @@ class ProjectMonitor(Primitive, Logged):
         return interface
         
     def remove_me(self, reason):
-        self.debug("remove me:", reason)
+        self.debug("remove_me():", reason)
         self.Removed = True
         self.CheckProjectTask.cancel()
         self.SyncTask.cancel()
@@ -276,12 +276,12 @@ class ProjectMonitor(Primitive, Logged):
 
         for rse, rse_interface in self.TapeRSEInterfaces.items():
             rse_interface.unpin_project(self.ProjectID)
-            self.log("unpinned files in:", rse)
-            self.debug("unpinned files in:", rse)
+            self.log("remove_me(): unpinned files in:", rse)
+            self.debug("remove_me(): unpinned files in:", rse)
 
         self.Master.remove_project(self.ProjectID, reason)
         self.Master = None
-        self.log("Project Monitor removed:", reason)
+        self.log("remove_me(): project monitor removed:", reason)
 
     def active_handles(self, as_dids = True):
         # returns {did -> handle} for all active handles, or None if the project is not found
