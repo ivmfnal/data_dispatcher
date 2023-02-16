@@ -268,20 +268,24 @@ class ProjectMonitor(Primitive, Logged):
         
     @synchronized
     def remove_me(self, reason):
-        self.log("remove me:", reason)
-        self.Removed = True
-        self.CheckProjectTask.cancel()
-        self.SyncTask.cancel()
-        if self.UpdateAvailabilityTask is not None:
-            self.UpdateAvailabilityTask.cancel()
+        try:
+            self.log("remove me:", reason)
+            self.Removed = True
+            self.CheckProjectTask.cancel()
+            self.SyncTask.cancel()
+            if self.UpdateAvailabilityTask is not None:
+                self.UpdateAvailabilityTask.cancel()
 
-        for rse_interface in self.TapeRSEInterfaces.values():
-            rse_interface.unpin_project(self.ProjectID)
-            self.log("unpinned files in:", rse)
+            for rse_interface in self.TapeRSEInterfaces.values():
+                rse_interface.unpin_project(self.ProjectID)
+                self.log("unpinned files in:", rse)
 
-        self.Master.remove_project(self.ProjectID, reason)
-        self.Master = None
-        self.log("Project Monitor removed")
+            self.Master.remove_project(self.ProjectID, reason)
+            self.Master = None
+            self.log("Project Monitor removed")
+        except Exception as e:
+            traceback.print_exc(file=sys.stderr)
+            raise
 
     def active_handles(self, as_dids = True):
         # returns {did -> handle} for all active handles, or None if the project is not found
