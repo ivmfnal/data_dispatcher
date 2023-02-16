@@ -1,4 +1,4 @@
-import stompy, pprint, urllib, requests, json, time, traceback, textwrap
+import stompy, pprint, urllib, requests, json, time, traceback, textwrap, sys
 from urllib.parse import urlparse
 from data_dispatcher.db import DBProject, DBReplica, DBRSE, DBProximityMap
 from data_dispatcher.logs import Logged
@@ -266,26 +266,22 @@ class ProjectMonitor(Primitive, Logged):
             self.TapeRSEInterfaces[rse] = interface = get_interface(rse, self.RSEConfig, self.DB)
         return interface
         
-    @synchronized
     def remove_me(self, reason):
-        try:
-            self.log("remove me:", reason)
-            self.Removed = True
-            self.CheckProjectTask.cancel()
-            self.SyncTask.cancel()
-            if self.UpdateAvailabilityTask is not None:
-                self.UpdateAvailabilityTask.cancel()
+        self.debug("remove me:", reason)
+        self.Removed = True
+        self.CheckProjectTask.cancel()
+        self.SyncTask.cancel()
+        if self.UpdateAvailabilityTask is not None:
+            self.UpdateAvailabilityTask.cancel()
 
-            for rse_interface in self.TapeRSEInterfaces.values():
-                rse_interface.unpin_project(self.ProjectID)
-                self.log("unpinned files in:", rse)
+        for rse, rse_interface in self.TapeRSEInterfaces.items():
+            rse_interface.unpin_project(self.ProjectID)
+            self.log("unpinned files in:", rse)
+            self.debug("unpinned files in:", rse)
 
-            self.Master.remove_project(self.ProjectID, reason)
-            self.Master = None
-            self.log("Project Monitor removed")
-        except Exception as e:
-            traceback.print_exc(file=sys.stderr)
-            raise
+        self.Master.remove_project(self.ProjectID, reason)
+        self.Master = None
+        self.log("Project Monitor removed:", reason)
 
     def active_handles(self, as_dids = True):
         # returns {did -> handle} for all active handles, or None if the project is not found
@@ -596,7 +592,7 @@ def main():
     logging_config = config.get("logging", {})
     log_out = logging_config.get("log", "-")
 
-    debug_out = logging_config.get("debug", False)
+    debug_out = "-" if "-d" in opts else logging_config.get("debug", False)
     debug_enabled = "-d" in opts or not not debug_out 
     if debug_enabled: debug_out = debug_out or None
 
