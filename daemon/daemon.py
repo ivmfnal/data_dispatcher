@@ -258,7 +258,6 @@ class ProjectMonitor(Primitive, Logged):
         self.SyncTask = SyncTaskQueue.add(self.sync_replicas, interval=self.SyncInterval)
         self.CheckProjectTask = GeneralTaskQueue.add(self.check_project_state, interval=self.UpdateInterval)
         self.UpdateAvailabilityTask = None
-        
 
     def tape_rse_interface(self, rse):
         interface = self.TapeRSEInterfaces.get(rse)
@@ -432,7 +431,7 @@ class ProjectMonitor(Primitive, Logged):
 class ProjectMaster(PyThread, Logged):
     
     RunInterval = 10        # seconds       - new project discovery latency
-    PurgeInterval = 30*60
+    PurgeInterval = 30
     
     def __init__(self, db, rse_config, rucio_client, url_schemes):
         Logged.__init__(self, "ProjectMaster")
