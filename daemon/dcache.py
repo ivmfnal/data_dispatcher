@@ -77,7 +77,7 @@ class PinRequest(Logged):
     
     PinLifetime = 3600
     
-    def __init__(self, rse, url, pin_prefix, ssl_config, paths):
+    def __init__(self, rse, url, pin_prefix, ssl_config, paths, mode="dcache"):
         Logged.__init__(self, f"PinRequest({rse})")
         self.BaseURL = url
         self.Paths = set(paths)
@@ -90,30 +90,49 @@ class PinRequest(Logged):
         self.Complete = False
         self.Expiration = None
         self.Error = None
+        self.StagedReplicas = set()         # set of paths
         self.debug("created for", len(paths),"replicas")
+        self.Mode = mode            # dcache or WLCG
 
     def __len__(self):
         return len(self.Paths)
 
     def send(self):
+        self.StagedReplicas = set()
         self.Expiration = time.time() + self.PinLifetime
         headers = { "accept" : "application/json",
                     "content-type" : "application/json"}
-        data =  {
-            "target" : json.dumps(list(self.Paths)),
-            "activity" : "PIN",
-            "clearOnSuccess" : "false",             # 6/30/22: dCache will accept strings instead of booleans for a while. In the future it will start accepting both 
-            "clearOnFailure" : "false", 
-            "expandDirectories" : None,
-            "arguments": {
-                "lifetime": str(self.PinLifetime),  # 6/30/22: dCache will accept strings instead of ints
-                "lifetime-unit": "SECONDS"
+        if self.Mode == "dcache"
+            data =  {
+                "target" : json.dumps(list(self.Paths)),
+                "activity" : "PIN",
+                "clearOnSuccess" : "false",             # 6/30/22: dCache will accept strings instead of booleans for a while. In the future it will start accepting both 
+                "clearOnFailure" : "false", 
+                "expandDirectories" : None,
+                "arguments": {
+                    "lifetime": str(self.PinLifetime),  # 6/30/22: dCache will accept strings instead of ints
+                    "lifetime-unit": "SECONDS"
+                }
             }
-        }
-        if self.PinPrefix:
-            data["target-prefix"] = self.PinPrefix
+            if self.PinPrefix:
+                data["target-prefix"] = self.PinPrefix
+            url = self.BaseURL
+        elif self.Mode == "WLCG":
+            if self.PinLifetime >= 3600:
+                lifetime = "PT%dH" % ((self.PinLifetime + 3599)//3600,)
+            elif self.PinLifetime >= 60:
+                lifetime = "PT%dM" % ((self.PinLifetime + 59)//60,)
+            else:
+                lifetime = "PT%dS" % (self.PinLifetime,)
+            data =  {
+                "files": [
+                    {"path": path, "diskLifetime": lifetime}
+                ]
+            }
+            url = self.BaseURL + ("/" if not self.BaseURL.endswith("/") else "") + "stage"
+            
         self.debug("request data:", json.dumps(data, indent="  "))
-        r = requests.post(self.BaseURL, data = json.dumps(data), headers=headers, 
+        r = requests.post(url, data = json.dumps(data), headers=headers, 
                     verify=False, cert = self.CertTuple)
         self.debug("response:", r)
         self.debug("response headers:")
@@ -121,7 +140,7 @@ class PinRequest(Logged):
             self.debug("  %s: %s" % (name, value))
         self.debug("response text:")
         self.debug(r.text)
-        self.URL = r.headers.get('request-url')
+        self.URL = r.headers.get('request-url') or r.headers.get("Location")            # dCache or WLCG format
         result = True
 
         if r.status_code // 100 != 2:
@@ -148,7 +167,25 @@ class PinRequest(Logged):
         self.debug("My URL:", self.URL, "   query response:", r)
         self.debug("response text:", "\n"+r.text)
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+        if data.get("status", "").upper() == "COMPLETED":
+            self.Complete = True
+            self.StagedReplicas = self.Paths
+        elif "targets" in data:
+            # dCache format
+            self.StagedReplicas = set(f for f in
+                (item.get("target") for item in data["targets"] if item.get("state") == "COMPLETED")
+                if f
+            )
+        elif "files" in data:
+            # WLCG format
+            self.StagedReplicas = set(item["path"] for item in data["files"]
+                    if item.get("onDisk") or item.get("state", "").upper() == "COMPLETED"
+            )
+        return data
+        
+    def staged_replicas(self):
+        return self.StagedReplicas
 
     def delete(self):
         assert self.URL is not None
@@ -160,6 +197,7 @@ class PinRequest(Logged):
             return "ERROR"
         r.raise_for_status()
         self.debug("delete: my URL:", self.URL, "   response:", r.text)
+        self.StagedReplicas = set()
         #return r.json()
 
     def status(self):
@@ -171,7 +209,12 @@ class PinRequest(Logged):
             info = self.query()
             self.Complete = info.get("status").upper() == "COMPLETED" and len(info.get("failures", {}).get("failures",{})) == 0
         return self.Complete
-        
+
+    def update_staged_set(self):
+        # query and update staged set unless already complete, return stged set
+        _ = self.complete()
+        return self.StagedReplicas
+
     def will_expire(self, t):
         return self.Expiration is None or time.time() >= self.Expiration - t
 
@@ -198,6 +241,7 @@ class DCachePinner(PyThread, Logged):
         self.DB = db
         self.Poller = poller
         self.Stop = False
+        self.StagedReplicas = []
 
     @synchronized
     def pin_project(self, project_id, replicas):
@@ -260,20 +304,15 @@ class DCachePinner(PyThread, Logged):
                                     self.log("error sending pin request:", pin_request.Error)
                                     self.error("error sending pin request:", pin_request.Error)
                         else:
-                            if self.PinRequest.Error:
-                                self.error("error in pin request -- deleting pin request")
-                                self.PinRequest.delete()
-                                self.PinRequest = None
-                            elif self.PinRequest.complete():
-                                all_dids = list(all_files.keys())
-                                self.log("pin request complete for %d files" % (len(self.PinRequest),))
-                                DBReplica.update_availability_bulk(self.DB, True, self.RSE, all_dids)
-                            else:
-                                # pin request is still not done, poll files individually
-                                dids_paths = list(all_files.items())
-                                n = len(dids_paths)
-                                self.debug("sending", len(dids_paths), "dids/paths to poller")
-                                self.Poller.submit(dids_paths)
+                            complete_paths = self.PinRequest.update_complete_set()
+                            complete_dids = [did for did, path in self.all_files.items() if path in complete_paths]
+                            pending_dids_paths = [(did, path) for did, path in self.all_files.items() if path not in complete_paths]
+                            self.log("files staged:", len(complete_dids), "    still pending:", len(pending_dids_paths))
+                            if complete_dids:
+                                DBReplica.update_availability_bulk(self.DB, True, self.RSE, complete_dids)
+                            if pending_dids_paths:
+                                self.debug("sending", len(pending_dids_paths), "dids/paths to poller")
+                                self.Poller.submit(pending_dids_paths)
                     else:
                         #self.debug("no files to pin")
                         pass

@@ -287,7 +287,6 @@ class ProjectMonitor(Primitive, Logged):
         project = DBProject.get(self.DB, self.ProjectID)
         if project is None:
             return None
-
         return [h for h in project.handles(with_replicas=True) if h.is_active()]
 
     def tape_replicas_by_rse(self, active_handles):
