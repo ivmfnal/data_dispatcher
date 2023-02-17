@@ -307,12 +307,12 @@ class DCachePinner(PyThread, Logged):
                                     self.log("error sending pin request:", pin_request.Error)
                                     self.error("error sending pin request:", pin_request.Error)
                         else:
-                            complete_paths = self.PinRequest.update_complete_set()
-                            complete_dids = [did for did, path in self.all_files.items() if path in complete_paths]
-                            pending_dids_paths = [(did, path) for did, path in self.all_files.items() if path not in complete_paths]
-                            self.log("files staged:", len(complete_dids), "    still pending:", len(pending_dids_paths))
+                            staged_paths = self.PinRequest.update_staged_set()
+                            staged_dids = [did for did, path in self.all_files.items() if path in staged_paths]
+                            pending_dids_paths = [(did, path) for did, path in self.all_files.items() if path not in staged_paths]
+                            self.log("files staged:", len(staged_dids), "    still pending:", len(pending_dids_paths))
                             if complete_dids:
-                                DBReplica.update_availability_bulk(self.DB, True, self.RSE, complete_dids)
+                                DBReplica.update_availability_bulk(self.DB, True, self.RSE, staged_dids)
                             if pending_dids_paths:
                                 self.debug("sending", len(pending_dids_paths), "dids/paths to poller")
                                 self.Poller.submit(pending_dids_paths)
