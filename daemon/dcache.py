@@ -303,6 +303,7 @@ class DCachePinner(PyThread, Logged):
                                     self.PinRequest = pin_request
                                     self.debug("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
                                     self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
+                                    next_run = 5            # check request status kinda soon
                                 else:
                                     self.log("error sending pin request:", pin_request.Error)
                                     self.error("error sending pin request:", pin_request.Error)
@@ -311,7 +312,7 @@ class DCachePinner(PyThread, Logged):
                             staged_dids = [did for did, path in all_files.items() if path in staged_paths]
                             pending_dids_paths = [(did, path) for did, path in all_files.items() if path not in staged_paths]
                             self.log("files staged:", len(staged_dids), "    still pending:", len(pending_dids_paths))
-                            if complete_dids:
+                            if staged_dids:
                                 DBReplica.update_availability_bulk(self.DB, True, self.RSE, staged_dids)
                             if pending_dids_paths:
                                 self.debug("sending", len(pending_dids_paths), "dids/paths to poller")
@@ -321,7 +322,7 @@ class DCachePinner(PyThread, Logged):
                         pass
             except Exception as e:
                 self.error("exception in run:\n", traceback.format_exc())
-            time.sleep(self.UpdateInterval)       
+            time.sleep(next_run)       
 
 class DCacheInterface(Primitive, Logged):
     
