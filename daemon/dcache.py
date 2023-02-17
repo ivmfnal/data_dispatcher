@@ -308,8 +308,8 @@ class DCachePinner(PyThread, Logged):
                                     self.error("error sending pin request:", pin_request.Error)
                         else:
                             staged_paths = self.PinRequest.update_staged_set()
-                            staged_dids = [did for did, path in self.all_files.items() if path in staged_paths]
-                            pending_dids_paths = [(did, path) for did, path in self.all_files.items() if path not in staged_paths]
+                            staged_dids = [did for did, path in all_files.items() if path in staged_paths]
+                            pending_dids_paths = [(did, path) for did, path in all_files.items() if path not in staged_paths]
                             self.log("files staged:", len(staged_dids), "    still pending:", len(pending_dids_paths))
                             if complete_dids:
                                 DBReplica.update_availability_bulk(self.DB, True, self.RSE, staged_dids)
