@@ -102,7 +102,7 @@ class PinRequest(Logged):
         self.Expiration = time.time() + self.PinLifetime
         headers = { "accept" : "application/json",
                     "content-type" : "application/json"}
-        if self.Mode == "dcache"
+        if self.Mode == "dcache":
             data =  {
                 "target" : json.dumps(list(self.Paths)),
                 "activity" : "PIN",
@@ -130,6 +130,9 @@ class PinRequest(Logged):
                 ]
             }
             url = self.BaseURL + ("/" if not self.BaseURL.endswith("/") else "") + "stage"
+        else:
+            print("Unknown Pin Request mode:", mode, file=sys.stderr)
+            sys.exit(1)
             
         self.debug("request data:", json.dumps(data, indent="  "))
         r = requests.post(url, data = json.dumps(data), headers=headers, 
