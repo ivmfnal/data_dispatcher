@@ -49,7 +49,7 @@ class WLCGPinRequest(Logged):
                 {"path": path, "diskLifetime": lifetime} for path in self.Paths
             ]
         }
-        url = self.EndpointURL + ("/" if not self.BaseURL.endswith("/") else "") + "stage"
+        url = self.EndpointURL + ("/" if not self.URL.endswith("/") else "") + "stage"
             
         self.debug("request data:", json.dumps(data, indent="  "))
         r = requests.post(url, data = json.dumps(data), headers=headers, verify=False, cert = self.CertTuple)
