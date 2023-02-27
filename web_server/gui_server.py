@@ -1,4 +1,4 @@
-from webpie import WPApp, WPHandler, WPStaticHandler
+from webpie import WPApp, WPHandler, WPStaticHandler, sanitize
 from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap       # , DBUser
 from data_dispatcher import Version
 from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
@@ -41,98 +41,6 @@ def page_index(page, npages, page_size, url_prefix):
     #print(f"page_index({page}, {npages}) -> ", index_page_links)
     return index_page_links
 
-class ___UsersHandler(BaseHandler):
-
-    def users(self, request, relpath, error="", **args):
-        me, auth_error = self.authenticated_user()
-        if not me:
-            self.redirect("../A/login?redirect=" + self.scriptUri() + "/U/users")
-        db = self.App.db()
-        users = sorted(list(DBUser.list(db)), key=lambda u: u.Username)
-        #print("Server.users: users:", users)
-        
-        index = None
-        if len(users) > 30:
-            alphabet = set(u.Username[0] for u in users)
-            index = {}
-            for u in users:
-                a = u.Username[0]
-                if not a in index:
-                    index[a] = u.Username
-
-        return self.render_to_response("users.html", users=users, error=unquote_plus(error), admin = me.is_admin(),
-                index = index)
-        
-    def user(self, request, relpath, username=None, error="", message="", **args):
-        db = self.App.connect()
-        user = DBUser.get(db, username)
-        me, auth_error = self.authenticated_user()
-        ldap_config = self.App.auth_config("ldap")
-        ldap_url = ldap_config and ldap_config["server_url"]
-        return self.render_to_response("user.html", user=user, 
-            ldap_url = ldap_url, 
-            error = unquote_plus(error), message=unquote_plus(message),
-            mode = "edit" if (me.is_admin() or me.Username==username) else "view", 
-            its_me = me.Username==username,
-            admin=me.is_admin())
-            
-    def create_user(self, request, relpath, error="", **args):
-        db = self.App.db()
-        me, auth_error = self.authenticated_user()
-        if not me.is_admin():
-            self.redirect("./users?error=%s" % (quote_plus("Not authorized to create users")))
-        return self.render_to_response("user.html", error=unquote_plus(error), mode="create")
-        
-    def save_user(self, request, relpath, **args):
-        db = self.App.db()
-        username = request.POST["username"]
-        me, auth_error = self.authenticated_user()
-        
-        new_user = request.POST["new_user"] == "yes"
-        
-        u = DBUser.get(db, username)
-        if u is None:   
-            if not new_user:    
-                self.redirect("./users?error=%s", quote_plus("user not found"))
-            u = DBUser(db, username, request.POST["name"], request.POST["email"], request.POST["flags"])
-        else:
-            u.Name = request.POST["name"]
-            u.EMail = request.POST["email"]
-            if me.is_admin():   u.Flags = request.POST["flags"]
-            
-        if me.is_admin() or me.Username == u.Username:
-
-            if "save_user" in request.POST:
-                password = request.POST.get("password1")
-                if password:
-                    u.set_auth_info("password", None, password)
-                
-                if me.is_admin():
-                    u.set_auth_info("ldap", self.App.auth_config("ldap"), "allow_ldap" in request.POST)
-                
-                u.save()
-            elif "add_dn" in request.POST:
-                dn = request.POST.get("new_dn")
-                if dn:
-                    dn_list = u.authenticator("x509").Info or []
-                    if not dn in dn_list:
-                        dn_list.append(dn)
-                        u.set_auth_info("x509", None, dn_list)
-                        u.save()
-            else:
-                for k, v in request.POST.items():
-                    if k.startswith("remove_dn:"):
-                        dn = k.split(":",1)[-1]
-                        break
-                else:
-                    dn = None
-                if dn:
-                    dn_list = u.authenticator("x509").Info or []
-                    while dn in dn_list:
-                        dn_list.remove(dn)
-                    u.set_auth_info("x509", None, dn_list)
-                    u.save()
-                    
 class ProjectsHandler(BaseHandler):
     
     HandleStateOrder = {
@@ -160,6 +68,7 @@ class ProjectsHandler(BaseHandler):
         dt = dt.replace(tzinfo=timezone.utc)
         return dt
 
+    @sanitize()
     def projects(self, request, relpath, message="", page=0, page_size=1000, **args):
         db = self.App.db()
         page = int(page)
@@ -233,6 +142,7 @@ class ProjectsHandler(BaseHandler):
                     query_text = query_text
                     )
         
+    @sanitize()
     def handle_logs(self, request, relpath, project_id=None):
         db = self.App.db()
         project_id = int(project_id)
@@ -242,6 +152,7 @@ class ProjectsHandler(BaseHandler):
         log_records = sorted([entry for entry in project.handles_log() if entry.Type == "state"], key = lambda e:e.T)
         return json.dumps([e.as_jsonable() for e in log_records]), "text/json"
 
+    @sanitize()
     def handle_state_counts(self, request, relpath, project_id=None):
         db = self.App.db()
         project_id = int(project_id)
@@ -253,6 +164,7 @@ class ProjectsHandler(BaseHandler):
             counts[state] = counts.get(state, 0) + 1
         return json.dumps(counts), "text/json"
 
+    @sanitize()
     def handle_counts_history(self, request, relpath, project_id=None):
         db = self.App.db()
         project_id = int(project_id)
@@ -302,6 +214,7 @@ class ProjectsHandler(BaseHandler):
             history.append(data)
         return json.dumps(history), "text/json"
 
+    @sanitize()
     def project(self, request, relpath, project_id=None, page=0, page_size=1000, **args):
         page = int(page)
         page_size = int(page_size)
@@ -372,6 +285,7 @@ class ProjectsHandler(BaseHandler):
             state_index = state_page_links
         )
 
+    @sanitize()
     def project_handles_log(self, request, relpath, project_id=None, page=0, page_size=1000, **args):
         page = int(page)
         page_size = int(page_size)
@@ -406,6 +320,7 @@ class ProjectsHandler(BaseHandler):
             page = page, page_index = page_index(page, npages, page_size,f"project_handles_log?project_id={project_id}")
         )
 
+    @sanitize()
     def handle(self, request, relpath, project_id=None, namespace=None, name=None, **args):
         db = self.App.db()
         handle = DBFileHandle.get(db, int(project_id), namespace, name)
@@ -434,6 +349,7 @@ class ProjectsHandler(BaseHandler):
         else:
             return float(delta)
         
+    @sanitize()
     def handle_event_counts(self, request, relpath, t0=None, window=None, bin=None, **_):
         db = self.App.db()
         if t0 is None:
@@ -456,6 +372,7 @@ class ProjectsHandler(BaseHandler):
 
 class RSEHandler(BaseHandler):
     
+    @sanitize()
     def proximity_map(self, request, relpath, message="", **args):
         enabled_rses = set(r.Name for r in DBRSE.list(self.App.db(), include_disabled=False))
         pmap = self.App.proximity_map(rses=enabled_rses)
@@ -469,6 +386,7 @@ class RSEHandler(BaseHandler):
             overrides = overrides, overrides_cpus=overrides_cpus, overrides_rses=overrides_rses
         )
 
+    @sanitize()
     def rses(self, request, relpath, **args):
         user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
@@ -478,6 +396,7 @@ class RSEHandler(BaseHandler):
     
     index = rses
     
+    @sanitize()
     def rse(self, request, relpath, name=None, **args):
         name = name or relpath
         rse = DBRSE.get(self.App.db(), name)
@@ -488,6 +407,7 @@ class RSEHandler(BaseHandler):
         mode = "edit" if is_admin else "view"
         return self.render_to_response("rse.html", rse=rse, mode=mode)
 
+    @sanitize()
     def create(self, request, relpath, **args):
         user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
@@ -505,6 +425,7 @@ class RSEHandler(BaseHandler):
                 proximity = int(proximity.strip())
                 pmap.append([site, proximity])
 
+    @sanitize()
     def do_create(self, request, relpath, **args):
         user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()
@@ -516,6 +437,7 @@ class RSEHandler(BaseHandler):
         self._do_update(rse, request)
         self.redirect(f"./rses")
         
+    @sanitize()
     def do_update(self, request, relpath, **args):
         user, auth_error = self.authenticated_user()
         is_admin = user is not None and user.is_admin()

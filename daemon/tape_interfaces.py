@@ -1,4 +1,4 @@
-from dcache import DCacheInterface
+from wlcg import DCacheInterface
 from pythreader import Primitive, synchronized
 
 class InterfaceLibrary(Primitive):

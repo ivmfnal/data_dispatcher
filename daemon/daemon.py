@@ -408,6 +408,7 @@ class ProjectMonitor(Primitive, Logged):
             #
 
             tape_replicas_by_rse = self.tape_replicas_by_rse(active_handles)               # {rse -> {did -> replica}}
+            self.debug("tape_replicas_by_rse:", [(rse, len(dids)) for rse, dids in tape_replicas_by_rse.items()])
         
             next_run = self.UpdateInterval
 
