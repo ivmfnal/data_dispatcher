@@ -694,7 +694,7 @@ class DBProject(DBObject, HasLogRecord):
                     and p.created_timestamp + p.idle_timeout < now()
                 group by p.id
                 having (max(hl.t) is null or max(hl.t) + p.idle_timeout < now())
-                    or (max(pl.t) is null or max(pl.t) + p.idle_timeout < now())
+                    and (max(pl.t) is null or max(pl.t) + p.idle_timeout < now())
         """)
         return (DBProject.from_tuple(db, tup[:-2]) for tup in transaction.cursor_iterator())
 
