@@ -238,7 +238,7 @@ class DCacheInterface(Primitive, Logged):
         #pin_url = self.discover(rse_config.pin_url(rse))
         pin_url = rse_config.pin_url(rse)
         
-        pin_url = "https://fndcadoor.fnal.gov:3880/api/v1/tape" # for now:
+        #pin_url = "https://fndcadoor.fnal.gov:3880/api/v1/tape" # for now:
         
         poll_url = rse_config.poll_url(rse)
         print(f"rse_config for {rse}:", rse_config)
