@@ -46,7 +46,7 @@ class WLCGPinRequest(Logged):
             lifetime = "PT%dS" % (self.PinLifetime,)
         data =  {
             "files": [
-                {"path": path, "diskLifetime": lifetime}
+                {"path": path, "diskLifetime": lifetime} for path in self.Paths
             ]
         }
         url = self.EndpointURL + ("/" if not self.BaseURL.endswith("/") else "") + "stage"
