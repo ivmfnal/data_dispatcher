@@ -19,16 +19,30 @@ Logging in
 Before using Data Dispatcher UI, the user needs to log in. Logging in essentially means obraining an authentication/authorization token from
 the token issuer and storing it in local file system for use by the Data Dispatcher UI commands.
 
-Currently, Data Dispatcher supports 2 modes of authentication:
+Currently, Data Dispatcher supports 3 modes of authentication:
 
     .. code-block:: shell
 
-        $ dd login password <username>                                  # login using LDAP password
+        $ dd login -m password <username>                                  # login using LDAP password
         Password: ...
         
-        $ dd login x509 <username> <cert_file.pem> <key_file.pem>       # login using X.509 authentication
-        $ dd login x509 <username> <proxy_file>
+        $ dd login -m x509 <username> <cert_file.pem> <key_file.pem>       # login using X.509 authentication
+        $ dd login -m x509 <username> <proxy_file>
+
+        $ dd login -m token [-t (<token>|<token file>)] <username>         # login using WLCG token
+
+If WLCG token authentication is used, the token or a file with the token can be specified with ``-t`` option.
+Otherwise, the command will look for the token in:
+
+    #. ``BEARER_TOKEN`` environment variable value
+    #. contents of a file pointed to by the ``BEARER_TOKEN_FILE`` environment variable
+    #. if ``XDG_RUNTIME_DIR`` environment variable is defined:
+
+        #. if ID environment variable is defined, contents of the file ``$XDG_RUNTIME_DIR/bt_u$ID``
+        #. if ID is not defined, contents of the file: 
         
+            ``$XDG_RUNTIME_DIR/bt_u<effective uid of the process>``
+
 Software versions
 ~~~~~~~~~~~~~~~~~
 
