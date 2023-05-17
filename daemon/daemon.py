@@ -527,7 +527,7 @@ class RucioListener(PyThread, Logged):
         Logged.__init__(self, "RucioListener")
         PyThread.__init__(self, name="RucioListener")
         self.Config = rucio_config
-        self.MessageBrokerConfig = rucio_config["message_broker"]
+        self.MessageBrokerConfig = rucio_config.get("message_broker")
         self.SSLConfig = self.MessageBrokerConfig.get("ssl", {})
         self.DB = db
         self.RSEConfig = rse_config
@@ -545,6 +545,9 @@ class RucioListener(PyThread, Logged):
         self.debug("added replica:", scope, name, rse, url, path)
 
     def run(self):
+        if self.MessageBrokerConfig is None:
+            self.log("Message broker is not configured. Stopping the RucioListener thread.")
+            return
         broker_addr = (self.MessageBrokerConfig["host"], self.MessageBrokerConfig["port"])
         cert_file = self.SSLConfig.get("cert")
         key_file = self.SSLConfig.get("key")
@@ -585,7 +588,7 @@ def main():
 
     rse_config = RSEConfig(config.get("rses", {}), connection_pool)
     ssl_config = config.get("ssl", {})
-    rucio_config = config["rucio"]
+    rucio_config = config.get("rucio", {})
     
     logging_config = config.get("logging", {})
     log_out = logging_config.get("log", "-")
@@ -629,6 +632,7 @@ def main():
     
     rucio_listener = RucioListener(connection_pool, rucio_config, rse_config)
     rucio_listener.start()
+        
 
     schemes = config.get("replica_url_schemes")
 

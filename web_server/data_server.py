@@ -346,7 +346,7 @@ class Handler(BaseHandler):
         project_log = (x.as_jsonable() for x in project.handles_log())
         return json.dumps(project_log), "text/json"
 
-    def projects(self, request, relpath, state=None, not_state=None, owner=None, attributes="", 
+    def projects(self, request, relpath, state=None, not_state="abandoned", owner=None, attributes="",
                 with_handles="yes", with_replicas="yes", **args):
         with_handles = with_handles == "yes"
         with_replicas = with_replicas == "yes"
@@ -442,6 +442,7 @@ class App(BaseApp, Logged):
         self.ProximityMapOverrides = proximity_map_cfg.get("overrides", {})
         log_out = config.get("web_server",{}).get("log","-")
         init_logger(log_out, debug_enabled=True)
+        self.init_auth_core(config)
     
     def proximity_map(self):
         db = self.db()

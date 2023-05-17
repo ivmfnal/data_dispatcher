@@ -301,13 +301,13 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         else:
             return None
     
-    def list_projects(self, owner=None, state="active", not_state=None, attributes=None, with_files=True, with_replicas=False):
+    def list_projects(self, owner=None, state="active", not_state="abandoned", attributes=None, with_files=True, with_replicas=False):
         """Lists existing projects
         
         Keyword Arguments:
             owner (str): Include only projects owned by the specified user. Default: all users
-            state (str): Include only projects in specified state. Default: all states
-            not_state (str): Exclude projects in the specified state. Default: do not exclude
+            state (str): Include only projects in specified state. Default: active only
+            not_state (str): Exclude projects in the specified state. Default: exclude abandoned
             attributes (dict): Include only projects with specified attribute values. Default: do not filter by attributes
             with_files (boolean): Include information about files. Default: True
             with_replicas (boolean): Include information about file replics. Default: False
