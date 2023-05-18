@@ -583,7 +583,10 @@ def main():
     config = yaml.load(open(config, "r"), Loader=yaml.SafeLoader)
 
     dbconfig = config["database"]
-    connstr="host=%(host)s port=%(port)s dbname=%(dbname)s user=%(user)s password=%(password)s" % dbconfig
+    if "url" in dbconfig:
+        connstr = dbconfig["url"]
+    else:
+        connstr="host=%(host)s port=%(port)s dbname=%(dbname)s user=%(user)s password=%(password)s" % dbconfig
     connection_pool = ConnectionPool(postgres=connstr)
 
     rse_config = RSEConfig(config.get("rses", {}), connection_pool)
