@@ -1,7 +1,7 @@
 from webpie import WPApp, WPHandler, WPStaticHandler, sanitize
 from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap       # , DBUser
 from data_dispatcher import Version
-from metacat.auth.server import AuthHandler, BaseHandler, BaseApp
+from metacat.auth.server import AuthHandler, BaseHandler, BaseApp, GUIAuthHandler
 import urllib, os, yaml, time, json, pprint
 from urllib.parse import quote, unquote, unquote_plus
 from wsdbtools import ConnectionPool
@@ -471,7 +471,7 @@ class TopHandler(BaseHandler):
         BaseHandler.__init__(self, request, app)
         #self.U = UsersHandler(request, app)
         self.P = ProjectsHandler(request, app)
-        self.A = AuthHandler(request, app)
+        self.A = GUIAuthHandler(request, app)
         self.R = RSEHandler(request, app)
         self.static = WPStaticHandler(request, app)
         

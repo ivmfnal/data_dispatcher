@@ -625,7 +625,8 @@ def main():
                 proximity_map_loader_interval
         )
         proximity_map_loader.start()
-
+    else:
+        print("Proximity map URL is not configured")
 
     rse_list_loader = RSEListLoader(connection_pool, rse_client)
     rse_list_loader.start()
