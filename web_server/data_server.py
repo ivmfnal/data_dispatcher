@@ -393,10 +393,10 @@ class Handler(BaseHandler):
             return "null", "text/json"
         return json.dumps(handle.as_jsonable(with_replicas=True)), "text/json"
     
-    def handles(self, request, relpath, project_id=None, state=None, rse=None, not_state=None, with_replicas="no"):
+    def handles(self, request, relpath, project_id=None, state=None, not_state=None, with_replicas="no"):
         db = self.App.db()
         project_id = int(project_id)
-        lst = DBFileHandle.list(db, project_id=project_id, rse=rse, not_state=not_state, state=state, with_replicas=with_replicas=="yes")
+        lst = DBFileHandle.list(db, project_id=project_id, not_state=not_state, state=state, with_replicas=with_replicas=="yes")
         return json.dumps([h.as_jsonable() for h in lst]), "text/json"
         
     def rses(self, request, relpath, **args):

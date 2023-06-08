@@ -427,7 +427,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
         return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found=True)
 
-    def list_handles(self, project_id, state=None, not_state=None, rse=None, with_replicas=False):
+    def list_handles(self, project_id, state=None, not_state=None, with_replicas=False):
         """Returns information about project file handles, selecting them by specified criteria
         
         Args:
@@ -436,14 +436,12 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         Keyword Arguments:
             state (str): select only handles in the specified state
             not_state (str): exclude handles in the specified state
-            rse (str): include only handles with replicas in the specified RSE
             with_replicas (boolean): include information about replicas
 
         Returns:
             list of dictionaries with inofrmation about selected file handles
         """
         args = []
-        if rse: args.append(f"rse={rse}")
         if project_id: args.append(f"project_id={project_id}")
         if state: args.append(f"state={state}")
         if not_state: args.append(f"not_state={not_state}")
@@ -503,10 +501,22 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         return self.get(suffix)
 
     def file_done(self, project_id, did):
+        """Notifies Data Dispatcher that the file was successfully processed and should be marked as "done".
+        
+        Args:
+            project_id (int): project id
+            did (str): file DID ("<namespace>:<name>")
+        """
         handle_id = f"{project_id}:{did}"
         return self.get(f"release?handle_id={handle_id}&failed=no")
 
     def file_failed(self, project_id, did, retry=True):
+        """Notifies Data Dispatcher that the file was successfully processed and should be marked as "done".
+        
+        Args:
+            project_id (int): project id
+            did (str): file DID ("<namespace>:<name>")
+        """
         handle_id = f"{project_id}:{did}"
         retry = "yes" if retry else "no"
         return self.get(f"release?handle_id={handle_id}&failed=yes&retry={retry}")
