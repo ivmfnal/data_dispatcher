@@ -67,7 +67,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         
         server_url = server_url or os.environ.get("DATA_DISPATCHER_URL")
         auth_server_url = auth_server_url or os.environ.get("DATA_DISPATCHER_AUTH_URL")
-        TokenAuthClientMixin.__init__(self, server_url, token, token_file, auth_url=auth_server_url)
+        TokenAuthClientMixin.__init__(self, server_url, auth_server_url, token=token, token_file=token_file)
 
         #print("DataDispatcherClient: url:", server_url)
 

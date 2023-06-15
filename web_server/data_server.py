@@ -227,7 +227,7 @@ class Handler(BaseHandler):
         project = DBProject.get(db, project_id)
         if not project:
             return 404, "Project not found"
-        if not user.is_admin() and user.Username != project.Owner:
+        if not (user.is_admin() or project.authorized_user(user.Username)):
             return 403, "Not authorized"
         if project.State == "abandoned":
             project.activate()

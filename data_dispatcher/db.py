@@ -121,7 +121,7 @@ class DBManyToMany(object):
         self.DstFKColumns = dst_fk_columns
         self.DstClass = dst_class
         self.DstTable = dst_class.Table
-        self.DstPKColumns = self.DstTable.PK
+        self.DstPKColumns = dst_class.PK
 
     @transactioned
     def add(self, dst_pk_values, payload, transaction=None):
@@ -140,20 +140,20 @@ class DBManyToMany(object):
             """)
         return self
 
-    def list(self, cursor=None):
+    @transactioned
+    def list(self, transaction=None):
         out_columns = ",".join(f"{self.DstTable}.{c}" for c in self.DstClass.Columns)
         join_column_pairs = [
             (f"{self.Table}.{dst_fk}", f"{self.DstTable}.{dst_pk}") 
             for src_fk, dst_pk in zip(self.DstFKColumns, self.DstPKColumns)
         ]
         join_condition = " and ".join(f"{fk} = {pk}" for fk, pk in join_column_pairs)
-        if cursor is None: cursor = self.DB.cursor()
-        cursor.execute(f"""
+        transaction.execute(f"""
             select {out_columns}
                 from {self.DstTable}, {self.Table}
                 where {join_condition}
         """)
-        return (self.DstClass.from_tuple(self.DB, tup) for tup in fetch_generator(cursor))
+        return (self.DstClass.from_tuple(self.DB, tup) for tup in fetch_generator(transaction))
         
     def __iter__(self):
         return self.list()
@@ -168,20 +168,20 @@ class DBOneToMany(object):
         self.DstTable = dst_class.Table
         self.DstFKColumns = dst_fk_columns
 
-    def list(self, cursor=None):
+    @transactioned
+    def list(self, transaction=None):
         out_columns = ",".join(f"{self.DstTable}.{c}" for c in self.DstClass.Columns)
         join_column_pairs = [
             (f"{self.Table}.{dst_pk}", f"{self.DstTable}.{dst_fk}") 
             for src_pk, dst_fk in zip(self.SrcPKColumns, self.DstFKColumns)
         ]
         join_condition = " and ".join(f"{pk} = {fk}" for pk, fk in join_column_pairs)
-        if cursor is None: cursor = self.DB.cursor()
-        cursor.execute(f"""
+        transaction.execute(f"""
             select {out_columns}
                 from {self.DstTable}, {self.Table}
                 where {join_condition}
         """)
-        return (self.DstClass.from_tuple(self.DB, tup) for tup in fetch_generator(cursor))
+        return (self.DstClass.from_tuple(self.DB, tup) for tup in fetch_generator(transaction))
         
     def __iter__(self):
         return self.list()
@@ -349,7 +349,8 @@ class DBProject(DBObject, HasLogRecord):
         self.Query = query
         self.WorkerTimeout = to_timedelta(worker_timeout)
         self.IdleTimeout = to_timedelta(idle_timeout)
-        
+        self.Users = DBManyToMany(db, DBUser, {"project_id":id}, ["project_id"], [], DBUser)    # if other than the owner
+
     def pk(self):
         return (self.ID,)
         
@@ -421,7 +422,7 @@ class DBProject(DBObject, HasLogRecord):
     @staticmethod
     @transactioned
     def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None,
-                    transaction=None):
+                    transaction=None, users=[]):
         if isinstance(owner, DBUser):
             owner = owner.Username
 
@@ -433,8 +434,19 @@ class DBProject(DBObject, HasLogRecord):
                     to_timedelta(worker_timeout), to_timedelta(idle_timeout))
         )
         id = transaction.fetchone()[0]
+
         project = DBProject.get(db, id)
+
+        for user in users:
+            project.Users.add([user], [], transaction=transaction)
+
         return project
+
+    def users(self):
+        return self.Users.list()
+        
+    def authorized_user(self, username):
+        return username == self.Owner or any(u.Username == username for u in self.Users)
 
     @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
