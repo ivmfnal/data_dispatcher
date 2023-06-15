@@ -19,16 +19,30 @@ Logging in
 Before using Data Dispatcher UI, the user needs to log in. Logging in essentially means obraining an authentication/authorization token from
 the token issuer and storing it in local file system for use by the Data Dispatcher UI commands.
 
-Currently, Data Dispatcher supports 2 modes of authentication:
+Currently, Data Dispatcher supports 3 modes of authentication:
 
     .. code-block:: shell
 
-        $ dd login password <username>                                  # login using LDAP password
+        $ dd login -m password <username>                                  # login using LDAP password
         Password: ...
         
-        $ dd login x509 <username> <cert_file.pem> <key_file.pem>       # login using X.509 authentication
-        $ dd login x509 <username> <proxy_file>
+        $ dd login -m x509 <username> <cert_file.pem> <key_file.pem>       # login using X.509 authentication
+        $ dd login -m x509 <username> <proxy_file>
+
+        $ dd login -m token [-t (<token>|<token file>)] <username>         # login using WLCG token
+
+If WLCG token authentication is used, the token or a file with the token can be specified with ``-t`` option.
+Otherwise, the command will look for the token in:
+
+    #. ``BEARER_TOKEN`` environment variable value
+    #. contents of a file pointed to by the ``BEARER_TOKEN_FILE`` environment variable
+    #. if ``XDG_RUNTIME_DIR`` environment variable is defined:
+
+        #. if ID environment variable is defined, contents of the file ``$XDG_RUNTIME_DIR/bt_u$ID``
+        #. if ID is not defined, contents of the file: 
         
+            ``$XDG_RUNTIME_DIR/bt_u<effective uid of the process>``
+
 Software versions
 ~~~~~~~~~~~~~~~~~
 
@@ -268,7 +282,7 @@ When the worker gets next file to process, the JSON representation of file inofr
         }
 
         
-Viewing projects
+Listing projects
 ................
 
     .. code-block:: shell
@@ -277,6 +291,11 @@ Viewing projects
             -j                                              - JSON output
             -u <owner>                                      - filter by project owner
             -a "name1=value1 name2=value2 ..."              - filter by project attributes
+
+Viewing projects
+................
+
+    .. code-block:: shell
 
         $ dd project show [options] <project_id>            - show project info (-j show as JSON)
                 -a                                          - show project attributes only
@@ -290,6 +309,22 @@ Viewing projects
                    reserved  - reserved files only
                    failed    - failed files only
                    done      - done files only
+
+Searching projects
+..................
+
+    .. code-block:: shell
+
+        $ dd project search [oprions] -q -              - read search query from stdin
+        $ dd project search [oprions] -q <file path>    - read search query from a file
+        $ dd project search [oprions] <search query>    - inline search query
+        
+        Options:
+            -j                                          - JSON output
+            -u <owner>                                  - filter by owner
+            -s (<state>|all)                            - filter by state, default: active projects only
+
+See :ref:`Searching Projects <SearchQL>` for details on search query language
 
 Copying project
 ...............
@@ -583,3 +618,5 @@ This command requires admin privileges.
         ...
         
 When an RSE is unavailable (down), replicas in this RSE are considered unavailable even if this is a disk RSE or they are known to be staged in a tape RSE.
+
+

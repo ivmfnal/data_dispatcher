@@ -449,6 +449,12 @@ class DBProject(DBObject, HasLogRecord):
         return username == self.Owner or any(u.Username == username for u in self.Users)
 
     @staticmethod
+    def from_sql(db, sql):
+        c = db.cursor()
+        c.execute(sql)
+        return (DBProject.from_tuple(db, tup) for tup in cursor_iterator(c))
+
+    @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
         wheres = [
             "(%(owner)s is null or p.owner=%(owner)s)",
@@ -557,16 +563,18 @@ class DBProject(DBObject, HasLogRecord):
 
     @transactioned
     def cancel(self, transaction=None):
-        self.State = "cancelled"
-        self.EndTimestamp = datetime.now(timezone.utc)
-        self.save(transaction=transaction)
-        self.add_log("state", event="cancel", state="cancelled", transaction=transaction)
+        if self.State != "cancelled":
+            self.State = "cancelled"
+            self.EndTimestamp = datetime.now(timezone.utc)
+            self.save(transaction=transaction)
+            self.add_log("state", event="cancel", state="cancelled", transaction=transaction)
 
     @transactioned
     def activate(self, transaction=None):
-        self.State = "active"
-        self.save(transaction=transaction)
-        self.add_log("state", event="activate", state="active", transaction=transaction)
+        if self.State != "active":
+            self.State = "active"
+            self.save(transaction=transaction)
+            self.add_log("state", event="activate", state="active", transaction=transaction)
 
     @transactioned
     def restart_handles(self, states=None, dids=None, transaction=None):
@@ -698,7 +706,7 @@ class DBProject(DBObject, HasLogRecord):
                     and p.created_timestamp + p.idle_timeout < now()
                 group by p.id
                 having (max(hl.t) is null or max(hl.t) + p.idle_timeout < now())
-                    or (max(pl.t) is null or max(pl.t) + p.idle_timeout < now())
+                    and (max(pl.t) is null or max(pl.t) + p.idle_timeout < now())
         """)
         return (DBProject.from_tuple(db, tup[:-2]) for tup in transaction.cursor_iterator())
 
@@ -1131,10 +1139,10 @@ class DBFileHandle(DBObject, HasLogRecord):
     ReservedState = "reserved"
     States = ["initial", "reserved", "done", "failed"]
     DerivedStates = [
-            "not found",
-            "found",
             "available", 
             "reserved",
+            "not found",
+            "found",
             "done",
             "failed"
         ]
@@ -1176,7 +1184,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         return self.Replicas
         
     def state(self):
-        # returns the handle state, including derived states like "available" and "found"
+        # returns conbined handle state, including derived states like "available" and "found"
         if self.State == "initial":
             replicas = list(self.replicas().values())
             if replicas:
@@ -1184,6 +1192,8 @@ class DBFileHandle(DBObject, HasLogRecord):
                     return "available"
                 else:
                     return "found"
+            else:
+                return "not found"
         return self.State
         
     def file_state(self):
@@ -1433,7 +1443,8 @@ class DBFileHandle(DBObject, HasLogRecord):
                     h.Replicas = {}
                     h.Availability = "not found" if with_availability else None
                 if r_tuple[0] is not None:
-                    h.Availability = "found"
+                    if h.Availability != "available":
+                        h.Availability = "found"
                     r = DBReplica.from_tuple(db, r_tuple)
                     r.RSEAvailable = bool(rse_available)
                     h.Replicas[r.RSE] = r
@@ -1581,15 +1592,40 @@ class DBFileHandle(DBObject, HasLogRecord):
         self.WorkerID = None
         self.save(transaction=transaction)
 
+    LOG_EVENTS = "reserve,worker_timeout,reset,failed,done,create".split(",")
+
+    @staticmethod
+    def event_counts(db, t0, bin):
+        t_begin = datetime.fromtimestamp(t0, timezone.utc)
+        t1 = time.time()
+        t1 = int((t1 + bin - 1)/bin) * bin
+        t_end = datetime.fromtimestamp(t1, timezone.utc)
+        c = db.cursor()
+        c.execute(f"""
+            select (extract(epoch from t)/{bin}::int)*{bin}, data->'event', count(*) 
+                from file_handle_log 
+                where t >= %s and t < %s
+                group by data->'event', (extract(epoch from t)/{bin}::int)*{bin}
+                order by data->'event', (extract(epoch from t)/{bin}::int)*{bin};
+        """, (t_begin, t_end))
+        n_times = int((t1 - t0)/bin)
+        zeros = [0] * n_times
+        counts = {
+            event: zeros[:] for event in DBFileHandle.LOG_EVENTS
+        }
+        for t, event, count in c.fetchall():
+            i = int((float(t)-t0)/bin)
+            counts[event][i] += 1
+        return t0, t1, DBFileHandle.LOG_EVENTS, counts
 
 class DBRSE(DBObject):
     
-    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference"]
+    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference", "type"]
     PK = ["name"]
     Table = "rses"
 
     def __init__(self, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
-                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0, type=None):
         self.DB = db
         self.Name = name
         self.Description = description
@@ -1602,6 +1638,7 @@ class DBRSE(DBObject):
         self.AddPrefix = add_prefix
         self.PinPrefix = pin_prefix
         self.Preference = preference
+        self.Type = type                            # "dcache", "eos", etc.
 
     def as_dict(self):
         return dict(
@@ -1615,31 +1652,24 @@ class DBRSE(DBObject):
             add_prefix      =   self.AddPrefix,
             pin_prefix      =   self.PinPrefix,
             preference      =   self.Preference,
-            is_enabled      =   self.Enabled
+            is_enabled      =   self.Enabled,
+            type            =   self.Type
         )
 
     as_jsonable = as_dict
 
     @classmethod
+    @transactioned
     def create(cls, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
-                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
-        c = db.cursor()
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0, type=None, transaction=None):
         table = cls.Table
         columns = cls.columns(as_text=True)
-        try:
-            c.execute("begin")
-            c.execute(f"""
-                begin;
+        transaction.execute(f"""
                 insert into {table}({columns})
-                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    on conflict(name) do nothing;
-                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, pin_prefix, preference)
+                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict(name) do nothing
+                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, pin_prefix, preference, type)
             )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
-        
         return DBRSE.get(db, name)
 
     @classmethod
@@ -1653,39 +1683,24 @@ class DBRSE(DBObject):
         """)
         return (cls.from_tuple(db, tup) for tup in cursor_iterator(c))
 
-    def save(self):
-        c = self.DB.cursor()
-        try:
-            #print("saving urls:", self.PinURL, self.PollURL)
-            c.execute("begin")
-            c.execute("""
-                begin;
-                update rses 
-                    set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, pin_prefix=%s, preference=%s
-                    where name=%s
-                """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
-                    self.AddPrefix, self.PinPrefix, self.Preference,
-                    self.Name)
-            )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
+    @transactioned
+    def save(self, transaction=None):
+        transaction.execute("""
+            update rses 
+                set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, pin_prefix=%s, preference=%s,
+                        type=%s
+                where name=%s
+            """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
+                self.AddPrefix, self.PinPrefix, self.Preference, self.Type,
+                self.Name)
+        )
 
 
     @staticmethod
-    def create_many(db, names):
-        c = db.cursor()
-        table = DBRSE.Table
-        try:
-            c.execute("begin")
-            c.executemany(f"""insert into {table}(name) values(%s) on conflict(name) do nothing""",
-                [(name,) for name in names]
-            )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
+    @transactioned
+    def create_many(db, names, transaction=None):
+        for name in names:
+            DBRSE.create(db, name, transaction=transaction)
 
 class DBProximityMap(DBObject):
 

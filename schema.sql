@@ -1,12 +1,11 @@
-drop table project_log;
-drop table file_handle_log;
-drop table replicas cascade;
-drop table file_handles;
-drop table project_users
-drop table projects;
-drop table proximity_map;
-drop table replica_log;
-drop table rses;
+drop table if exists project_log;
+drop table if exists file_handle_log;
+drop table if exists replicas cascade;
+drop table if exists file_handles;
+drop table if exists projects;
+drop table if exists proximity_map;
+drop table if exists replica_log;
+drop table if exists rses;
 
 create table if not exists users            -- do not create if we are adding DD schema to MetaCat
 (
@@ -64,7 +63,8 @@ create table rses
     remove_prefix   text    default '',
     add_prefix      text    default '',
     pin_prefix      text    default '',
-    preference      int     default 0
+    preference      int     default 0,
+    type            text
 );
 
 create table replicas

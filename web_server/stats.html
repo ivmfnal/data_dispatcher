@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block html_head %}
+<script src="{{GLOBAL_AppTopPath}}/static/js/request.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.12.1.min.js"></script>
+
+<style type="text/css">
+    .plot {
+        background-color: rgba(250, 250, 250, 1.0);
+        padding: 10px;
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block headline %}Statistics{% endblock %}
+
+{% block content %}
+
+<table class=placement>
+    <tr>
+        <td>Window:&nbsp;&nbsp;<select id="window_select" onchange="window_changed()">
+                <option value="30d">month</option>
+                <option value="7d" selected="selected">week</option>
+                <option value="24h">day</option>
+                <option value="1h">hour</option>
+                <option value="10m">10 minutes</option>
+            </select>&nbsp;&nbsp;bin:<span id="bin_display"></span>
+        </td>
+    </tr>
+    <tr>
+        <td colspan>
+            <div class=plot id="handle_events_chart" style="width:1000px; height:400px"></div>
+            <script type="text/javascript">
+                const WindowToBin = {
+                    "30d": "2h", 
+                    "7d": "30m", 
+                    "24h": "5m", 
+                    "1h": "10s", 
+                    "10m": "5s"
+                };
+                
+                function handle_event_counts_chart(chart_element)
+                {
+                    this.div_element = chart_element;
+                
+                    this.data_received = function(data)
+                    {
+                        var times = [];
+                        var traces = [];
+                        const date_0 = new Date(data.t0*1000);
+                        const date_1 = new Date(data.t1*1000);
+                        for( var t = data.t0; t < data.t1; t += data.bin )
+                            times.push(new Date(t*1000));
+                        for( event of data.events )
+                        {
+                            var trace = {
+                                type: "scatter",
+                                line: {shape: 'hv', width: 1.0},
+                                mode: "line",
+                                x: times,
+                                y: data.counts[event],
+                                name: event
+                            }
+                            traces.push(trace);
+                        }
+                        
+                        const layout = {
+                            title: {
+                              text:'File handle event counts',
+                              font: {
+                                family: 'Verdana, sans-serif',
+                                  size: 18
+                              },
+                              xref: 'paper',
+                              x: 0.0,
+                            },
+                            plot_bgcolor: "rgba(255, 255, 255, 1.0)",
+                            paper_bgcolor: "rgba(250, 250, 250, 1.0)",
+                            legend: {   y:0.5   },
+                            xaxis: {
+                                type: "Date/time",
+                                range: [date_0, date_1],
+                                title: {
+                                    text: "Date/time"
+                                }
+                            },
+                            yaxis: {
+                                title: {
+                                    text: "Event count/bin"
+                                }
+                            }
+                        }
+                        
+                        Plotly.newPlot(this.div_element, traces, layout);
+                    }
+                    
+                    this.request_data = function(window, bin)
+                    {
+                        url = "./handle_event_counts?window=" + window + "&bin=" + bin;
+                        var request = HTTPRequest(url, this, null, "json");
+                    }
+                }
+                var handle_event_counts = new handle_event_counts_chart("handle_events_chart");
+                
+                function window_changed()
+                {
+                    let window = document.getElementById("window_select").value;
+                    let bin = WindowToBin[window];
+                    document.getElementById("bin_display").innerHTML = bin;
+                    handle_event_counts.request_data(window, bin);
+                }
+                
+                window_changed();
+
+            </script>
+        </td>
+    </tr>
+</table>
+
+{% endblock %}
+

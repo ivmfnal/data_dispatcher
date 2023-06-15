@@ -9,7 +9,7 @@ build:	server client
 	
 server:	$(SERVER_LIBDIR)
 	cp $(SERVER_FILES) $(SERVER_LIBDIR)
-	cp -R logs $(SERVER_LIBDIR)
+	cp -R query logs $(SERVER_LIBDIR)
 
 client: $(CLIENT_BINDIR) $(CLIENT_LIBDIR)
 	cp $(CLIENT_FILES) $(CLIENT_LIBDIR)
