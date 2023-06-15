@@ -7,11 +7,21 @@ drop table proximity_map;
 drop table replica_log;
 drop table rses;
 
+create table if not exists users            -- do not create if we are adding DD schema to MetaCat
+(
+    username    text    primary key,
+    name        text,
+    email       text,
+    flags       text    default '',
+    auth_info   jsonb   default '{}',
+    auid        text                        -- anonymized user identificator
+);
+
 create table projects
 (
-	id	                bigserial primary key,
-	owner	            text,
-	created_timestamp   timestamp with time zone     default now(),
+    id                  bigserial primary key,
+    owner               text,
+    created_timestamp   timestamp with time zone     default now(),
     end_timestamp       timestamp with time zone,
     state	            text,
     retry_count         int,
