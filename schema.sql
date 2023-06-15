@@ -17,6 +17,20 @@ create table if not exists users            -- do not create if we are adding DD
     auid        text                        -- anonymized user identificator
 );
 
+create table if not exists roles            -- do not create if we are adding DD schema to MetaCat
+(
+    name        text    primary key,
+    parent_role text    references roles(name),
+    description text
+);
+
+create table if not exists users_roles      -- do not create if we are adding DD schema to MetaCat
+(
+    username    text    references users(username),
+    role_name        text    references roles(name),
+    primary key(username, role_name)
+);
+
 create table projects
 (
     id                  bigserial primary key,
