@@ -2,6 +2,7 @@ drop table project_log;
 drop table file_handle_log;
 drop table replicas cascade;
 drop table file_handles;
+drop table project_users
 drop table projects;
 drop table proximity_map;
 drop table replica_log;
@@ -34,7 +35,7 @@ create table if not exists users_roles      -- do not create if we are adding DD
 create table projects
 (
     id                  bigserial primary key,
-    owner               text,
+    owner               text references users(username),
     created_timestamp   timestamp with time zone     default now(),
     end_timestamp       timestamp with time zone,
     state	            text,
@@ -43,6 +44,12 @@ create table projects
     idle_timeout        interval,
     attributes          jsonb  default '{}'::jsonb,
     query               text
+);
+
+create table project_users
+(
+    project_id  bigint references projects(id),
+    username    text references users(username)
 );
 
 create table rses
