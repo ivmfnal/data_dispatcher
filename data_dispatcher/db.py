@@ -477,11 +477,11 @@ class DBProject(DBObject, HasLogRecord):
 
     @property
     def users(self):
-        return self.Users.list()
+        return sorted(list(self.Users), key=lambda u: u.Username)
 
     @property
     def roles(self):
-        return self.Roles.list()
+        return sorted(list(self.Roles), key=lambda r: r.Name)
         
     def authorized_user(self, username):
         return username == self.Owner or any(u.Username == username for u in self.users) or \
