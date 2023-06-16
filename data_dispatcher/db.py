@@ -1,13 +1,12 @@
 import json, time, io, traceback, urllib.parse
 from datetime import datetime, timedelta, timezone
-from metacat.auth import BaseDBUser as DBUser
+from metacat.auth import BaseDBUser as DBUser, BaseDBRole as DBRole
 
 def cursor_iterator(c):
     t = c.fetchone()
     while t is not None:
         yield t
         t = c.fetchone()
-
 
 def json_literal(v):
     if isinstance(v, str):       v = '"%s"' % (v.replace("'", "''"),)
@@ -20,6 +19,13 @@ def to_timedelta(t):
     if isinstance(t, (int, float)):
         t = timedelta(seconds=t)
     return t
+    
+class HasDB(object):
+
+    # instances must have DB attribute
+    
+    def __init__(self):
+        self.DB = None
 
 def transactioned(method):
     def decorated(first, *params, transaction=None, **args):
@@ -27,7 +33,7 @@ def transactioned(method):
         if transaction is not None:
             return method(first, *params, transaction=transaction, **args)
 
-        if isinstance(first, DBObject):
+        if isinstance(first, HasDB):
             transaction = first.DB.transaction()
         elif isinstance(first, type):
             # class method -- DB is second argument
@@ -40,9 +46,12 @@ def transactioned(method):
 
     return decorated
 
+def sanitize(s):
+    s = str(s)
+    if "'" in s:
+        raise ValueError('Invalid value: "%s"' % (s,))
 
-
-class DBObject(object):
+class DBObject(HasDB):
     
     @classmethod
     def from_tuple(cls, db, dbtup):
@@ -89,7 +98,7 @@ class DBObject(object):
 
     def _delete(self, cursor=None, do_commit=True, **pk_values):
         cursor = cursor or self.DB.cursor()
-        where_clause = " and ".join(f"{column} = '{value}'" for column, value in pk_values.items())
+        where_clause = " and ".join("%s = '%s'" % (column, sanitize(value),) for column, value in pk_values.items())
         try:
             cursor.execute(f"""
                 delete from {self.Table} where {where_clause}
@@ -112,32 +121,38 @@ class DBObject(object):
         pk_values = {column:value for column, value in zip(self.PK, self.pk())}
         return self._delete(cursor=None, do_commit=True, **pk_values)
     
-class DBManyToMany(object):
+class DBManyToMany(HasDB):
     
     def __init__(self, db, table, src_fk_values, dst_fk_columns, payload_columns, dst_class):
         self.DB = db
         self.Table = table
         self.SrcFKColumns, self.SrcFKValues = zip(*list(src_fk_values.items()))
+        self.SrcFKColumns = list(self.SrcFKColumns)
+        self.SrcFKValues = list(self.SrcFKValues)
         self.DstFKColumns = dst_fk_columns
         self.DstClass = dst_class
         self.DstTable = dst_class.Table
         self.DstPKColumns = dst_class.PK
+        self.PayloadColumns = payload_columns
 
     @transactioned
-    def add(self, dst_pk_values, payload, transaction=None):
+    def add(self, dst_pk_values, payload={}, transaction=None):
         assert len(dst_pk_values) == len(self.DstFKColumns)
         
         payload_cols_vals = list(payload.items())
-        payload_cols, payload_vals = zip(*payload_cols_vals)
+        payload_cols, payload_vals = [], []
+        if payload:
+            payload_cols, payload_vals = zip(*payload_cols_vals)
         
         fk_cols = ",".join(self.SrcFKColumns + self.DstFKColumns)
         cols = ",".join(self.SrcFKColumns + self.DstFKColumns + payload_cols)
-        vals = ",".join([f"'{v}'" for v in self.SrcFKValues + dst_pk_values + payload_vals])
+        values = tuple(self.SrcFKValues + dst_pk_values + payload_vals)
+        value_placeholders = ",".join(["%s"] * len(values))
         
         transaction.execute(f"""
-                insert into {self.Table}({cols}) values({vals})
+                insert into {self.Table}({cols}) values({value_placeholders})
                     on conflict({fk_cols}) do nothing
-            """)
+            """, values)
         return self
 
     @transactioned
@@ -145,20 +160,21 @@ class DBManyToMany(object):
         out_columns = ",".join(f"{self.DstTable}.{c}" for c in self.DstClass.Columns)
         join_column_pairs = [
             (f"{self.Table}.{dst_fk}", f"{self.DstTable}.{dst_pk}") 
-            for src_fk, dst_pk in zip(self.DstFKColumns, self.DstPKColumns)
+            for dst_fk, dst_pk in zip(self.DstFKColumns, self.DstPKColumns)
         ]
-        join_condition = " and ".join(f"{fk} = {pk}" for fk, pk in join_column_pairs)
+        src_fk_conditions = " and ".join([f"{c} = %s" for c in self.SrcFKColumns])
+        join_conditions = " and ".join(f"{fk} = {pk}" for fk, pk in join_column_pairs)
         transaction.execute(f"""
             select {out_columns}
                 from {self.DstTable}, {self.Table}
-                where {join_condition}
-        """)
-        return (self.DstClass.from_tuple(self.DB, tup) for tup in fetch_generator(transaction))
+                where {src_fk_conditions} and {join_conditions}
+        """, tuple(self.SrcFKValues))
+        return (self.DstClass.from_tuple(self.DB, tup) for tup in cursor_iterator(transaction))
         
     def __iter__(self):
         return self.list()
 
-class DBOneToMany(object):
+class DBOneToMany(HasDB):
     
     def __init__(self, db, table, src_pk_values, dst_fk_columns, dst_class):
         self.DB = db
@@ -181,7 +197,7 @@ class DBOneToMany(object):
                 from {self.DstTable}, {self.Table}
                 where {join_condition}
         """)
-        return (self.DstClass.from_tuple(self.DB, tup) for tup in fetch_generator(transaction))
+        return (self.DstClass.from_tuple(self.DB, tup) for tup in cursor_iterator(transaction))
         
     def __iter__(self):
         return self.list()
@@ -349,7 +365,8 @@ class DBProject(DBObject, HasLogRecord):
         self.Query = query
         self.WorkerTimeout = to_timedelta(worker_timeout)
         self.IdleTimeout = to_timedelta(idle_timeout)
-        self.Users = DBManyToMany(db, DBUser, {"project_id":id}, ["project_id"], [], DBUser)    # if other than the owner
+        self.Users = DBManyToMany(db, "project_users", {"project_id":id}, ["username"], [], DBUser)    # if other than the owner
+        self.Roles = DBManyToMany(db, "project_roles", {"project_id":id}, ["role_name"], [], DBRole)
 
     def pk(self):
         return (self.ID,)
@@ -382,7 +399,9 @@ class DBProject(DBObject, HasLogRecord):
             active = self.is_active(),
             query = self.Query,
             worker_timeout = None if self.WorkerTimeout is None else self.WorkerTimeout.total_seconds(),
-            idle_timeout = None if self.IdleTimeout is None else self.IdleTimeout.total_seconds()
+            idle_timeout = None if self.IdleTimeout is None else self.IdleTimeout.total_seconds(),
+            users = [u.Username for u in self.Users],
+            roles = [r.Name for r in self.Roles]
         )
         if with_handles or with_replicas:
             out["file_handles"] = [h.as_jsonable(with_replicas=with_replicas) for h in self.handles()]
@@ -422,7 +441,7 @@ class DBProject(DBObject, HasLogRecord):
     @staticmethod
     @transactioned
     def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None,
-                    transaction=None, users=[]):
+                    transaction=None, users=[], roles=[]):
         if isinstance(owner, DBUser):
             owner = owner.Username
 
@@ -436,17 +455,37 @@ class DBProject(DBObject, HasLogRecord):
         id = transaction.fetchone()[0]
 
         project = DBProject.get(db, id)
-
-        for user in users:
-            project.Users.add([user], [], transaction=transaction)
+        
+        if users:
+            project.add_users(users)
+        if roles:
+            project.add_roles(roles)
 
         return project
 
+    def add_users(self, users):
+        current_users = set(u.Username for u in self.users)
+        for u in users:
+            if u not in current_users:
+                self.Users.add([u])
+                
+    def add_roles(self, roles):
+        current_roles = set(r.Name for r in self.roles)
+        for r in roles:
+            if r not in current_roles:
+                self.Roles.add([r])
+
+    @property
     def users(self):
         return self.Users.list()
+
+    @property
+    def roles(self):
+        return self.Roles.list()
         
     def authorized_user(self, username):
-        return username == self.Owner or any(u.Username == username for u in self.Users)
+        return username == self.Owner or any(u.Username == username for u in self.users) or \
+            any(username in r for r in self.roles)
 
     @staticmethod
     def from_sql(db, sql):

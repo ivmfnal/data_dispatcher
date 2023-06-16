@@ -7,7 +7,7 @@ from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
 class CreateCommand(CLICommand):
     
-    Opts = "q:c:l:j:A:a:t:p:w:"
+    Opts = "q:c:l:j:A:a:t:p:w:u:r:"
     Usage = """[options] [inline MQL query]         -- create project
 
         Use an inline query or one of the following to provide file list:
@@ -25,6 +25,9 @@ class CreateCommand(CLICommand):
         -A "name=value name=value ..."                  - project attributes
         -a @<file.json>                                 - JSON file with common file attributes
         -a "name=value name=value ..."                  - common file attributes
+        
+        -u <username>[,...]                             - add authorized users
+        -r <role>[,...]                                 - add authorized roles
 
         -p (json|pprint|id)                             - print created project info as JSON, 
                                                           pprint or just project id (default)
@@ -103,6 +106,9 @@ class CreateCommand(CLICommand):
                     namespace, name = did.split(":", 1)
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
                     
+        users = [u.strip() for u in opts.get("-u", "").split(',') if u]
+        roles = [r.strip() for r in opts.get("-r", "").split(',') if r]
+
         worker_timeout = opts.get("-w")
         if worker_timeout is not None:
             mult = 1
@@ -130,7 +136,8 @@ class CreateCommand(CLICommand):
             print("Empty file list", file=sys.stderr)
             sys.exit(1)
         info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query, 
-                    worker_timeout=worker_timeout, idle_timeout=idle_timeout)
+                    worker_timeout=worker_timeout, idle_timeout=idle_timeout,
+                    users=users, roles=roles)
         printout = opts.get("-p", "id")
         if printout == "json":
             print(pretty_json(info))
@@ -298,6 +305,8 @@ class ShowCommand(CLICommand):
                 print("Status:             ", info["state"])
                 print("Worker timeout:     ", info.get("worker_timeout"))
                 print("Idle timeout:       ", info.get("idle_timeout"))
+                print("Authorized users:   ", ", ".join(sorted(info.get("users", []))))
+                print("           roles:   ", ", ".join(sorted(info.get("roles", []))))
                 print("Project Attributes: ")
                 for k, v in info.get("attributes", {}).items():
                     if not isinstance(v, (int, float, str, bool)):

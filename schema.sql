@@ -2,6 +2,8 @@ drop table if exists project_log;
 drop table if exists file_handle_log;
 drop table if exists replicas cascade;
 drop table if exists file_handles;
+drop table if exists project_users;
+drop table if exists project_roles;
 drop table if exists projects;
 drop table if exists proximity_map;
 drop table if exists replica_log;
@@ -27,7 +29,7 @@ create table if not exists roles            -- do not create if we are adding DD
 create table if not exists users_roles      -- do not create if we are adding DD schema to MetaCat
 (
     username    text    references users(username),
-    role_name        text    references roles(name),
+    role_name   text    references roles(name),
     primary key(username, role_name)
 );
 
@@ -47,8 +49,16 @@ create table projects
 
 create table project_users
 (
-    project_id  bigint references projects(id),
-    username    text references users(username)
+    project_id  bigint references projects(id) on delete cascade,
+    username    text references users(username) on delete cascade,
+    primary key(project_id, username)
+);
+
+create table project_roles
+(
+    project_id  bigint references projects(id) on delete cascade,
+    role_name   text references roles(name) on delete cascade,
+    primary key(project_id, role_name)
 );
 
 create table rses

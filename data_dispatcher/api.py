@@ -133,7 +133,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     DEFAULT_IDLE_TIMEOUT = 72*3600      # 72 hors
     
     def create_project(self, files, common_attributes={}, project_attributes={}, query=None, worker_timeout=None,
-            idle_timeout = DEFAULT_IDLE_TIMEOUT):
+            idle_timeout = DEFAULT_IDLE_TIMEOUT, users=[], roles=[]):
         """Creates new project
         
         Parameters
@@ -145,12 +145,18 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         project_attributes : dict
             attriutes to attach to the new project
         query : str 
-            MQL query to be associated with the project.
+            MQL query to be associated with the project. Thit attribute optiona and is not used by Data Dispatcher in any way.
+            It is used for informational purposes only.
         worker_timeout : int or float
             If not None, all file handles will be automatically released if allocated by same worker for longer than the ``worker_timeout`` seconds
         idle_timeout : int or float
             If there is no file reserve/release activity for the specified time interval, the project goes into "abandoned" state.
             Default is 72 hours (3 days). If set to None, the project remains active until complete.
+        users : list of strings
+            List of users who can use the worker interface (next_file, done, failed...), in addition to the project
+            creator.
+        roles : list of strings
+            List of roles, members of which are authorized to use the worker interface.
 
         Returns
         -------
@@ -177,7 +183,9 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     "project_attributes":   project_attributes,
                     "query":                query,
                     "worker_timeout":       worker_timeout,
-                    "idle_timeout":         idle_timeout
+                    "idle_timeout":         idle_timeout,
+                    "users":                users or [],
+                    "roles":                roles or []
                 }
             )
         )
@@ -232,7 +240,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
 
     def delete_project(self, project_id):
         return self.get(f"delete_project?project_id={project_id}")
-        
+
     def cancel_project(self, project_id):
         """Cancels a project by id
 
@@ -243,7 +251,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             (dict) project information
         """
         return self.get(f"cancel_project?project_id={project_id}")
-        
+
     def activate_project(self, project_id):
         """
         Resets the state of an abandoned project back to "active"
@@ -280,7 +288,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         with_replicas = "yes" if with_replicas else "no"
         uri = f"project?project_id={project_id}&with_files={with_files}&with_replicas={with_replicas}"
         return self.get(uri, none_if_not_found=True)
-        
+
     def get_handle(self, project_id, namespace, name):
         """Gets information about a file handle
         
@@ -399,7 +407,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     break
         return retry            # True=try again later, False=project ended
 
-    def reserved_files(self, project_id, worker_id=None):
+    def reserved_handles(self, project_id, worker_id=None):
         """Returns list of file handles reserved in the project by given worker
         
         Args:
@@ -414,40 +422,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         return [h for h in project["file_handles"]
             if h["state"] == "reserved" and h["worker_id"] == worker_id
         ]
-        
-    def get_file(self, namespace, name):
-        """Gets information about a file
-        
-        Args:
-            namespace (str): file namespace
-            name (str): file name
-    
-        Returns:
-            dictionary with the file information or None if not found
-        """
-        return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found=True)
 
-    def list_handles(self, project_id, state=None, not_state=None, with_replicas=False):
-        """Returns information about project file handles, selecting them by specified criteria
-        
-        Args:
-            project_id (int): project id
-        
-        Keyword Arguments:
-            state (str): select only handles in the specified state
-            not_state (str): exclude handles in the specified state
-            with_replicas (boolean): include information about replicas
-
-        Returns:
-            list of dictionaries with inofrmation about selected file handles
-        """
-        args = []
-        if project_id: args.append(f"project_id={project_id}")
-        if state: args.append(f"state={state}")
-        if not_state: args.append(f"not_state={not_state}")
-        args = "?" + "&".join(args) if args else ""
-        return self.get(f"handles{args}")
-        
     def list_rses(self):
         """Return information about all RSEs
         
@@ -458,7 +433,6 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
         
         return self.get(f"rses")
-
 
     def get_rse(self, name):
         """Returns information about RSE
@@ -486,20 +460,6 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         available = "yes" if available else "no"
         return self.get(f"set_rse_availability?name={name}&available={available}", none_if_not_found=True)
 
-
-    def replica_available(self, namespace, name, rse, path=None, preference=0, url=None):
-        data = {
-            "path": path,
-            "url": url,
-            "preference": preference
-        }
-        suffix = f"replica_available?&rse={rse}&namespace={namespace}&name={name}"
-        return self.post(suffix, data)
-
-    def replica_unavailable(self, namespace, name, rse):
-        suffix = f"replica_unavailable?&rse={rse}&namespace={namespace}&name={name}"
-        return self.get(suffix)
-
     def file_done(self, project_id, did):
         """Notifies Data Dispatcher that the file was successfully processed and should be marked as "done".
         
@@ -521,4 +481,36 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         retry = "yes" if retry else "no"
         return self.get(f"release?handle_id={handle_id}&failed=yes&retry={retry}")
 
+    #
+    # Deprecated, undocumented, unsupported
+    #
+    
+    def get_file(self, namespace, name):
+        """Deprecated
+        """
+        return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found=True)
 
+    def list_handles(self, project_id, state=None, not_state=None, with_replicas=False):
+        """Deprecated
+        """
+        args = []
+        if project_id: args.append(f"project_id={project_id}")
+        if state: args.append(f"state={state}")
+        if not_state: args.append(f"not_state={not_state}")
+        args = "?" + "&".join(args) if args else ""
+        return self.get(f"handles{args}")
+        
+    def replica_available(self, namespace, name, rse, path=None, preference=0, url=None):
+        data = {
+            "path": path,
+            "url": url,
+            "preference": preference
+        }
+        suffix = f"replica_available?&rse={rse}&namespace={namespace}&name={name}"
+        return self.post(suffix, data)
+
+    def replica_unavailable(self, namespace, name, rse):
+        suffix = f"replica_unavailable?&rse={rse}&namespace={namespace}&name={name}"
+        return self.get(suffix)
+
+    

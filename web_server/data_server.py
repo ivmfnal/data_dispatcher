@@ -59,7 +59,7 @@ class Handler(BaseHandler):
         db = self.App.db()
         #print("calling DBProject.create()...")
         project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout,
-                        idle_timeout=idle_timeout)
+                        idle_timeout=idle_timeout, users=specs.get("users", []), roles=specs.get("roles", []))
         files_converted = []
         for f in files:
             if isinstance(f, str):
