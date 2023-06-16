@@ -587,7 +587,7 @@ def main():
         connstr = dbconfig["url"]
     else:
         connstr="host=%(host)s port=%(port)s dbname=%(dbname)s user=%(user)s password=%(password)s" % dbconfig
-    connection_pool = ConnectionPool(postgres=connstr)
+    connection_pool = ConnectionPool(postgres=connstr, schema=dbconfig.get("schema"))
 
     rse_config = RSEConfig(config.get("rses", {}), connection_pool)
     ssl_config = config.get("ssl", {})
