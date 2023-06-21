@@ -1,21 +1,21 @@
 import getopt, json, time, pprint, textwrap, sys
 from datetime import datetime
 from metacat.webapi import MetaCatClient
-from metacat.db import DBFile
 from .ui_lib import pretty_json, parse_attrs, print_handles
 
 from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
 
 class CreateCommand(CLICommand):
     
-    Opts = "q:c:l:j:A:a:t:p:"
+    Opts = "q:c:l:j:A:a:t:p:w:u:r:"
     Usage = """[options] [inline MQL query]         -- create project
 
         Use an inline query or one of the following to provide file list:
         -l (-|<flat file with file list>)               - read "namespace:name [attr=value ...]" lines from the file 
         -j (-|<JSON file with file list>)               - read JSON file with file list {"namespace":...,"name"..., "attributes":{...}}
 
-        -t <worker timeout>[s|m|h|d]                    - optional worker timeout in seconds (minutes, hours, days)
+        -w (<worker timeout>[s|m|h|d] | none)           - worker timeout in seconds (minutes, hours, days), default: 12 hours
+        -t (<idle timeout>[s|m|h|d] | none)             - worker timeout in seconds (minutes, hours, days), default: 72 hours
 
         -q <file with MQL query>                        - read MQL query from file instead
         -c <name>[,<name>...]                           - copy metadata attributes from the query results, 
@@ -25,10 +25,16 @@ class CreateCommand(CLICommand):
         -A "name=value name=value ..."                  - project attributes
         -a @<file.json>                                 - JSON file with common file attributes
         -a "name=value name=value ..."                  - common file attributes
+        
+        -u <username>[,...]                             - add authorized users
+        -r <role>[,...]                                 - add authorized roles
 
         -p (json|pprint|id)                             - print created project info as JSON, 
                                                           pprint or just project id (default)
     """
+    
+    FileProperties = "fid,namespace,name,checksums,size,creator,created_timestamp,parents,children,datasets".split(',') # from metacat.dbobjects2
+
     
     def __call__(self, command, client, opts, args):
         if sum([len(args) > 0, "-l" in opts, "-j" in opts, "-q" in opts]) != 1:
@@ -72,7 +78,7 @@ class CreateCommand(CLICommand):
                     #print(info["metadata"])
                     attrs = {}
                     for k in fields:
-                        if '.' not in k and k in DBFile.Properties:
+                        if '.' not in k and k in self.FileProperties:
                             attrs[k] = info.get(k)
                         else:
                             attrs[k] = info["metadata"].get(k)
@@ -100,18 +106,38 @@ class CreateCommand(CLICommand):
                     namespace, name = did.split(":", 1)
                     files.append({"namespace":namespace, "name":name, "attributes":parse_attrs(rest)})
                     
-        worker_timeout = opts.get("-t")
+        users = [u.strip() for u in opts.get("-u", "").split(',') if u]
+        roles = [r.strip() for r in opts.get("-r", "").split(',') if r]
+
+        worker_timeout = opts.get("-w")
         if worker_timeout is not None:
             mult = 1
             if worker_timeout[-1].lower() in "smhd":
                 worker_timeout, unit = worker_timeout[:-1], worker_timeout[-1].lower()
                 mult = {'s':1, 'm':60, 'h':3600, 'd':24*3600}[unit]
             worker_timeout = float(worker_timeout)*mult
+        else:
+            worker_timeout = 12*3600
+
+        idle_timeout = opts.get("-t")
+        if idle_timeout is not None:
+            mult = 1
+            if idle_timeout[-1].lower() in "smhd":
+                idle_timeout, unit = idle_timeout[:-1], idle_timeout[-1].lower()
+                mult = {'s':1, 'm':60, 'h':3600, 'd':24*3600}[unit]
+            idle_timeout = float(idle_timeout)*mult
+        else:
+            idle_timeout = 72*3600
 
         #print("files:", files)
         #print("calling API.client.create_project...")
         #print("")
-        info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query, worker_timeout=worker_timeout)
+        if not files:
+            print("Empty file list", file=sys.stderr)
+            sys.exit(1)
+        info = client.create_project(files, common_attributes=common_attrs, project_attributes=project_attrs, query=query, 
+                    worker_timeout=worker_timeout, idle_timeout=idle_timeout,
+                    users=users, roles=roles)
         printout = opts.get("-p", "id")
         if printout == "json":
             print(pretty_json(info))
@@ -207,7 +233,19 @@ class RestartCommand(CLICommand):
             
             handle_states = {s:True for s in handle_states}
             client.restart_handles(project_id, **handle_states)
+            
+class ActivateCommand(CLICommand):
 
+    MinArgs = 1
+    Opts = "j"
+    Usage = """[-j] <project_id>                    -- re-activate an abandoned project
+        -j                                              - print project info as JSON
+    """
+
+    def __call__(self, command, client, opts, args):
+        project_id = int(args[0])
+        client.activate_project(project_id)
+            
 class ShowCommand(CLICommand):
     
     Opts = "arjf:"
@@ -266,6 +304,9 @@ class ShowCommand(CLICommand):
                 print("Query:              ", textwrap.indent(info.get("query") or "", " "*10).lstrip())
                 print("Status:             ", info["state"])
                 print("Worker timeout:     ", info.get("worker_timeout"))
+                print("Idle timeout:       ", info.get("idle_timeout"))
+                print("Authorized users:   ", ", ".join(sorted(info.get("users", []))))
+                print("           roles:   ", ", ".join(sorted(info.get("roles", []))))
                 print("Project Attributes: ")
                 for k, v in info.get("attributes", {}).items():
                     if not isinstance(v, (int, float, str, bool)):
@@ -281,17 +322,62 @@ class ListCommand(CLICommand):
     Usage = """[options]                            -- list projects
             -j                                          - JSON output
             -u <owner>                                  - filter by owner
-            -s <state>                                  - filter by state
+            -s <state>                                  - filter by state, default: active projects only
             -a "name=value name=value ..."              - filter by attributes
     """
 
     def __call__(self, command, client, opts, args):
-        state = opts.get("-s")
+        state = opts.get("-s", "active")
         attributes = None
         if "-a" in opts:
             attributes = parse_attrs(opts["-a"])
         owner = opts.get("-u")
         lst = client.list_projects(state=state, attributes=attributes, owner=owner, with_files=True, with_replicas=False)
+        if "-j" in opts:
+            print(pretty_json(list(lst)))
+        else:
+            print("%-15s %-15s %-19s %-15s %17s" % ("project id", "owner", "created", "state", "done/failed/files"))
+            print("%s %s %s %s %s" % ("-"*15, "-"*15, "-"*19, "-"*15, "-"*17))
+            for prj in lst:
+                ct = time.localtime(prj["created_timestamp"])
+                ct = time.strftime("%Y-%m-%d %H:%M:%S", ct)
+            
+                nfiles = len(prj["file_handles"])
+                ready_files = reserved_files = failed_files = done_files = available_files = 0
+                for h in prj["file_handles"]:
+                    if h["state"] == "ready":
+                        ready_files += 1
+                    elif h["state"] == "done":
+                        done_files += 1
+                    elif h["state"] == "failed":
+                        failed_files += 1
+                counts = "%d/%d/%d" % (done_files, failed_files, nfiles)
+                print("%-15s %-15s %19s %15s %17s" % (prj["project_id"], prj["owner"], ct, prj["state"], counts))
+            print("%s %s %s %s %s" % ("-"*15, "-"*15, "-"*19, "-"*15, "-"*17))
+
+class SearchCommand(CLICommand):
+    Opts = "ju:s:"
+    Usage = """[options] (-q (<query file>|-) |<search query>)            -- search projects
+            -j                                          - JSON output
+            -u <owner>                                  - filter by owner
+            -s (<state>|all)                            - filter by state, default: active projects only
+            -q <query file>|-                           - read the search query from the file or stdin if "-"
+    """
+
+    def __call__(self, command, client, opts, args):
+        state = opts.get("-s", "active")
+        owner = opts.get("-u")
+        if "-q" in opts:
+            query_file = opts["-q"]
+            if query_file == "-":
+                query = sys.stdin.read()
+            else:
+                query = open(query_file, "r").read()
+        else:
+            if not args:
+                raise InvalidArguments("Search query is not specified")
+            query = " ".join(args)
+        lst = client.search_projects(query, state=state, owner=owner, with_files=True, with_replicas=False)
         if "-j" in opts:
             print(pretty_json(list(lst)))
         else:
@@ -340,8 +426,10 @@ ProjectCLI = CLI(
     "copy",     CopyCommand(),
     "show",     ShowCommand(),
     "list",     ListCommand(),
+    "search",   SearchCommand(),
+    "restart",  RestartCommand(),
+    "activate", ActivateCommand(),
     "cancel",   CancelCommand(),
-    "delete",   DeleteCommand(),
-    "restart",  RestartCommand()
+    "delete",   DeleteCommand()
 )
 

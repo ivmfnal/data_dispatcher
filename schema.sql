@@ -1,32 +1,64 @@
-drop table project_log;
-drop table file_handle_log;
-drop table replicas cascade;
-drop table file_handles;
-drop table files;
-drop table projects;
-drop table proximity_map;
-drop table replica_log;
-drop table rses;
+drop table if exists project_log;
+drop table if exists file_handle_log;
+drop table if exists replicas cascade;
+drop table if exists file_handles;
+drop table if exists project_users;
+drop table if exists project_roles;
+drop table if exists projects;
+drop table if exists proximity_map;
+drop table if exists replica_log;
+drop table if exists rses;
+
+create table if not exists users            -- do not create if we are adding DD schema to MetaCat
+(
+    username    text    primary key,
+    name        text,
+    email       text,
+    flags       text    default '',
+    auth_info   jsonb   default '{}',
+    auid        text                        -- anonymized user identificator
+);
+
+create table if not exists roles            -- do not create if we are adding DD schema to MetaCat
+(
+    name        text    primary key,
+    parent_role text    references roles(name),
+    description text
+);
+
+create table if not exists users_roles      -- do not create if we are adding DD schema to MetaCat
+(
+    username    text    references users(username),
+    role_name   text    references roles(name),
+    primary key(username, role_name)
+);
 
 create table projects
 (
-	id	                bigserial primary key,
-	owner	            text,
-	created_timestamp   timestamp with time zone     default now(),
+    id                  bigserial primary key,
+    owner               text references users(username),
+    created_timestamp   timestamp with time zone     default now(),
     end_timestamp       timestamp with time zone,
     state	            text,
     retry_count         int,
-    worker_timeout      int,
+    worker_timeout      interval,
+    idle_timeout        interval,
     attributes          jsonb  default '{}'::jsonb,
     query               text
 );
 
-create table files
+create table project_users
 (
-    namespace text,
-    name text,
-    time_added  timestamp with time zone    default now(),
-    primary key(namespace, name)
+    project_id  bigint references projects(id) on delete cascade,
+    username    text references users(username) on delete cascade,
+    primary key(project_id, username)
+);
+
+create table project_roles
+(
+    project_id  bigint references projects(id) on delete cascade,
+    role_name   text references roles(name) on delete cascade,
+    primary key(project_id, role_name)
 );
 
 create table rses
@@ -41,7 +73,8 @@ create table rses
     remove_prefix   text    default '',
     add_prefix      text    default '',
     pin_prefix      text    default '',
-    preference      int     default 0
+    preference      int     default 0,
+    type            text
 );
 
 create table replicas
@@ -54,7 +87,6 @@ create table replicas
     available   boolean     default false,
     preference  int         default 0,
     primary key (namespace, name, rse),
-    foreign key (namespace, name) references files (namespace, name) on delete cascade,
     foreign key (rse) references rses (name) on delete cascade
 );
 
@@ -77,8 +109,7 @@ create table file_handles
     reserved_since  timestamp with time zone,
     attempts    int default 0,
     attributes  jsonb  default '{}'::jsonb,
-    primary key (project_id, namespace, name),
-    foreign key (namespace, name) references files (namespace, name)
+    primary key (project_id, namespace, name)
 );
 
 create unique index file_handles_project_id_filespec on file_handles(project_id, namespace, name);

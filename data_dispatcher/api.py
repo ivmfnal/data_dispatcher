@@ -1,5 +1,6 @@
 import requests, uuid, json, urllib.parse, os, time, random
 from metacat.auth import TokenLib, TokenAuthClientMixin
+from metacat.common import HTTPClient
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -44,98 +45,13 @@ def to_str(x):
     if isinstance(x, bytes):
         x = x.decode("utf-8")
     return x
-    
-class HTTPClient(object):
 
-    InitialRetry = 1.0
-    RetryExponent = 1.5
-    DefaultTimeout = 300.0
-
-    def __init__(self, server_url, timeout=None, token=None):
-        self.ServerURL = server_url
-        self.Token = token
-        self.Timeout = timeout or self.DefaultTimeout
-
-    def retry_request(self, method, url, timeout=None, **args):
-        """
-        Implements the functionality to retry on 503 response with random exponentially growing delay
-        """
-        if timeout is None:
-            timeout = self.Timeout
-        tend = time.time() + timeout
-        retry_interval = self.InitialRetry
-        response = None
-        while time.time() < tend:
-            if method == "get":
-                response = requests.get(url, timeout=self.Timeout, **args)
-            else:
-                response = requests.post(url, timeout=self.Timeout, **args)
-            #print("retry_request: response:", response)
-            if response.status_code != 503:
-                break
-            sleep_time = min(random.random() * retry_interval, tend-time.time())
-            retry_interval *= self.RetryExponent
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-        return response
-
-    def get(self, uri_suffix, none_if_not_found=False):
-        if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
-        url = "%s%s" % (self.ServerURL, uri_suffix)
-        #print("url:", url)
-        headers = {}
-        if self.Token is not None:
-            headers["X-Authentication-Token"] = self.Token.encode()
-        response = self.retry_request("get", url, headers=headers)
-        if response.status_code != 200:
-            if none_if_not_found and response.status_code == 404:
-                return None
-            elif response.status_code == 404:
-                raise NotFoundError(url, response.text)
-            else:
-                raise APIError(url, response.status_code, response.text)
-        if response.headers.get("Content-Type", "").startswith("text/json"):
-            data = json.loads(response.text)
-        else:
-            data = response.text
-        #print("   data:", data)
-        return data
-
-    def post(self, uri_suffix, data):
-        #print("post_json: data:", type(data), data)
-        
-        if not uri_suffix.startswith("/"):  uri_suffix = "/"+uri_suffix
-        
-        if data is None or isinstance(data, (dict, list)):
-            data = json.dumps(data)
-        else:
-            data = to_bytes(data)
-        #print("post_json: data:", type(data), data)
-            
-        url = "%s%s" % (self.ServerURL, uri_suffix)
-        
-        headers = {}
-        if self.Token is not None:
-            headers["X-Authentication-Token"] = self.Token.encode()
-
-        response = self.retry_request("post", url, data=data, headers=headers)
-        if response.status_code != 200:
-            if response.status_code == 404:
-                raise NotFoundError(url, response.text)
-            else:
-                raise APIError(url, response.status_code, response.text)
-        #print("response.text:", response.text)
-        if response.headers.get("Content-Type", "").startswith("text/json"):
-            data = json.loads(response.text)
-        else:
-            data = response.text
-        return data
-        
 class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     
     DefaultWorkerIDFile = ".data_dispatcher_worker_id"
     
-    def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, token = None, token_file = None,
+    def __init__(self, server_url=None, auth_server_url=None, worker_id=None, worker_id_file=None, 
+            token = None, token_file = None, token_library = None, 
             cpu_site="DEFAULT", timeout=300):
         
         """Initializes the DataDispatcherClient object
@@ -152,7 +68,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         
         server_url = server_url or os.environ.get("DATA_DISPATCHER_URL")
         auth_server_url = auth_server_url or os.environ.get("DATA_DISPATCHER_AUTH_URL")
-        TokenAuthClientMixin.__init__(self, server_url, token, token_file, auth_url=auth_server_url)
+        TokenAuthClientMixin.__init__(self, server_url, auth_server_url, token=token, token_file=token_file, token_library=token_library)
 
         #print("DataDispatcherClient: url:", server_url)
 
@@ -213,7 +129,11 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
     #
     # projects
     #
-    def create_project(self, files, common_attributes={}, project_attributes={}, query=None, worker_timeout=None):
+    
+    DEFAULT_IDLE_TIMEOUT = 72*3600      # 72 hors
+    
+    def create_project(self, files, common_attributes={}, project_attributes={}, query=None, worker_timeout=None,
+            idle_timeout = DEFAULT_IDLE_TIMEOUT, users=[], roles=[]):
         """Creates new project
         
         Parameters
@@ -225,10 +145,19 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         project_attributes : dict
             attriutes to attach to the new project
         query : str 
-            query used to create the file list, optional. If specified, the query string will be added to the project as the attribute
+            MQL query to be associated with the project. Thit attribute optiona and is not used by Data Dispatcher in any way.
+            It is used for informational purposes only.
         worker_timeout : int or float
             If not None, all file handles will be automatically released if allocated by same worker for longer than the ``worker_timeout`` seconds
-            
+        idle_timeout : int or float
+            If there is no file reserve/release activity for the specified time interval, the project goes into "abandoned" state.
+            Default is 72 hours (3 days). If set to None, the project remains active until complete.
+        users : list of strings
+            List of users who can use the worker interface (next_file, done, failed...), in addition to the project
+            creator.
+        roles : list of strings
+            List of roles, members of which are authorized to use the worker interface.
+
         Returns
         -------
         dict
@@ -253,7 +182,10 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     "files":                file_list,
                     "project_attributes":   project_attributes,
                     "query":                query,
-                    "worker_timeout":       worker_timeout
+                    "worker_timeout":       worker_timeout,
+                    "idle_timeout":         idle_timeout,
+                    "users":                users or [],
+                    "roles":                roles or []
                 }
             )
         )
@@ -281,8 +213,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                 }
             )
         )
-    
-        
+
     def restart_handles(self, project_id, done=False, failed=False, reserved=False, all=False, handles=[]):
         """Restart processing of project file handles
         
@@ -308,13 +239,8 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         return self.post("restart_handles", json.dumps(selection))
 
     def delete_project(self, project_id):
-        """Deletes a project by id
-
-        Args:
-            project_id (str): project id
-        """
         return self.get(f"delete_project?project_id={project_id}")
-        
+
     def cancel_project(self, project_id):
         """Cancels a project by id
 
@@ -325,7 +251,13 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             (dict) project information
         """
         return self.get(f"cancel_project?project_id={project_id}")
-        
+
+    def activate_project(self, project_id):
+        """
+        Resets the state of an abandoned project back to "active"
+        """
+        return self.get(f"activate_project?project_id={project_id}")
+
     def get_project(self, project_id, with_files=True, with_replicas=False):
         """Gets information about the project
         
@@ -337,13 +269,26 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             with_replicas (boolean) : whether to include iformation about project file replicas. Default: False
     
         Returns:
-            (dict) project information
+            (dict) project information or None if project not found.
+
+            The dictionary will include the following values:
+        
+                * project_id: numeric, project id
+                * owner: str, project owner username,
+                * state: str, current project state,
+                * attributes: dict, project metadata attributes as set by the create_project(),
+                * created_timestamp: numeric, timestamp for the project creation time,
+                * ended_timestamp: numeric or None, project end timestamp,
+                * active: boolean, whether the project is active - at least one handle is not done or failed,
+                * query: str, MQL query string associated with the project,
+                * worker_timeout: numeric or None, worker idle timeout, in seconds
+                * idle_timeout: numeric or None, project inactivity timeout in seconds
         """
         with_files = "yes" if with_files else "no"
         with_replicas = "yes" if with_replicas else "no"
         uri = f"project?project_id={project_id}&with_files={with_files}&with_replicas={with_replicas}"
         return self.get(uri, none_if_not_found=True)
-        
+
     def get_handle(self, project_id, namespace, name):
         """Gets information about a file handle
         
@@ -364,13 +309,13 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         else:
             return None
     
-    def list_projects(self, owner=None, state=None, not_state=None, attributes=None, with_files=True, with_replicas=False):
+    def list_projects(self, owner=None, state="active", not_state="abandoned", attributes=None, with_files=True, with_replicas=False):
         """Lists existing projects
         
         Keyword Arguments:
             owner (str): Include only projects owned by the specified user. Default: all users
-            state (str): Include only projects in specified state. Default: all states
-            not_state (str): Exclude projects in the specified state. Default: do not exclude
+            state (str): Include only projects in specified state. Default: active only
+            not_state (str): Exclude projects in the specified state. Default: exclude abandoned
             attributes (dict): Include only projects with specified attribute values. Default: do not filter by attributes
             with_files (boolean): Include information about files. Default: True
             with_replicas (boolean): Include information about file replics. Default: False
@@ -390,6 +335,30 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         args = "?" + "&".join(args) if args else ""
         return self.get(f"projects{args}")
 
+    def search_projects(self, search_query, owner=None, state="active", with_files=True, with_replicas=False):
+        """Lists existing projects
+        
+        Arguments:
+            search_query (str): project search query in subset of MQL
+        
+        Keyword Arguments:
+            owner (str): Include only projects owned by the specified user. Default: all users
+            with_files (boolean): Include information about files. Default: True
+            with_replicas (boolean): Include information about file replics. Default: False
+    
+        Returns:
+            list of dictionaries with information about projects found
+        """
+        
+        info = {
+            "query":    search_query,
+            "with_handles": with_files,
+            "with_replicas": with_replicas,
+        }
+        if state != "all":  info["state"] = state
+        if owner:   info["owner"] = owner
+        return self.post("search_projects", json.dumps(info))
+
     def __next_file(self, project_id, cpu_site, worker_id):
         if worker_id is None:
             raise ValueError("DataDispatcherClient must be initialized with Worker ID")
@@ -405,12 +374,11 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
             project_id (int): project id to reserve a file from
             cpu_site (str): optional, if specified, the file will be reserved according to the CPU/RSE proximity map
             timeout (int or float): optional, if specified, time to wait for a file to become available. Otherwise, will wait indefinitely
-            stagger (int or float): optional, introduce a random delay between 0 and <stagger> seconds before sending first request. 
-                This will help mitigate the effect of synchronous stard of multiple workers. Default: 10
+            stagger (int or float): optional, introduce a random delay between 0 and <stagger> seconds before sending first request. This will help mitigate the effect of synchronous stard of multiple workers. Default: 10
 
         Returns:
             Dictionary or boolean.
-            If dictionary, the dictionary contains the reserved file information.
+            If dictionary, the dictionary contains the reserved file information. "replicas" field will be a dictionary will contain a subdictionary with replicas information indexed by RSE name.
             If ``True``: the request timed out, but can be retried.
             If ``False``: the project has ended.
         """
@@ -439,44 +407,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
                     break
         return retry            # True=try again later, False=project ended
 
-    def old_next_file(self, project_id, cpu_site=None, worker_id=None, timeout=None):
-        """Reserves next available file from the project
-        
-        Args:
-            project_id (int): project id to reserve a file from
-            cpu_site (str): optional, if specified, the file will be reserved according to the CPU/RSE proximity map
-            timeout (int or float): optional, if specified, time to wait for a file to become available. Otherwise, will wait indefinitely
-        
-        Returns:
-            Dictionary or boolean.
-            If dictionary, the dictionary contains the reserved file information.
-            If ``True``: the request timed out, but can be retried.
-            If ``False``: the project has ended.
-        """
-        worker_id = worker_id or self.WorkerID
-        cpu_site = cpu_site or self.CPUSite
-        t1 = None if timeout is None else time.time() + timeout
-        retry = True
-        if stagger:
-            time.sleep(random.random() * stagger)
-        while retry:
-            reply = self.__next_file(project_id, cpu_site, worker_id)
-            info = reply.get("handle")
-            if info:
-                return info         # allocated
-            retry = reply["retry"]
-            if retry:
-                if t1 is None or time.time() < t1:
-                    dt = 60
-                    if t1 is not None:
-                        dt = min(dt, t1-time.time())
-                    if dt > 0:
-                        time.sleep(max(1.0, random.random() * dt))
-                else:
-                    break
-        return retry
-
-    def reserved_files(self, project_id, worker_id=None):
+    def reserved_handles(self, project_id, worker_id=None):
         """Returns list of file handles reserved in the project by given worker
         
         Args:
@@ -491,42 +422,7 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         return [h for h in project["file_handles"]
             if h["state"] == "reserved" and h["worker_id"] == worker_id
         ]
-        
-    def get_file(self, namespace, name):
-        """Gets information about a file
-        
-        Args:
-            namespace (str): file namespace
-            name (str): file name
-    
-        Returns:
-            dictionary with the file information or None if not found
-        """
-        return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found=True)
 
-    def list_handles(self, project_id, state=None, not_state=None, rse=None, with_replicas=False):
-        """Returns information about project file handles, selecting them by specified criteria
-        
-        Args:
-            project_id (int): project id
-        
-        Keyword Arguments:
-            state (str): select only handles in the specified state
-            not_state (str): exclude handles in the specified state
-            rse (str): include only handles with replicas in the specified RSE
-            with_replicas (boolean): include information about replicas
-
-        Returns:
-            list of dictionaries with inofrmation about selected file handles
-        """
-        args = []
-        if rse: args.append(f"rse={rse}")
-        if project_id: args.append(f"project_id={project_id}")
-        if state: args.append(f"state={state}")
-        if not_state: args.append(f"not_state={not_state}")
-        args = "?" + "&".join(args) if args else ""
-        return self.get(f"handles{args}")
-        
     def list_rses(self):
         """Return information about all RSEs
         
@@ -537,7 +433,6 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         """
         
         return self.get(f"rses")
-
 
     def get_rse(self, name):
         """Returns information about RSE
@@ -565,7 +460,46 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         available = "yes" if available else "no"
         return self.get(f"set_rse_availability?name={name}&available={available}", none_if_not_found=True)
 
+    def file_done(self, project_id, did):
+        """Notifies Data Dispatcher that the file was successfully processed and should be marked as "done".
+        
+        Args:
+            project_id (int): project id
+            did (str): file DID ("<namespace>:<name>")
+        """
+        handle_id = f"{project_id}:{did}"
+        return self.get(f"release?handle_id={handle_id}&failed=no")
 
+    def file_failed(self, project_id, did, retry=True):
+        """Notifies Data Dispatcher that the file was successfully processed and should be marked as "done".
+        
+        Args:
+            project_id (int): project id
+            did (str): file DID ("<namespace>:<name>")
+        """
+        handle_id = f"{project_id}:{did}"
+        retry = "yes" if retry else "no"
+        return self.get(f"release?handle_id={handle_id}&failed=yes&retry={retry}")
+
+    #
+    # Deprecated, undocumented, unsupported
+    #
+    
+    def get_file(self, namespace, name):
+        """Deprecated
+        """
+        return self.get(f"file?namespace={namespace}&name={name}", none_if_not_found=True)
+
+    def list_handles(self, project_id, state=None, not_state=None, with_replicas=False):
+        """Deprecated
+        """
+        args = []
+        if project_id: args.append(f"project_id={project_id}")
+        if state: args.append(f"state={state}")
+        if not_state: args.append(f"not_state={not_state}")
+        args = "?" + "&".join(args) if args else ""
+        return self.get(f"handles{args}")
+        
     def replica_available(self, namespace, name, rse, path=None, preference=0, url=None):
         data = {
             "path": path,
@@ -579,13 +513,4 @@ class DataDispatcherClient(HTTPClient, TokenAuthClientMixin):
         suffix = f"replica_unavailable?&rse={rse}&namespace={namespace}&name={name}"
         return self.get(suffix)
 
-    def file_done(self, project_id, did):
-        handle_id = f"{project_id}:{did}"
-        return self.get(f"release?handle_id={handle_id}&failed=no")
-
-    def file_failed(self, project_id, did, retry=True):
-        handle_id = f"{project_id}:{did}"
-        retry = "yes" if retry else "no"
-        return self.get(f"release?handle_id={handle_id}&failed=yes&retry={retry}")
-
-
+    

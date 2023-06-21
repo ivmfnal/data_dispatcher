@@ -17,7 +17,17 @@
 <table class="form">
     <tr>    <th>Project ID</th>         <td>{{project.ID}}</td> </tr>
     <tr>    <th>User</th>               <td>{{project.Owner}}</td> </tr>
+    {% if project.users and project.users|length %}
+        <tr><th>Authorized users</th>   <td>{% for u in project.users %}{{u.Username}} {% endfor %}</td>
+        </tr>
+    {% endif %}
+    {% if project.roles and project.roles|length %}
+        <tr><th>Authorized roles</th>   <td>{% for r in project.roles %}{{r.Name}} {% endfor %}</td>
+        </tr>
+    {% endif %}
     <tr>    <th>Created</th>            <td>{{project.CreatedTimestamp|as_dt_utc}}</td> </tr>
+    <tr>    <th>Worker timeout</th>     <td>{{project.WorkerTimeout|none_as_blank}}</td></tr>
+    <tr>    <th>Idle timeout</th>       <td>{{project.IdleTimeout|none_as_blank}}</td></tr>
     <tr>    <th>Ended</th>              
             <td>{% if not project.EndTimestamp is none %}
                     {{project.EndTimestamp|as_dt_utc}}
@@ -26,15 +36,9 @@
     </tr>
 
     <tr>    <th>Status</th>             <td><span class="{{project.State}}" style="padding: 3px">{{project.State}}</span></td> </tr>
-    <tr>    <th>Query</th>              <td><pre>{{project.Query or ""}}</pre></td>
-            {#
-                {% if project.Query or False and not GLOBAL_MetaCatURL is none %}
-                <td><a href="{{GLOBAL_MetaCatURL}}/gui/query?query={{project.quoted_query()}}&run=yes">run query</a></td>
-                {% endif %}
-            #}
+    <tr>    <th>Project query</th>              <td><pre>{{project.Query or ""}}</pre>
     </tr>
-    <tr>    <th>Worker timeout</th>     <td>{{project.WorkerTimeout|none_as_blank}}</td></tr>
-    <tr>    <th>Project attributes</th>         <td class="nopadding">
+    <tr>    <th>Project metadata</th>         <td class="nopadding">
             {% if project.Attributes|length %}
                 <table class="placement attributes dense">
                     {% for name, value in project.Attributes.items() %}
@@ -46,17 +50,17 @@
     </tr>
     <tr>    <th>Project history</th>         
             <td>
-                <span id="count_display"></span><br/>
+                <span id="count_display" style="border: solid white 1px; padding: 1px; margin:1"></span><br/>
                 <svg id="project_history_svg" height=100 width=800 onmouseout="display_count()"></svg>
                 <script type="text/javascript">
-                    function display_count(label, n)
+                    function display_count(label, n, t)
                     {
                         var d = document.getElementById("count_display");
                         if( label == null )
                             d.innerHTML = "";
                         else
                         {
-                            d.innerHTML = label + ": " + n;
+                            d.innerHTML = t + ": " + label + ": " + n;
                             d.className = label;
                         }
                     }
@@ -64,31 +68,32 @@
             </td> 
     </tr>
     <tr>    
-            <th>Files</th>
+            <th></th>
             <td class="nopadding">
                 <table class="placement dense">
                     <tr>
-                    {% for state in states -%}
-                        <td class="{{state}}">
-                            {% if state in state_index %}
-                                <a href="{{state_index[state]}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</a>
-                            {% else %}
-                                {{state}}:&nbsp{{handle_counts_by_state[state]}}
-                            {% endif %}
-                        </td>
-                    {% endfor %}
+                        {% if page_index %}
+                            <td style="white-space:pre">page:{%- for p, link in page_index -%}
+                                        {%- if link is not none -%}
+                                            &nbsp;&nbsp;<a href="{{link}}">{{p}}</a>
+                                        {%- else -%}
+                                            &nbsp;&nbsp;{{p}}
+                                        {%- endif -%}
+                                    {%- endfor -%}
+                            </td>
+                        {% endif %}
+                        {% for state in states -%}
+                            <td class="{{state|replace(' ', '_')}}">
+                                {% if state in state_index %}
+                                    <a href="{{state_index[state]}}">{{state}}:&nbsp{{handle_counts_by_state[state]}}</a>
+                                {% else %}
+                                    {{state}}:&nbsp{{handle_counts_by_state[state]}}
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                        <td><a href="./project_handles_log?project_id={{project.ID}}">handles log</a></td>
                     </tr>
                 </table>
-                {% if not page_index is none %}
-                    <p>page:{%- for p, link in page_index -%}
-                                {%- if link is not none -%}
-                                    &nbsp;&nbsp;<a href="{{link}}">{{p+1}}</a>
-                                {%- else -%}
-                                    &nbsp;&nbsp;{{p+1}}
-                                {%- endif -%}
-                            {%- endfor -%}
-                    </p>
-                {% endif %}
                 <table class="data replicas">
                     <tr>
                         <th>File</th>
@@ -100,14 +105,19 @@
                     </tr>
                     {% for handle in handles %}
                         {% set did = handle.Namespace + ":" + handle.Name %}
-                        {% set wf_state = handle.State %}
+                        {% set wf_state = handle.state() %}
                         <tr id="state:{{wf_state}}">
-                            <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a></td>
+                            <td style="text-align:left"><a href="./handle?project_id={{project.ID}}&namespace={{handle.Namespace}}&name={{handle.Name}}">{{did}}</a>&nbsp;<a title="copy" href="javascript:copy('{{did}}')"><img class="copy_button"
+                                    src="{{GLOBAL_AppTopPath}}/static/copy.png"/></a></td>
                             {% set file_state = handle.file_state() %}
-                            <td class="{{file_state}}">{{file_state}}</td>
+                            <td class="{{file_state|replace(' ', '_')}}">{{file_state}}</td>
                             <td>{{handle.n_replicas}} ({{handle.n_available_replicas}})</td>
-                            <td class="{{wf_state}}">{{wf_state}}</td>
-                            <td>{{handle.WorkerID or ""}}</td>
+                            <td class="{{wf_state|replace(' ', '_')}}">{{wf_state}}</td>
+                            <td>{% if handle.WorkerID %}
+                                    {{handle.WorkerID}}&nbsp;<a title="copy" href="javascript:copy('{{handle.WorkerID}}')"><img class="copy_button"
+                                        src="{{GLOBAL_AppTopPath}}/static/copy.png"/></a>
+                                {% endif %}
+                            </td>
                             <td>{{handle.Attempts}}</td>
                         </tr>
                     {% endfor %}
@@ -132,7 +142,22 @@
     </tr>
 </table>
 
+<div id="file_count_display" style="display:none; position:absolute"></div>
+
 <script type="text/javascript">
+    
+    function display_count_event(event)
+    {
+        var d = document.getElementById("count_display");
+        if( event == null )
+            d.innerHTML = "";
+        else
+        {
+            const the_rect = event.target;
+            d.innerHTML = the_rect.__t + ": " + the_rect.__label + ": " + the_rect.__count;
+            d.className = the_rect.__label;
+        }
+    }
     
     function project_history_received(data, param)
     {
@@ -203,8 +228,12 @@
                             rect.setAttribute("width", w);
                             rect.setAttribute("height", h);
                             rect.setAttribute("style", "stroke-width:0;" + "fill:"+color+";");
+
+                            rect.__count = n;
+                            rect.__label = label;
+                            rect.__t = r.t_display;
                             
-                            rect.setAttribute("onmouseover", "display_count('"+label+"',"+n+")");
+                            rect.onmouseover = display_count_event;
                             canvas.appendChild(rect);
                             y += h;
                         }

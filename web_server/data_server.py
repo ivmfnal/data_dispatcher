@@ -1,6 +1,5 @@
 from webpie import WPApp, WPHandler
-from wsdbtools import ConnectionPool
-from data_dispatcher.db import DBProject, DBFileHandle, DBFile, DBRSE, DBProximityMap
+from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap
 from data_dispatcher.logs import Logged, init_logger
 from data_dispatcher import Version
 from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, \
@@ -8,6 +7,8 @@ from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatu
 from metacat.auth.server import BaseHandler, BaseApp, AuthHandler
 import json, urllib.parse, yaml, secrets, hashlib
 import requests
+from datetime import datetime, timedelta
+from data_dispatcher.query import ProjectQuery
 
 
 def to_bytes(x):
@@ -39,18 +40,26 @@ class Handler(BaseHandler):
     def create_project(self, request, relpath, **args):
         #print("create_project()...")
         user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
         #print("authenticated user:", user)
+        if user is None:
+            print("returning 401", error)
+            return 401, error
         specs = json.loads(to_str(request.body))
+        #print("specs:", specs)
         files = specs["files"]
         query = specs.get("query")
         worker_timeout = specs.get("worker_timeout")
+        if worker_timeout is not None:
+            worker_timeout = timedelta(seconds=worker_timeout)
+        idle_timeout = specs.get("idle_timeout")
+        if idle_timeout is not None:
+            idle_timeout = timedelta(seconds=idle_timeout)
         attributes = specs.get("project_attributes", {})
-        #print(specs.get("files"))
+        #print("opening DB...")
         db = self.App.db()
         #print("calling DBProject.create()...")
-        project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout)
+        project = DBProject.create(db, user.Username, attributes=attributes, query=query, worker_timeout=worker_timeout,
+                        idle_timeout=idle_timeout, users=specs.get("users", []), roles=specs.get("roles", []))
         files_converted = []
         for f in files:
             if isinstance(f, str):
@@ -93,6 +102,23 @@ class Handler(BaseHandler):
         project.delete()
         return "null", "text/json"
         
+    def activate_project(self, request, relpath, project_id=None, **args):
+        if not project_id:
+            return 400, "Project id must be specified"
+        user, error = self.authenticated_user()
+        if user is None:
+            return 401, error
+           
+        project_id = int(project_id)
+        db = self.App.db()
+        project = DBProject.get(db, project_id)
+        if project is None:
+            return 404, "Project not found"
+        if user.Username != project.Owner and not user.is_admin():
+            return 403, "Forbidden"
+        project.activate()
+        return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
+
     def restart_project(self, request, relpath, project_id=None, force="no", failed_only="yes", **args):
         force = force == "yes"
         failed_only = failed_only == "yes"
@@ -113,7 +139,6 @@ class Handler(BaseHandler):
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
     def restart_handles(self, request, relpath, **args):
-
         params = json.loads(to_str(request.body))
         project_id = params.get("project_id")
         if not project_id:
@@ -190,49 +215,6 @@ class Handler(BaseHandler):
         project.cancel()
         return json.dumps(project.as_jsonable(with_replicas=True)), "text/json"
         
-    def replica_available(self, request, relpath, namespace=None, name=None, rse=None, **args):
-        user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
-        data = request.json
-        db = self.App.db()
-        if rse is None:             return 400, "RSE must be specified"
-        if None in (namespace, name):       return 400, "File namespace and name must be specified"
-        preference = data.get("preference", 0)
-        url = data.get("url")
-        path = data.get("path")
-        f = DBFile.get(db, namespace, name)
-        if not f:
-            return 404, "File not found"
-        f.create_replica(rse, path, url, preference=preference, available=True)
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-            
-    def replica_unavailable(self, request, relpath, namespace=None, name=None, rse=None, **args):
-        user, error = self.authenticated_user()
-        if user is None:
-            return 401, error
-        db = self.App.db()
-        if rse is None:             return 400, "RSE must be specified"
-        if None in (namespace, name):       return 400, "File namespace and name must be specified"
-        f = DBFile.get(db, namespace, name)
-        if not f:
-            return 404, "File not found"
-        r = f.get_replica(rse)
-        if r is None:
-            return 404, "Replica not found"
-        r.Available = False
-        r.save()
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-        
-    def file(self, request, relpath, namespace=None, name=None, **args):
-        if None in (namespace, name):
-            return 400, "File namespace and name must be specified"
-        db = self.App.db()
-        f = DBFile.get(db, namespace, name)
-        if f is None:
-            return 404, "File not found"
-        return json.dumps(f.as_jsonable(with_replicas=True)), "text/json"
-
     def next_file(self, request, relpath, project_id=None, worker_id=None, cpu_site=None, **args):
         #print("next_file...")
         user, error = self.authenticated_user()
@@ -245,9 +227,13 @@ class Handler(BaseHandler):
         project = DBProject.get(db, project_id)
         if not project:
             return 404, "Project not found"
-        if not user.is_admin() and user.Username != project.Owner:
+        if not (user.is_admin() or project.authorized_user(user.Username)):
             return 403, "Not authorized"
-        handle, reason, retry = project.reserve_handle(worker_id, self.App.proximity_map(), cpu_site)
+        if project.State == "abandoned":
+            project.activate()
+        elif project.State != "active":
+            return 400, f"Inactive project. State={project.State}"
+        handle, reason, retry = project.reserve_handle(worker_id)
         if handle is None:
             out = {
                 "handle": None,
@@ -255,8 +241,14 @@ class Handler(BaseHandler):
                 "retry": retry
             }
         else:
+            pmap = self.App.proximity_map()
             info = handle.as_jsonable(with_replicas=True)
             info["replicas"] = {rse:r for rse, r in info["replicas"].items() if r["available"] and r["rse_available"]}
+            for rse, r in info["replicas"].items():
+                try:    proximity = pmap.proximity(cpu_site, rse)
+                except KeyError:
+                    proximity = None
+                r["preference"] = proximity
             info["project_attributes"] = project.Attributes or {}
             out = {
                 "handle": info,
@@ -288,8 +280,9 @@ class Handler(BaseHandler):
         
         handle = project.release_handle(namespace, name, failed, retry)
         if handle is None:
-            return 404, "Handle not found"
-        
+            return 404, "Handle not found or was not reserved"
+        if project.State == "abandoned":
+            project.activate()
         return json.dumps(handle.as_jsonable()), "text/json"
 
     def ______reset_file(self, request, relpath, handle_id=None, force="no", **args):
@@ -353,7 +346,7 @@ class Handler(BaseHandler):
         project_log = (x.as_jsonable() for x in project.handles_log())
         return json.dumps(project_log), "text/json"
 
-    def projects(self, request, relpath, state=None, not_state=None, owner=None, attributes="", 
+    def projects(self, request, relpath, state=None, not_state="abandoned", owner=None, attributes="",
                 with_handles="yes", with_replicas="yes", **args):
         with_handles = with_handles == "yes"
         with_replicas = with_replicas == "yes"
@@ -362,8 +355,24 @@ class Handler(BaseHandler):
         db = self.App.db()
         projects = DBProject.list(db, state=state, not_state=not_state, owner=owner, attributes=attributes)
         return json.dumps([p.as_jsonable(with_handles=with_handles, with_replicas=with_replicas) for p in projects]), "text/json"
-        
-        
+
+    def search_projects(self, request, relpath, **args):
+        specs = json.loads(to_str(request.body))
+        query_text = specs.get("query")
+        owner = specs.get("owner")
+        with_handles = specs.get("with_handles", False)
+        with_replicas = specs.get("with_replicas", False)
+        state = specs.get("state")
+        query = ProjectQuery(query_text)
+        sql = query.sql()
+        db = self.App.db()
+        projects = DBProject.from_sql(db, sql)
+        projects = (project for project in projects 
+            if (not owner or project.Owner == owner)
+                and (not state or project.State == state)
+        )
+        return json.dumps([p.as_jsonable(with_handles=with_handles, with_replicas=with_replicas) for p in projects]), "text/json"
+
     def file_handle(self, request, relpath, handle_id=None, project_id=None, file_id=None, name=None, namespace=None, **args):
         db = self.App.db()
         if handle_id:
@@ -384,10 +393,10 @@ class Handler(BaseHandler):
             return "null", "text/json"
         return json.dumps(handle.as_jsonable(with_replicas=True)), "text/json"
     
-    def handles(self, request, relpath, project_id=None, state=None, rse=None, not_state=None, with_replicas="no"):
+    def handles(self, request, relpath, project_id=None, state=None, not_state=None, with_replicas="no"):
         db = self.App.db()
         project_id = int(project_id)
-        lst = DBFileHandle.list(db, project_id=project_id, rse=rse, not_state=not_state, state=state, with_replicas=with_replicas=="yes")
+        lst = DBFileHandle.list(db, project_id=project_id, not_state=not_state, state=state, with_replicas=with_replicas=="yes")
         return json.dumps([h.as_jsonable() for h in lst]), "text/json"
         
     def rses(self, request, relpath, **args):
@@ -433,6 +442,7 @@ class App(BaseApp, Logged):
         self.ProximityMapOverrides = proximity_map_cfg.get("overrides", {})
         log_out = config.get("web_server",{}).get("log","-")
         init_logger(log_out, debug_enabled=True)
+        self.init_auth_core(config)
     
     def proximity_map(self):
         db = self.db()

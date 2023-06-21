@@ -14,24 +14,67 @@ from .ui_lib import pretty_json
 
 class LoginCommand(CLICommand):
     
+    Opts = "t:m:"
     Usage = """<mechanism> <args>...             -- log in
-        login x509 <user> <cert> <key>                  - use X.509 authentication
-        login password <user>                           - password authentication
+        login -m x509 <user> <cert> [<key>]                   - use X.509 authentication
+        login -m password <user>                              - password authentication
+        login -m token [-t (<token>|<token file>)] <user>     - WLCG token authentication
     """
-    MinArgs = 2
+    MinArgs = 1
     
     def __call__(self, command, client, opts, args):
-        mech, rest = args[0], args[1:]
+        
+        if args[0] in ("password", "x509"):
+            mech = args[0]
+            args = args[1:]
+        else:
+            mech = opts.get("-m", "password")
+        username, rest = args[0], args[1:]
         if mech == "x509":
-            username, cert, key = rest
+            key = None
+            if not rest:
+                raise InvalidArguments("Certificate or proxy file needed")
+            elif len(args) == 1:
+                cert = key = rest[0]
+            else:
+                cert, key = rest[:2]
             user, expiration = client.login_x509(username, cert, key)
         elif mech == "password":
             import getpass
-            username = rest[0]
             password = getpass.getpass("Password:")
             user, expiration = client.login_password(username, password)
+        elif mech == "token":
+            token = token_file = None
+            v = opts.get("-t")
+            if v:
+                if os.path.isfile(v):
+                    token = open(v, "r").read().strip()
+                else:
+                    token = v
+            else:
+                token = os.environ.get("BEARER_TOKEN")
+                if not token:
+                    token_file = os.environ.get("BEARER_TOKEN_FILE")
+                    if not token_file:
+                        uid = os.environ.get("ID", str(os.geteuid()))
+                        token_dir = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+                        token_file = token_dir + "/" + "bt_u" + uid
+            if not token:
+                if token_file:
+                    if not os.path.isfile(token_file):
+                        print("File not found:", token_file, file=sys.stderr)
+                        sys.exit(1)
+                    token = open(token_file, "r").read().strip()
+            if not token:
+                print("Token not found", file=sys.stderr)
+                sys.exit(1)
+            user, expiration = client.login_token(username, token)
         else:
             raise InvalidArguments(f"Unknown authentication mechanism {mech}\n")
+
+        if not client.tokens_saved():
+            print("Authentication token not saved. Can not access/create token library", sys.stderr)
+            sys.exit(1)
 
         print ("User:   ", user)
         print ("Expires:", time.ctime(expiration))

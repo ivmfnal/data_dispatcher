@@ -38,11 +38,8 @@ function simple_request(url, callback, format, param)
 {
     return HTTPRequest(url, 
         {
-            data_received: function(data, param)
-            {   
-                callback(data, null);  
-            }
-        }, null, format
+            data_received: callback
+        }, param, format
     );
 }
 

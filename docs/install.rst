@@ -22,6 +22,8 @@ Alternatively:
         $ cd data_dispatcher
         $ python setup.py install --user
 
+If using ``--user``, make sure your ``~/.local/bin`` is in your PATH 
+
 
 Configuration
 -------------

@@ -19,16 +19,30 @@ Logging in
 Before using Data Dispatcher UI, the user needs to log in. Logging in essentially means obraining an authentication/authorization token from
 the token issuer and storing it in local file system for use by the Data Dispatcher UI commands.
 
-Currently, Data Dispatcher supports 2 modes of authentication:
+Currently, Data Dispatcher supports 3 modes of authentication:
 
     .. code-block:: shell
 
-        $ dd login password <username>                                  # login using LDAP password
+        $ ddisp login -m password <username>                                  # login using LDAP password
         Password: ...
         
-        $ dd login x509 <username> <cert_file.pem> <key_file.pem>       # login using X.509 authentication
-        $ dd login x509 <username> <proxy_file>
+        $ ddisp login -m x509 <username> <cert_file.pem> <key_file.pem>       # login using X.509 authentication
+        $ ddisp login -m x509 <username> <proxy_file>
+
+        $ ddisp login -m token [-t (<token>|<token file>)] <username>         # login using WLCG token
+
+If WLCG token authentication is used, the token or a file with the token can be specified with ``-t`` option.
+Otherwise, the command will look for the token in:
+
+    #. ``BEARER_TOKEN`` environment variable value
+    #. contents of a file pointed to by the ``BEARER_TOKEN_FILE`` environment variable
+    #. if ``XDG_RUNTIME_DIR`` environment variable is defined:
+
+        #. if ID environment variable is defined, contents of the file ``$XDG_RUNTIME_DIR/bt_u$ID``
+        #. if ID is not defined, contents of the file: 
         
+            ``$XDG_RUNTIME_DIR/bt_u<effective uid of the process>``
+
 Software versions
 ~~~~~~~~~~~~~~~~~
 
@@ -36,7 +50,7 @@ To print client and server versions, use the version command:
 
     .. code-block:: shell
 
-        $ dd version
+        $ ddisp version
         Server URL:     http://host.domain:8080/dd/data
         Server version: 1.3.2
         Client version: 1.3.1
@@ -53,13 +67,13 @@ One is to specify a MetaCat query and create the project from the resulting file
 
     .. code-block:: shell
     
-        $ dd project create <inline MetaCat query>
+        $ ddisp project create <inline MetaCat query>
 
         # Examples:
-        $ dd project create files from dune:all limit 100
-        $ dd project create files from dune:all where 'namespace="protodune-sp"' skip 3000 limit 10
+        $ ddisp project create files from dune:all limit 100
+        $ ddisp project create files from dune:all where 'namespace="protodune-sp"' skip 3000 limit 10
 
-        $ dd project create -q <file with MetaCat MQL query>
+        $ ddisp project create -q <file with MetaCat MQL query>
 
 A project can be created with explicit list of files, specified as a text file with list of DIDs (namespace:name), one
 DID per line:
@@ -71,7 +85,7 @@ DID per line:
         protodune-sp:np04_raw_run006833_0001_dl1.root
         protodune-sp:np04_raw_run006833_0001_dl6.root
         _EOF_
-        $ dd project create -l file_list
+        $ ddisp project create -l file_list
 
 
 Third way is to yse JSON-formatted file list. The list is composed of items of one of two types:
@@ -94,13 +108,13 @@ Third way is to yse JSON-formatted file list. The list is composed of items of o
                 "attributes": {"debug":true} 
             }
         ]
-        $ dd project create -j /tmp/file_list.json
+        $ ddisp project create -j /tmp/file_list.json
         
 Hyphen can be used as the value for ``-j`` and ``-l`` options to read the list from stdin:
 
     .. code-block:: shell
 
-        $ dd project create -l - << _EOF_ 
+        $ ddisp project create -l - << _EOF_ 
         protodune-sp:np04_raw_run006833_0001_dl10.root
         protodune-sp:np04_raw_run006833_0001_dl1.root
         protodune-sp:np04_raw_run006833_0001_dl6.root
@@ -116,10 +130,10 @@ the value of the ``-p`` option:
 
     .. code-block:: shell
 
-        $ dd project create -p id ...                   # -p id is default
+        $ ddisp project create -p id ...                   # -p id is default
         123                                             # print the project id only
         
-        $ dd project create -p json ... # print project information as JSON
+        $ ddisp project create -p json ... # print project information as JSON
         {
             "project_id": 123,
             "file_handles": [
@@ -128,7 +142,7 @@ the value of the ``-p`` option:
             ...
         }
         
-        $ dd project create -p pprint ... # print project information using Python pprint
+        $ ddisp project create -p pprint ... # print project information using Python pprint
         {
          'project_id': 123,
          'file_handles': [
@@ -137,13 +151,47 @@ the value of the ``-p`` option:
          ...
         }
 
+Project time-outs
+.................
 
-Project and project file attributes
-...................................
+There are 2 parameters which control the behavior of the Data Dispatcher with respect to idle projects: *worker timeout* and *project idle timeout*.
+
+Worker timeout parameter tells the Data Dispatcher that if a worker reserves a file and does not release it for too long, the Data Dispatcher will 
+assume that the worker which holds the file has died witout releasing the file and the Data Dispatcher will
+release it and make available for another (or the same) worker to allocate. This parameter can be set using ``-w`` option when creating the project:
+
+    .. code-block:: shell
+    
+        $ ddisp project create -w (<worker timeout>[s|m|h|d] | none)
+        
+the timeout value is numeric with optional suffix ``s``, ``m``, ``h`` or ``d``. If a suffix is used, then the timeout is set to the specified
+number of seconds, minutes, hours or days respectively. ``none`` can be used to create a project without any worker timeout. Default worker timeout
+is 12 hours.
+
+Project idle timeout applies in the case, when a there is no worker file reserve/release activity for the project for the specified time interval.
+In this case, the Data Dispatcher moves the project into ``abandoned`` state. In this state, the Data Dispatcher stops updaitng file replica
+availability information for the project. Use ``-t`` option to specify this timeout:
+
+    .. code-block:: shell
+    
+        $ ddisp project create -t (<idle timeout>[s|m|h|d] | none)
+
+Default value for the project idle timeout is 72 hours.
+
+To reactivate an abandoned project, use ``activate`` subcommand:
+
+    .. code-block:: shell
+    
+        $ ddisp project activate <project id>
+
+An abandoned project will also be re-activated if a worker releases or tries to reserve a file.
+
+Project and file metadata
+.........................
 
 Data Dispatcher provides a way to pass some arbitrary metadata about the project as a whole and/or each individual project file to the worker.
 The metadata is attached to the project and/or project files at the time of the project creation. Project and file metadata can be any JSON dictionary. 
-If the project is created using a MetaCat query, Data Dispatcher can copy some portions of file metadata from MetaCat to avoid unnecessary
+If the project is created using a MetaCat query, Data Dispatcher can copy portions of file metadata from MetaCat to avoid unnecessary
 querying MetaCat at the run time.
 When the worker asks for the next file to process, the Data Dispatcher responds with the file information, which includes the project and the 
 file metadata.
@@ -157,7 +205,7 @@ There are several ways to specify project level metadata attributes:
     .. code-block:: shell
 
         # inline:
-        $ dd project create -A "email_errors=user@fnal.gov step=postprocess" ...
+        $ ddisp project create -A "email_errors=user@fnal.gov step=postprocess" ...
         
         # as a JSON file:
         $ cat project_attrs.json
@@ -165,21 +213,21 @@ There are several ways to specify project level metadata attributes:
             "email_errors": "user@fnal.gov",
             "step": "postprocess"
         }
-        $ dd project create -A @project_attrs.json
+        $ ddisp project create -A @project_attrs.json
         
 To copy some metadata attributes from MetaCat:
 
     .. code-block:: shell
 
-        $ dd project create -c core.runs files from ...
-        $ dd project create -c detector.hv_value,core.data_tier files from ...
+        $ ddisp project create -c core.runs files from ...
+        $ ddisp project create -c detector.hv_value,core.data_tier files from ...
 
 To associate common attributes with each file in the project, use ``-a`` option:
 
     .. code-block:: shell
 
-        $ dd project create -a "name1=value1 name2=value2" ...
-        $ dd project create -a @<JSON file>
+        $ ddisp project create -a "name1=value1 name2=value2" ...
+        $ ddisp project create -a @<JSON file>
 
 If the file list is specified explicitly using JSON file, then each file dictionary may optionally include file attributes:
 
@@ -195,13 +243,13 @@ If the file list is specified explicitly using JSON file, then each file diction
             },
             { "namespace":"protodune-sp", "name":"np04_raw_run006834_0010_dl10.root" }
         ]
-        $ dd project create -j /tmp/file_list.json
+        $ ddisp project create -j /tmp/file_list.json
         
 When the worker gets next file to process, the JSON representation of file inofrmation includes project and project file attributes:
 
     .. code-block:: shell
 
-        $ dd worker next -j 70
+        $ ddisp worker next -j 70
         {
           "attempts": 1,
           "attributes": {                   # file attributes
@@ -233,18 +281,35 @@ When the worker gets next file to process, the JSON representation of file inofr
           "worker_id": "fnpc123_pid4563"
         }
 
-        
+Project ownership and use authorization
+.......................................
+
+A project is owned by the user who created the project. By default, only the project owner and an admin users are authorized to
+use the project worker interface - reserve files, report their processing status. If necessary, at the
+time of the project creation, additional authorized users or roles can be specified:
+
+    .. code-block:: shell
+
+        $ ddisp project create -u alice,bob,charlie ...
+        $ ddisp project create -r production,my_group ...
+        $ ddisp project create -u alice,bob -r my_group ...
+
+Listing projects
+................
+
+    .. code-block:: shell
+
+        $ ddisp project list
+            -j                                              - JSON output
+            -u <owner>                                      - filter by project owner
+            -a "name1=value1 name2=value2 ..."              - filter by project attributes
+
 Viewing projects
 ................
 
     .. code-block:: shell
 
-        $ dd project list
-            -j                                              - JSON output
-            -u <owner>                                      - filter by project owner
-            -a "name1=value1 name2=value2 ..."              - filter by project attributes
-
-        $ dd project show [options] <project_id>            - show project info (-j show as JSON)
+        $ ddisp project show [options] <project_id>            - show project info (-j show as JSON)
                 -a                                          - show project attributes only
                 -r                                          - show replicas information
                 -j                                          - show as JSON
@@ -256,6 +321,22 @@ Viewing projects
                    reserved  - reserved files only
                    failed    - failed files only
                    done      - done files only
+
+Searching projects
+..................
+
+    .. code-block:: shell
+
+        $ ddisp project search [oprions] -q -              - read search query from stdin
+        $ ddisp project search [oprions] -q <file path>    - read search query from a file
+        $ ddisp project search [oprions] <search query>    - inline search query
+        
+        Options:
+            -j                                          - JSON output
+            -u <owner>                                  - filter by owner
+            -s (<state>|all)                            - filter by state, default: active projects only
+
+See :ref:`Searching Projects <SearchQL>` for details on search query language
 
 Copying project
 ...............
@@ -283,13 +364,13 @@ project.
 
     .. code-block:: shell
 
-        $ dd project restart <project_id> <did> ...
+        $ ddisp project restart <project_id> <did> ...
         
 This command will reset the state of the files specified with their DIDs regardless of their current state.
 
     .. code-block:: shell
     
-        $ dd restart [options] <project_id>
+        $ ddisp restart [options] <project_id>
               -f                                              - restart failed files
               -d                                              - restart done files
               -r                                              - unreserve reserved files
@@ -304,7 +385,7 @@ Cancelling project
 
     .. code-block:: shell
     
-        $ dd project cancel [-j] <project id>
+        $ ddisp project cancel [-j] <project id>
         
 ``-j`` will print the project information in JSON format
     
@@ -313,7 +394,7 @@ Deleting project
 
     .. code-block:: shell
     
-        $ dd project delete <project id>
+        $ ddisp project delete <project id>
 
 
 Workflow
@@ -336,16 +417,16 @@ Data Dispatcher.
 
     .. code-block:: shell
         
-        $ dd worker id -n          # - generate random worker id
+        $ ddisp worker id -n          # - generate random worker id
         9e0124f8
         
-        $ dd worker id <assigned worker id>
+        $ ddisp worker id <assigned worker id>
         # example
         $ my_id=`hostname`_`date +%s`
-        $ dd worker id $my_id
+        $ ddisp worker id $my_id
         fnpc123_1645849756
         
-        $ dd worker id            # - prints current worker id
+        $ ddisp worker id            # - prints current worker id
         fnpc123_1645849756
 
 Getting next file to process
@@ -353,7 +434,7 @@ Getting next file to process
 
     .. code-block:: shell
 
-       $ dd worker next [-j] [-t <timeout>] [-c <cpu_site>] [-w <worker_id>] <project_id>  - get next available file
+       $ ddisp worker next [-j] [-t <timeout>] [-c <cpu_site>] [-w <worker_id>] <project_id>  - get next available file
              -c - choose the file according to the CPU/RSE proximity map for the CPU site
              -j - as JSON
              -t - wait for next file until "timeout" seconds, 
@@ -408,7 +489,7 @@ Replicas located in unavailable RSEs will _not_ be included, even if they are kn
 
     .. code-block:: shell
 
-        $ dd worker next -j 70
+        $ ddisp worker next -j 70
         {
           "attempts": 1,
           "attributes": {
@@ -447,14 +528,14 @@ If the file was processed successfully, the worker issues "done" command:
 
     .. code-block:: shell
 
-        $ dd worker done <project_id> <file namespace>:<file name>
+        $ ddisp worker done <project_id> <file namespace>:<file name>
         
 If the file processing failes, the worker issues "failed" command. "-f" option is used to signal that the file has failed permanently and should
 not be retried. Otherwise, the failed file will be moved to the back of the project's file list and given to a worker for consumption in the future.
 
     .. code-block:: shell
 
-        $ dd worker failed [-f] <project_id> <file namespace>:<file name>
+        $ ddisp worker failed [-f] <project_id> <file namespace>:<file name>
             
 
 RSEs
@@ -467,7 +548,7 @@ Listing known RSEs
 
     .. code-block:: shell
     
-        $ dd rse list -j
+        $ ddisp rse list -j
         [
           {
             "add_prefix": "",
@@ -493,7 +574,7 @@ Listing known RSEs
           }
         ]
         
-        $ dd rse list
+        $ ddisp rse list
         Name                                     Pref Tape Status Description
         --------------------------------------------------------------------------------------------------------------
         FNAL_DCACHE                                 0 tape     up FNAL dCache
@@ -510,7 +591,7 @@ Showing information about particular RSE
 
     .. code-block:: shell
     
-        $ dd rse show FNAL_DCACHE
+        $ ddisp rse show FNAL_DCACHE
         RSE:            FNAL_DCACHE
         Preference:     0
         Tape:           yes
@@ -520,7 +601,7 @@ Showing information about particular RSE
         Remove prefix:  
         Add prefix:     
         
-        $ dd rse show -j FNAL_DCACHE
+        $ ddisp rse show -j FNAL_DCACHE
         {
           "add_prefix": "",
           "description": "FNAL dCache",
@@ -540,8 +621,8 @@ This command requires admin privileges.
 
     .. code-block:: shell
 
-        $ dd rse set -a down FNAL_DCACHE
-        $ dd rse show FNAL_DCACHE
+        $ ddisp rse set -a down FNAL_DCACHE
+        $ ddisp rse show FNAL_DCACHE
         RSE:            FNAL_DCACHE
         Preference:     0
         Tape:           yes
@@ -549,3 +630,5 @@ This command requires admin privileges.
         ...
         
 When an RSE is unavailable (down), replicas in this RSE are considered unavailable even if this is a disk RSE or they are known to be staged in a tape RSE.
+
+

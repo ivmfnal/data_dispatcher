@@ -1,11 +1,20 @@
 {% extends "base.html" %}
 
+{% block html_head %}
+<script src="{{GLOBAL_AppTopPath}}/static/js/request.js"></script>
+<style type="text/css">
+    .query_text {
+        font-family:  source_code, monospace;
+        
+    }
+</style>
+{% endblock %}
+
 {% block headline %}Projects{% endblock %}
 
 {% block content %}
 
 <script type="text/javascript">
-
     var States = {{handle_states}};
     
     function show_fractions(canvas, counts)
@@ -43,6 +52,28 @@
         }
     }
 
+    function show_counts(counts, project_id)
+    {
+        console.log("counts for ", project_id, ": ", counts);
+        for( state in counts )
+        {
+            const count = counts[state];
+            if( count > 0 )
+            {
+                var o = document.getElementById("handle_state_count:" + project_id + ":" + state);
+                if( o != null )
+                    o.innerHTML = "" + counts[state];
+                o.className = state.replace(" ", "_");
+            }
+        }
+    }
+    
+    function handle_counts_received(counts, project_id)
+    {
+        show_counts(counts, project_id);
+        var fractions_canvas = document.getElementById("cnv_"+project_id);
+        show_fractions(fractions_canvas, counts);
+    }
 </script>
 
 {% if not page_index is none %}
@@ -56,6 +87,32 @@
     </p>
 {% endif %}
 
+<h3>Search</h3>
+<form action="" method="POST">
+    <table class="form">
+        <tr>
+            <th>User</th><td><input type="text" name="search_user" value="{{search_user or ''}}"/></td>
+        </tr>
+        <tr>
+            <th>Created after (UTC)</th><td><input type="text" name="search_created_after" value="{{search_created_after or ''}}"/> <span style="color:gray">YYYY-MM-DD[ HH:MM:SS]</span></td>
+        </tr>
+        <tr>
+            <th>Created before (UTC)</th><td><input type="text" name="search_created_before" value="{{search_created_before or ''}}"/> <span style="color:gray">YYYY-MM-DD[ HH:MM:SS]</span></td>
+        </tr>
+        <tr>
+            <th>Active projects only</th><td><input type="checkbox" name="search_active_only" {% if search_active_only %} checked="checked" {% endif %}/></td>
+        </tr>
+        <tr>
+            <th>Search projects</th>
+            <td><textarea class="query_text" name="query" cols=60 rows=5>{{query_text}}</textarea></td>
+            <td><a href="https://data-dispatcher.readthedocs.io/en/latest/project_query.html">help</a></td>
+        </tr>
+        <tr>
+            <td></td><td><input type="submit" name="action" value="Search"/></td>
+        </tr>
+    </table>
+</form>
+    
 <table class="data">
 	<tr>
 		<th rowspan=2>Project ID</th>
@@ -74,21 +131,18 @@
             <td>{{prj.Owner}}</td>
             <td class="{{prj.State}}">{{prj.State}}</td>
             <td style="vertical-align:middle"><canvas height=10 width=200 id="cnv_{{prj.ID}}"></canvas>
-                
-                <script type="text/javascript">
-                    var counts = {};
-                    {% for state, count in prj.HandleCounts.items() %}
-                        counts["{{state}}"] = {{count}};
-                    {% endfor %}
-                    show_fractions(document.getElementById("cnv_{{prj.ID}}"), counts);
-                </script>
             </td>
             {% for state in handle_states %}
-                <td {% if prj.HandleCounts[state] %}class="{{state}}"{% endif %}>{{prj.HandleCounts[state]}}</td>
+                <td id="handle_state_count:{{prj.ID}}:{{state}}"></td>
             {% endfor %}
         </tr>
+        
+        <script type="text/javascript">
+            simple_request("./handle_state_counts?project_id={{prj.ID}}", handle_counts_received, "json", {{prj.ID}})
+        </script>
 	{% endfor %}
 </table>
+
 
 {% endblock %}
 

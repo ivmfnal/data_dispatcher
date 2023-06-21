@@ -31,7 +31,7 @@ class NextFileCommand(CLICommand):
 
         if isinstance(reply, dict):
             if as_json:
-                reply["replicas"] = sorted(reply["replicas"].values(), key=lambda r: -r["preference"])
+                reply["replicas"] = sorted(reply["replicas"].values(), key=lambda r: 1000000 if r.get("preference") is None else r["preference"])
                 print(pretty_json(reply))
             else:
                 print("%s:%s" % (reply["namespace"], reply["name"]))

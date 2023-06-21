@@ -1,6 +1,6 @@
 import json, time, io, traceback, urllib.parse
 from datetime import datetime, timedelta, timezone
-from metacat.auth import BaseDBUser as DBUser
+from metacat.auth import BaseDBUser as DBUser, BaseDBRole as DBRole
 
 def cursor_iterator(c):
     t = c.fetchone()
@@ -8,15 +8,50 @@ def cursor_iterator(c):
         yield t
         t = c.fetchone()
 
-
 def json_literal(v):
-    if isinstance(v, str):       v = '"%s"' % (v,)
+    if isinstance(v, str):       v = '"%s"' % (v.replace("'", "''"),)
     elif isinstance(v, bool):    v = "true" if v else "false"
     elif v is None:              v = "null"
     else:   v = str(v)
     return v
     
-class DBObject(object):
+def to_timedelta(t):
+    if isinstance(t, (int, float)):
+        t = timedelta(seconds=t)
+    return t
+    
+class HasDB(object):
+
+    # instances must have DB attribute
+    
+    def __init__(self):
+        self.DB = None
+
+def transactioned(method):
+    def decorated(first, *params, transaction=None, **args):
+
+        if transaction is not None:
+            return method(first, *params, transaction=transaction, **args)
+
+        if isinstance(first, HasDB):
+            transaction = first.DB.transaction()
+        elif isinstance(first, type):
+            # class method -- DB is second argument
+            transaction = params[0].transaction()
+        else:
+            transaction = first.transaction()       # static method
+
+        with transaction:
+            return method(first, *params, transaction=transaction, **args)
+
+    return decorated
+
+def sanitize(s):
+    s = str(s)
+    if "'" in s:
+        raise ValueError('Invalid value: "%s"' % (s,))
+
+class DBObject(HasDB):
     
     @classmethod
     def from_tuple(cls, db, dbtup):
@@ -63,7 +98,7 @@ class DBObject(object):
 
     def _delete(self, cursor=None, do_commit=True, **pk_values):
         cursor = cursor or self.DB.cursor()
-        where_clause = " and ".join(f"{column} = '{value}'" for column, value in pk_values.items())
+        where_clause = " and ".join("%s = '%s'" % (column, sanitize(value),) for column, value in pk_values.items())
         try:
             cursor.execute(f"""
                 delete from {self.Table} where {where_clause}
@@ -86,59 +121,60 @@ class DBObject(object):
         pk_values = {column:value for column, value in zip(self.PK, self.pk())}
         return self._delete(cursor=None, do_commit=True, **pk_values)
     
-class DBManyToMany(object):
+class DBManyToMany(HasDB):
     
     def __init__(self, db, table, src_fk_values, dst_fk_columns, payload_columns, dst_class):
         self.DB = db
         self.Table = table
         self.SrcFKColumns, self.SrcFKValues = zip(*list(src_fk_values.items()))
+        self.SrcFKColumns = list(self.SrcFKColumns)
+        self.SrcFKValues = list(self.SrcFKValues)
         self.DstFKColumns = dst_fk_columns
         self.DstClass = dst_class
         self.DstTable = dst_class.Table
-        self.DstPKColumns = self.DstTable.PK
+        self.DstPKColumns = dst_class.PK
+        self.PayloadColumns = payload_columns
 
-    def add(self, dst_pk_values, payload, cursor=None, do_commit=True):
+    @transactioned
+    def add(self, dst_pk_values, payload={}, transaction=None):
         assert len(dst_pk_values) == len(self.DstFKColumns)
         
         payload_cols_vals = list(payload.items())
-        payload_cols, payload_vals = zip(*payload_cols_vals)
+        payload_cols, payload_vals = [], []
+        if payload:
+            payload_cols, payload_vals = zip(*payload_cols_vals)
         
         fk_cols = ",".join(self.SrcFKColumns + self.DstFKColumns)
         cols = ",".join(self.SrcFKColumns + self.DstFKColumns + payload_cols)
-        vals = ",".join([f"'{v}'" for v in self.SrcFKValues + dst_pk_values + payload_vals])
+        values = tuple(self.SrcFKValues + dst_pk_values + payload_vals)
+        value_placeholders = ",".join(["%s"] * len(values))
         
-        if cursor is None: cursor = self.DB.cursor()
-        try:
-            cursor.execute(f"""
-                insert into {self.Table}({cols}) values({vals})
+        transaction.execute(f"""
+                insert into {self.Table}({cols}) values({value_placeholders})
                     on conflict({fk_cols}) do nothing
-            """)
-            if do_commit:
-                cursor.execute("commit")
-        except:
-            cursor.execute(rollback)
-            raise
+            """, values)
         return self
 
-    def list(self, cursor=None):
+    @transactioned
+    def list(self, transaction=None):
         out_columns = ",".join(f"{self.DstTable}.{c}" for c in self.DstClass.Columns)
         join_column_pairs = [
             (f"{self.Table}.{dst_fk}", f"{self.DstTable}.{dst_pk}") 
-            for src_fk, dst_pk in zip(self.DstFKColumns, self.DstPKColumns)
+            for dst_fk, dst_pk in zip(self.DstFKColumns, self.DstPKColumns)
         ]
-        join_condition = " and ".join(f"{fk} = {pk}" for fk, pk in join_column_pairs)
-        if cursor is None: cursor = self.DB.cursor()
-        cursor.execute(f"""
+        src_fk_conditions = " and ".join([f"{c} = %s" for c in self.SrcFKColumns])
+        join_conditions = " and ".join(f"{fk} = {pk}" for fk, pk in join_column_pairs)
+        transaction.execute(f"""
             select {out_columns}
                 from {self.DstTable}, {self.Table}
-                where {join_condition}
-        """)
-        return (self.DstClass.from_tuple(self.DB, tup) for tup in fetch_generator(cursor))
+                where {src_fk_conditions} and {join_conditions}
+        """, tuple(self.SrcFKValues))
+        return (self.DstClass.from_tuple(self.DB, tup) for tup in cursor_iterator(transaction))
         
     def __iter__(self):
         return self.list()
 
-class DBOneToMany(object):
+class DBOneToMany(HasDB):
     
     def __init__(self, db, table, src_pk_values, dst_fk_columns, dst_class):
         self.DB = db
@@ -148,20 +184,20 @@ class DBOneToMany(object):
         self.DstTable = dst_class.Table
         self.DstFKColumns = dst_fk_columns
 
-    def list(self, cursor=None):
+    @transactioned
+    def list(self, transaction=None):
         out_columns = ",".join(f"{self.DstTable}.{c}" for c in self.DstClass.Columns)
         join_column_pairs = [
             (f"{self.Table}.{dst_pk}", f"{self.DstTable}.{dst_fk}") 
             for src_pk, dst_fk in zip(self.SrcPKColumns, self.DstFKColumns)
         ]
         join_condition = " and ".join(f"{pk} = {fk}" for pk, fk in join_column_pairs)
-        if cursor is None: cursor = self.DB.cursor()
-        cursor.execute(f"""
+        transaction.execute(f"""
             select {out_columns}
                 from {self.DstTable}, {self.Table}
                 where {join_condition}
         """)
-        return (self.DstClass.from_tuple(self.DB, tup) for tup in fetch_generator(cursor))
+        return (self.DstClass.from_tuple(self.DB, tup) for tup in cursor_iterator(transaction))
         
     def __iter__(self):
         return self.list()
@@ -206,14 +242,14 @@ class HasLogRecord(object):
     #   LogIDColumns    - list of columns in the log table identifying the parent
     #
 
-    def add_log(self, type, data=None, **kwargs):
+    @transactioned
+    def add_log(self, type, data=None, transaction=None, **kwargs):
         #print("add_log:", type, data, kwargs)
-        c = self.DB.cursor()
         data = (data or {}).copy()
         data.update(kwargs)
         parent_pk_columns = ",".join(self.LogIDColumns)
         parent_pk_values = ",".join([f"'{v}'" for v in self.pk()])
-        c.execute(f"""
+        transaction.execute(f"""
             begin;
             insert into {self.LogTable}({parent_pk_columns}, type, data)
                 values({parent_pk_values}, %s, %s);
@@ -239,7 +275,8 @@ class HasLogRecord(object):
             yield DBLogRecord(type, t, data, id_columns)
 
     @classmethod
-    def add_log_bulk(cls, db, records):
+    @transactioned
+    def add_log_bulk(cls, db, records, transaction=None):
         """
             records: list of tuples:
                 (
@@ -260,14 +297,7 @@ class HasLogRecord(object):
 
             table = cls.LogTable
             columns = cls.LogIDColumns + ["type", "data"]
-            c = db.cursor()
-            try:
-                c.execute("begin")
-                c.copy_from(csv, table, columns=columns)
-                c.execute("commit")
-            except:
-                c.execute("rollback")
-                raise
+            transaction.copy_from(csv, table, columns=columns)
 
     def get_log(self, type=None, since=None, reversed=False):
         parent_pk_columns = self.LogIDColumns
@@ -288,15 +318,32 @@ class HasLogRecord(object):
         c = self.DB.cursor()
         c.execute(sql)
         return (DBLogRecord(type, t, message) for type, t, message in cursor_iterator(c))
-
+        
+    def last_log_record(self, type=None):
+        parent_pk_columns = self.LogIDColumns
+        c = self.DB.cursor()
+        pk_wheres = " and ".join([f"({c} = %s)" for c in parent_pk_columns])
+        c.execute(f"""
+            select type, t, data from {self.LogTable}
+                where {pk_wheres}
+                    and (%s is null or type = %s)
+                order by t desc
+                limit 1
+        """, tuple(self.pk()) + (type, type)
+        )
+        tup = c.fetchone()
+        if tup:
+            return DBLogRecord(*tup)
+        else:
+            return None
 
 class DBProject(DBObject, HasLogRecord):
     
     InitialState = "active"
-    States = ["active", "failed", "done", "cancelled", "held"]
+    States = ["active", "failed", "done", "cancelled", "held", "abandoned"]
     EndStates = ["failed", "done", "cancelled"]
     
-    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query,worker_timeout".split(",")
+    Columns = "id,owner,created_timestamp,end_timestamp,state,retry_count,attributes,query,worker_timeout,idle_timeout".split(",")
     Table = "projects"
     PK = ["id"]
     
@@ -304,7 +351,7 @@ class DBProject(DBObject, HasLogRecord):
     LogTable = "project_log"
     
     def __init__(self, db, id, owner=None, created_timestamp=None, end_timestamp=None, state=None, 
-                retry_count=None, attributes={}, query=None, worker_timeout=None):
+                retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None):
         self.DB = db
         self.ID = id
         self.Owner = owner
@@ -316,8 +363,11 @@ class DBProject(DBObject, HasLogRecord):
         self.HandleCounts = None
         self.EndTimestamp = end_timestamp
         self.Query = query
-        self.WorkerTimeout = worker_timeout
-        
+        self.WorkerTimeout = to_timedelta(worker_timeout)
+        self.IdleTimeout = to_timedelta(idle_timeout)
+        self.Users = DBManyToMany(db, "project_users", {"project_id":id}, ["username"], [], DBUser)    # if other than the owner
+        self.Roles = DBManyToMany(db, "project_roles", {"project_id":id}, ["role_name"], [], DBRole)
+
     def pk(self):
         return (self.ID,)
         
@@ -348,7 +398,10 @@ class DBProject(DBObject, HasLogRecord):
             ended_timestamp = None if self.EndTimestamp is None else self.EndTimestamp.timestamp(),
             active = self.is_active(),
             query = self.Query,
-            worker_timeout = self.WorkerTimeout
+            worker_timeout = None if self.WorkerTimeout is None else self.WorkerTimeout.total_seconds(),
+            idle_timeout = None if self.IdleTimeout is None else self.IdleTimeout.total_seconds(),
+            users = [u.Username for u in self.Users],
+            roles = [r.Name for r in self.Roles]
         )
         if with_handles or with_replicas:
             out["file_handles"] = [h.as_jsonable(with_replicas=with_replicas) for h in self.handles()]
@@ -359,17 +412,19 @@ class DBProject(DBObject, HasLogRecord):
         return json.dumps(self.Attributes, indent=4)
         
     @staticmethod
-    def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None):
+    def create_notxn(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None):
         if isinstance(owner, DBUser):
             owner = owner.Username
         c = db.cursor()
         try:
             c.execute("begin")
             c.execute("""
-                insert into projects(owner, state, retry_count, attributes, query, worker_timeout)
-                    values(%s, %s, %s, %s, %s, %s)
+                insert into projects(owner, state, retry_count, attributes, query, worker_timeout, idle_timeout)
+                    values(%s, %s, %s, %s, %s, %s, %s)
                     returning id
-            """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query, worker_timeout))
+            """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query, 
+                        to_timedelta(worker_timeout), to_timedelta(idle_timeout))
+            )
             id = c.fetchone()[0]
             db.commit()
         except:
@@ -379,12 +434,72 @@ class DBProject(DBObject, HasLogRecord):
         project = DBProject.get(db, id)
         return project
 
+    def handle_states(self):
+        return {(h.Namespace, h.Name): h.Availability if h.State == "initial" else h.State 
+                for h in self.handles(reload=True, with_availability=True)}
+
+    @staticmethod
+    @transactioned
+    def create(db, owner, retry_count=None, attributes={}, query=None, worker_timeout=None, idle_timeout=None,
+                    transaction=None, users=[], roles=[]):
+        if isinstance(owner, DBUser):
+            owner = owner.Username
+
+        transaction.execute("""
+            insert into projects(owner, state, retry_count, attributes, query, worker_timeout, idle_timeout)
+                values(%s, %s, %s, %s, %s, %s, %s)
+                returning id
+        """, (owner, DBProject.InitialState, retry_count, json.dumps(attributes or {}), query, 
+                    to_timedelta(worker_timeout), to_timedelta(idle_timeout))
+        )
+        id = transaction.fetchone()[0]
+
+        project = DBProject.get(db, id)
+        
+        if users:
+            project.add_users(users)
+        if roles:
+            project.add_roles(roles)
+
+        return project
+
+    def add_users(self, users):
+        current_users = set(u.Username for u in self.users)
+        for u in users:
+            if u not in current_users:
+                self.Users.add([u])
+                
+    def add_roles(self, roles):
+        current_roles = set(r.Name for r in self.roles)
+        for r in roles:
+            if r not in current_roles:
+                self.Roles.add([r])
+
+    @property
+    def users(self):
+        return sorted(list(self.Users), key=lambda u: u.Username)
+
+    @property
+    def roles(self):
+        return sorted(list(self.Roles), key=lambda r: r.Name)
+        
+    def authorized_user(self, username):
+        return username == self.Owner or any(u.Username == username for u in self.users) or \
+            any(username in r for r in self.roles)
+
+    @staticmethod
+    def from_sql(db, sql):
+        c = db.cursor()
+        c.execute(sql)
+        return (DBProject.from_tuple(db, tup) for tup in cursor_iterator(c))
+
     @staticmethod
     def list(db, owner=None, state=None, not_state=None, attributes=None, with_handle_counts=False):
-        wheres = ["true"]
-        if owner: wheres.append(f"p.owner='{owner}'")
-        if state: wheres.append(f"p.state='{state}'")
-        if not_state: wheres.append(f"p.state!='{not_state}'")
+        wheres = [
+            "(%(owner)s is null or p.owner=%(owner)s)",
+            "(%(state)s is null or p.state=%(state)s)",
+            "(%(not_state)s is null or p.state!=%(not_state)s)"
+        ]
         if attributes is not None:
             for name, value in attributes.items():
                 wheres.append("p.attributes @> '{\"%s\": %s}'::jsonb" % (name, json_literal(value)))
@@ -402,48 +517,6 @@ class DBProject(DBObject, HasLogRecord):
             #
             
             available_by_project = {}
-            saved = f"""
-                with 
-                    found_files as  
-                    (
-                        select distinct h.project_id, r.namespace, r.name, true as found
-                            from {rep_table} r, {h_table} h, {table} p
-                            where h.namespace = r.namespace
-                                and h.name = r.name
-                                and h.state = 'initial'
-                                and p.id = h.project_id
-                                and {p_wheres}
-                    ),
-                    available_files as 
-                    (
-                        select distinct ff.project_id, ff.namespace, ff.name, true as available
-                            from found_files ff, {rep_table} r, {rse_table} s
-                            where ff.namespace = r.namespace
-                                and ff.name = r.name
-                                and r.available
-                                and s.name = r.rse and s.is_available
-                    ),
-                    handle_states as
-                    (
-                        select h.project_id, h.namespace, h.name, 
-                                case
-                                    when af.available = true then 'available'
-                                    when ff.found = true then 'found'
-                                    else h.state
-                                end as state
-                            from {table} p, {h_table} h
-                                left outer join found_files ff on ff.namespace = h.namespace and ff.name = h.name
-                                left outer join available_files af on af.namespace = h.namespace and af.name = h.name
-                            where p.id = h.project_id
-                    )
-                    
-                select {columns}, hs.state, count(*)
-                    from handle_states hs, projects p
-                        where p.id = hs.project_id
-                        and {p_wheres}
-                    group by p.id, hs.state
-                    order by p.id, hs.state
-            """
             c.execute(f"""
                 with 
                     found_files as  
@@ -482,7 +555,7 @@ class DBProject(DBObject, HasLogRecord):
                         and {p_wheres}
                     group by p.id, hs.state
                     order by p.id, hs.state
-            """)
+            """, {"state":state, "not_state":not_state, "owner":owner})
 
             p = None
             for tup in cursor_iterator(c):
@@ -503,11 +576,11 @@ class DBProject(DBObject, HasLogRecord):
                 select {columns}
                     from {table} p
                     where {p_wheres}
-            """)
+            """, {"state":state, "not_state":not_state, "owner":owner})
             for tup in cursor_iterator(c):
                 yield DBProject.from_tuple(db, tup)
 
-    def save(self):
+    def save_old(self):
         c = self.DB.cursor()
         try:
             c.execute("begin")
@@ -520,13 +593,30 @@ class DBProject(DBObject, HasLogRecord):
             self.DB.rollback()
             raise
 
-    def cancel(self):
-        self.State = "cancelled"
-        self.EndTimestamp = datetime.now(timezone.utc)
-        self.save()
-        self.add_log("state", event="cancel", state="cancelled")
-        
-    def restart_handles(self, states=None, dids=None):
+    @transactioned
+    def save(self, transaction=None):
+        transaction.execute("""
+            update projects set state=%s, end_timestamp=%s
+                where id=%s
+        """, (self.State, self.EndTimestamp, self.ID))
+
+    @transactioned
+    def cancel(self, transaction=None):
+        if self.State != "cancelled":
+            self.State = "cancelled"
+            self.EndTimestamp = datetime.now(timezone.utc)
+            self.save(transaction=transaction)
+            self.add_log("state", event="cancel", state="cancelled", transaction=transaction)
+
+    @transactioned
+    def activate(self, transaction=None):
+        if self.State != "active":
+            self.State = "active"
+            self.save(transaction=transaction)
+            self.add_log("state", event="activate", state="active", transaction=transaction)
+
+    @transactioned
+    def restart_handles(self, states=None, dids=None, transaction=None):
         if states:
             states = set(states)
         if dids:
@@ -552,14 +642,18 @@ class DBProject(DBObject, HasLogRecord):
             self.State = "active"
             log_data["state"] = self.State = "active"
             self.EndTimestamp = None
-            self.save()
-            self.add_log("state", log_data)
+            self.save(transaction=transaction)
+            self.add_log("state", log_data, transaction=transaction)
         else:
-            self.add_log("event", log_data)
+            self.add_log("event", log_data, transaction=transaction)
 
-    def handles(self, state=None, with_replicas=True, reload=False):
+    def handles(self, state=None, with_replicas=True, with_availability=True, reload=False):
         if reload or self.Handles is None:
-            self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, with_replicas=with_replicas))
+            #print("DBProject.handles(): getting handles with_replicas:", with_replicas, " with_availability:", with_availability)
+            self.Handles = list(DBFileHandle.list(self.DB, project_id=self.ID, 
+                with_replicas=with_replicas, with_availability=with_availability)
+            )
+            #print("received", len(self.Handles))
         return (h for h in self.Handles if (state is None or h.State == state))
 
     def get_handles(self, dids, with_replicas=True):
@@ -567,27 +661,35 @@ class DBProject(DBObject, HasLogRecord):
 
     def handle(self, namespace, name):
         return DBFileHandle.get(self.DB, self.ID, namespace, name)
-
+        
     def add_files(self, files_descs):
         # files_descs is list of disctionaries: [{"namespace":..., "name":...}, ...]
         files_descs = list(files_descs)     # make sure it's not a generator
-        DBFile.create_many(self.DB, files_descs)
         DBFileHandle.create_many(self.DB, self.ID, files_descs)
         
-    def files(self):
-        return DBFile.list(self.DB, self.ID)
-        
-    def release_handle(self, namespace, name, failed, retry):
+    @transactioned
+    def reserve_handle(self, worker_id, transaction=None):
+        handle = DBFileHandle.reserve_for_worker(self.DB, self.ID, worker_id, transaction=transaction)
+        if handle is not None:
+            return handle, "ok", False
+            
+        if not self.is_active(reload=True):
+            return None, "project inactive", False
+        else:
+            return None, "retry", True
+
+    @transactioned
+    def release_handle(self, namespace, name, failed, retry, transaction=None):
         handle = self.handle(namespace, name)
-        if handle is None:
+        if handle is None or handle.State != "reserved":
             return None
 
         if failed:
-            handle.failed(retry)
+            handle.failed(retry, transaction=transaction)
         else:
-            handle.done()
+            handle.done(transaction=transaction)
 
-        if not self.is_active(reload=True) and self.State == "active":
+        if self.State == "active" and not self.is_active(reload=True):
             failed_handles = [h.did() for h in self.handles() if h.State == "failed"]
 
             if failed_handles:
@@ -597,11 +699,11 @@ class DBProject(DBObject, HasLogRecord):
                 state = "done"
                 data = {}
 
-            self.add_log("state", event="release", state=state)
+            self.add_log("state", event="release", state=state, transaction=transaction)
 
             self.State = state
             self.EndTimestamp = datetime.now(timezone.utc)
-            self.save()
+            self.save(transaction=transaction)
         return handle
         
     def is_active(self, reload=False):
@@ -609,62 +711,6 @@ class DBProject(DBObject, HasLogRecord):
         p = self if not reload else DBProject.get(self.DB, self.ID)
         if p is None:   return False
         return p.State == "active" and not all(h.State in ("done", "failed") for h in p.handles())
-            
-    def ___reserve_handle(self, worker_id, proximity_map, cpu_site=None):
-
-        if not self.is_active(reload=True):
-            return None, "project inactive", False
-
-        handles = sorted(
-            self.handles(with_replicas=True, reload=True, state=DBFileHandle.ReadyState),
-            key = lambda h: h.Attempts
-        )
-    
-        #
-        # find the lowest attempt count among all available file handles
-        #
-        
-        handles_with_lowest_attempts = []
-        lowest_attempts = None
-
-        for h in handles:
-            if lowest_attempts is not None and h.Attempts > lowest_attempts:
-                break
-            replicas = {}
-            for r in h.replicas().values():
-                if r.is_available():
-                    rse = r.RSE
-                    proximity = proximity_map.proximity(cpu_site, rse)
-                    if proximity >= 0:
-                        r.Preference = proximity
-                        replicas[rse] = r
-
-            if replicas:
-                h.Replicas = replicas
-                lowest_attempts = h.Attempts
-                handles_with_lowest_attempts.append(h)
-
-        #
-        # reserve the most preferred handle
-        #
-
-        for h in sorted(handles_with_lowest_attempts, 
-                    key=lambda h: min(r.Preference for r in h.Replicas.values())
-                    ):
-            if h.reserve(worker_id):
-                return h, "ok", False
-
-        return None, "retry", True
-
-    def reserve_handle(self, worker_id, proximity_map, cpu_site):
-        handle = DBFileHandle.reserve_for_worker(self.DB, self.ID, worker_id, proximity_map, cpu_site)
-        if handle is not None:
-            return handle, "ok", False
-            
-        if not self.is_active(reload=True):
-            return None, "project inactive", False
-        else:
-            return None, "retry", True
 
     def file_state_counts(self):
         counts = {}
@@ -682,11 +728,46 @@ class DBProject(DBObject, HasLogRecord):
             log_record.Name = log_record.IDColumns["name"]
             yield log_record
 
-    def files_log(self):
-        return DBFile.log_records_for_project(self.DB, self.ID)
+    @staticmethod
+    @transactioned
+    def find_abandoned(db, transaction=None):
+        p_table = DBProject.Table
+        hl_table = DBFileHandle.LogTable
+        pl_table = DBProject.LogTable
+        columns = DBProject.columns("p", as_text=True)
+        transaction.execute(f"""\
+            select {columns}, max(hl.t), max(pl.t)
+                from {p_table} p
+                    left outer join {hl_table} hl on (hl.project_id=p.id)
+                    left outer join {pl_table} pl on (pl.project_id=p.id)
+                where p.idle_timeout is not null
+                    and p.state = 'active'
+                    and p.created_timestamp + p.idle_timeout < now()
+                group by p.id
+                having (max(hl.t) is null or max(hl.t) + p.idle_timeout < now())
+                    and (max(pl.t) is null or max(pl.t) + p.idle_timeout < now())
+        """)
+        return (DBProject.from_tuple(db, tup[:-2]) for tup in transaction.cursor_iterator())
+
+    @staticmethod
+    @transactioned
+    def mark_abandoned(db, transaction=None):
+        # assume every handle has at least one log record on creation
+        project_ids = [p.ID for p in DBProject.find_abandoned(db, transaction=transaction)]
+        n = 0
+        if project_ids:
+            p_table = DBProject.Table
+            r_table = DBReplica.Table
+            transaction.execute(f"""\
+                update {p_table} p 
+                    set state='abandoned'
+                    where p.id = any(%s)
+                """, (project_ids,))
+            n = transaction.rowcount
+        return n
         
     @staticmethod
-    def purge(db, retain=86400):        # 24 hours
+    def purge_old(db, retain=86400):        # 24 hours
         c = db.cursor()
         table = DBProject.Table
         t_retain = datetime.now(timezone.utc) - timedelta(seconds=retain)
@@ -706,6 +787,20 @@ class DBProject(DBObject, HasLogRecord):
             raise
         return deleted
 
+    @transactioned
+    @staticmethod
+    def purge(db, retain=86400, transaction=None):        # 24 hours
+        table = DBProject.Table
+        t_retain = datetime.now(timezone.utc) - timedelta(seconds=retain)
+        deleted = 0
+        transaction.execute(f"""
+                delete from {table}
+                    where state in ('done', 'failed', 'cancelled')
+                        and end_timestamp is not null
+                        and end_timestamp < %s
+            """, (t_retain,))
+        return transaction.rowcount
+
     def replicas_logs(self):
         log_records = DBReplica.log_records_for_dids([(h.Namespace, h.Name) for h in self.handles()])
         out = {}
@@ -720,151 +815,8 @@ class DBProject(DBObject, HasLogRecord):
     def release_timed_out_handles(self):
         if self.WorkerTimeout is None:
             return 0
-        t = datetime.now() - timedelta(seconds=self.WorkerTimeout)
+        t = datetime.now() - to_timedelta(self.WorkerTimeout)
         return DBFileHandle.release_reserved_before(self.DB, self.ID, t)
-
-class DBFile(DBObject):
-    
-    Columns = ["namespace", "name"]
-    PK = ["namespace", "name"]
-    Table = "files"
-    
-    #LogIDColumns = ["namespace", "name"]
-    #LogTable = "file_log"
-    
-    def __init__(self, db, namespace, name):
-        self.DB = db
-        self.Namespace = namespace
-        self.Name = name
-        self.Replicas = None	# {rse -> DBReplica}
-    
-    def id(self):
-        return f"{self.Namespace}:{self.Name}"
-
-    def did(self):
-        return f"{self.Namespace}:{self.Name}"
-
-    def as_jsonable(self, with_replicas=False):
-        out = dict(
-            namespace   = self.Namespace,
-            name        = self.Name,
-        )
-        if with_replicas:
-            out["replicas"] = {rse: r.as_jsonable() for rse, r in self.replicas().items()}
-        return out
-        
-    def replicas(self):
-        if self.Replicas is None:
-            self.Replicas = {r.RSE: r for r in DBReplica.list(self.DB, self.Namespace, self.Name)}
-        return self.Replicas
-
-    def create_replica(self, rse, path, url, preference=0, available=False):
-        replica = DBReplica.create(self.DB, self.Namespace, self.Name, rse, path, url, preference=preference, available=available)
-        self.Replicas = None	# force re-load from the DB
-        return replica
-
-    def get_replica(self, rse):
-        return self.replicas().get(rse)
-        
-    @staticmethod
-    def create(db, namespace, name, error_if_exists=False):
-        c = self.DB.cursor()
-        try:
-            c.execute("begin")
-            conflict = "on conflict (namespace, name) do nothing" if not error_if_exists else ""
-            c.execute(f"insert into files(namespace, name) values(%s, %s) {conflict}; commit" % (namespace, name))
-            return DBFile.get(db, namespace, name)
-        except:
-            c.execute("rollback")
-            raise
-
-    @staticmethod
-    def create_many(db, descs):
-        #
-        # descs: [{"namespace":..., "name":..., ...}]
-        #
-        csv = [f"%s\t%s" % (item["namespace"], item["name"]) for item in descs]
-        data = io.StringIO("\n".join(csv))
-        table = DBFile.Table
-        c = db.cursor()
-        try:
-            t = int(time.time()*1000)
-            temp_table = f"files_temp_{t}"
-            c.execute("begin")
-            c.execute(f"create temp table {temp_table} (namespace text, name text)")
-            c.copy_from(data, temp_table)
-            c.execute(f"""
-                insert into {table}(namespace, name)
-                    select namespace, name from {temp_table}
-                    on conflict(namespace, name) do nothing;
-                drop table {temp_table};
-                commit
-                """)
-        except Exception as e:
-            c.execute("rollback")
-            raise
-            
-    @staticmethod
-    def list(db, project=None):
-        project_id = project.ID if isinstance(project, DBProject) else project
-        c = db.cursor()
-        table = DBFile.Table
-        columns = DBFile.columns(as_text=True)
-        files_columns = DBFile.columns(table, as_text=True)
-        project_where = f" id = {project_id} " if project is not None else " true "
-        c.execute(f"""
-            select {columns}
-                from {table}, projects
-                where {project_where}
-        """)
-        return (DBFile.from_tuple(db, tup) for tup in cursor_iterator(c))
-
-    @staticmethod
-    def delete_many(db, specs):
-        csv = [f"{namespace}:{name}"  for namespace, name in specs]
-        data = io.StringIO("\n".join(csv))
-        
-        c = db.cursor()
-        try:
-            t = int(time.time()*1000)
-            temp_table = f"files_temp_{t}"
-            c.execute("begin")
-            c.execute(f"creare temp table {temp_table} (spec text)")
-            c.copy_from(data, temp_table)
-            c.execute(f"""
-                delete from {self.Table} 
-                    where namespace || ':' || name in 
-                        (select * from {temp_table});
-                    on conflict (namespace, name) do nothing;       -- in case some other projects still use it
-                drop table {temp_table};
-                commit
-                """)
-        except Exception as e:
-            c.execute("rollback")
-            raise
-            
-    @staticmethod
-    def purge(db):
-        c = db.cursor()
-        table = DBFile.Table
-        deleted = 0
-        c.execute("begin")
-        try:
-            c.execute(f"""
-                delete from {table} f
-                    where not exists (
-                            select * from file_handles h 
-                                where f.namespace = h.namespace
-                                    and f.name = h.name
-                    )
-            """)
-            deleted = c.rowcount
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
-        return deleted
-
 
 class DBReplica(DBObject, HasLogRecord):
     Table = "replicas"
@@ -891,8 +843,10 @@ class DBReplica(DBObject, HasLogRecord):
         return f"{self.Namespace}:{self.Name}"
         
     def is_available(self):
-        assert self.Available is not None and self.RSEAvailable is not None
-        return self.Available and self.RSEAvailable
+        if self.Available is not None and self.RSEAvailable is not None:
+            return self.Available and self.RSEAvailable
+        else:
+            return None
 
     @staticmethod
     def list(db, namespace=None, name=None, rse=None):
@@ -940,23 +894,18 @@ class DBReplica(DBObject, HasLogRecord):
         return out
 
     @staticmethod
-    def create(db, namespace, name, rse, path, url, preference=0, available=False, error_if_exists=False):
-        c = db.cursor()
+    @transactioned
+    def create(db, namespace, name, rse, path, url, preference=0, available=False, error_if_exists=False, transaction=None):
         table = DBReplica.Table
-        try:
-            c.execute("begin")
-            c.execute(f"""
-                insert into {table}(namespace, name, rse, path, url, preference, available)
-                    values(%s, %s, %s, %s, %s, %s, %s)
-                    on conflict(namespace, name, rse)
-                        do update set path=%s, url=%s, preference=%s, available=%s;
-                commit
-            """, (namespace, name, rse, path, url, preference, available,
-                    path, url, preference, available)
-            )
-        except:
-            c.execute("rollback")
-            raise
+        transaction.execute(f"""
+            insert into {table}(namespace, name, rse, path, url, preference, available)
+                values(%s, %s, %s, %s, %s, %s, %s)
+                on conflict(namespace, name, rse)
+                    do update set path=%s, url=%s, preference=%s, available=%s;
+            commit
+        """, (namespace, name, rse, path, url, preference, available,
+                path, url, preference, available)
+        )
         
         replica = DBReplica.get(db, namespace, name, rse)
         replica.add_log("state", {
@@ -1190,6 +1139,34 @@ class DBReplica(DBObject, HasLogRecord):
         ]
         if log_records:
             DBReplica.add_log_bulk(db, log_records)
+            
+    @staticmethod
+    @transactioned
+    def purge(db, transaction=None):
+        table = DBReplica.Table
+        h_table = DBFileHandle.Table
+        p_table = DBProject.Table
+        transaction.execute(f"""\
+            delete from {table} r
+                where not exists (
+                    select * from {h_table} h
+                        where r.namespace = h.namespace and r.name = h.name
+                )
+        """)
+        norphans = transaction.rowcount
+        
+        transaction.execute(f"""\
+            delete from {table} r
+                where not exists (
+                    select pp.id
+                        from {p_table} pp, {h_table} hh
+                        where pp.state = 'active'
+                            and pp.id = hh.project_id
+                            and hh.namespace = r.namespace and hh.name = r.name
+                )
+        """)
+        nabandoned = transaction.rowcount
+        return nabandoned + norphans
 
 class DBFileHandle(DBObject, HasLogRecord):
 
@@ -1201,10 +1178,10 @@ class DBFileHandle(DBObject, HasLogRecord):
     ReservedState = "reserved"
     States = ["initial", "reserved", "done", "failed"]
     DerivedStates = [
-            "not found",
-            "found",
             "available", 
             "reserved",
+            "not found",
+            "found",
             "done",
             "failed"
         ]
@@ -1221,6 +1198,7 @@ class DBFileHandle(DBObject, HasLogRecord):
         self.WorkerID = worker_id
         self.Attempts = attempts
         self.Attributes = (attributes or {}).copy()
+        self.Availability = None             # "not found", "found" (but unavailable), "available"
         self.File = None
         self.Replicas = None
         self.ReservedSince = reserved_since
@@ -1239,18 +1217,13 @@ class DBFileHandle(DBObject, HasLogRecord):
     def did(self):
         return f"{self.Namespace}:{self.Name}"
 
-    def get_file(self):
-        if self.File is None:
-            self.File = DBFile.get(self.DB, self.Namespace, self.Name)
-        return self.File
-        
     def replicas(self):
         if self.Replicas is None:
-            self.Replicas = self.get_file().replicas()
+            self.Replicas = {r.RSE:r for r in DBReplica.list(self.DB, self.Namespace, self.Name)}
         return self.Replicas
         
     def state(self):
-        # returns the handle state, including derived states like "available" and "found"
+        # returns conbined handle state, including derived states like "available" and "found"
         if self.State == "initial":
             replicas = list(self.replicas().values())
             if replicas:
@@ -1258,6 +1231,8 @@ class DBFileHandle(DBObject, HasLogRecord):
                     return "available"
                 else:
                     return "found"
+            else:
+                return "not found"
         return self.State
         
     def file_state(self):
@@ -1316,7 +1291,8 @@ class DBFileHandle(DBObject, HasLogRecord):
         return handle
 
     @staticmethod
-    def create_many(db, project_id, files):
+    @transactioned
+    def create_many(db, project_id, files, transaction=None):
         #
         # files: [ {"name":"...", "namespace":"...", "attributes":{}}]
         #
@@ -1329,15 +1305,8 @@ class DBFileHandle(DBObject, HasLogRecord):
             attributes = info.get("attributes") or {}
             files_csv.append("%s\t%s\t%s\t%s\t%s" % (project_id, namespace, name, DBFileHandle.InitialState, json.dumps(attributes)))
         
-        c = db.cursor()
-        try:
-            c.execute("begin")
-            c.copy_from(io.StringIO("\n".join(files_csv)), "file_handles", 
+        transaction.copy_from(io.StringIO("\n".join(files_csv)), "file_handles", 
                     columns = ["project_id", "namespace", "name", "state", "attributes"])
-            c.execute("commit")
-        except Exception as e:
-            c.execute("rollback")
-            raise
             
         log_records = [
             (
@@ -1350,7 +1319,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             )
             for f in files 
         ]            
-        DBFileHandle.add_log_bulk(db, log_records)
+        DBFileHandle.add_log_bulk(db, log_records, transaction=transaction)
 
     @staticmethod
     def get_bulk(db, project_id, dids, with_replicas=False):
@@ -1372,7 +1341,7 @@ class DBFileHandle(DBObject, HasLogRecord):
                         order by h.namespace, h.name
             """
             #print("DBFileHandle.list: sql:", sql)
-            print(c.mogrify(sql, (project_id, namespace_names)).decode("utf-8"))
+            #print(c.mogrify(sql, (project_id, namespace_names)).decode("utf-8"))
             c.execute(sql, (project_id, namespace_names))
             h = None
             for tup in cursor_iterator(c):
@@ -1460,7 +1429,7 @@ class DBFileHandle(DBObject, HasLogRecord):
             yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
 
     @staticmethod
-    def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False):
+    def list(db, project_id=None, state=None, namespace=None, not_state=None, with_replicas=False, with_availability=False):
         wheres = []
         if project_id: wheres.append(f"h.project_id={project_id}")
         if state:
@@ -1478,36 +1447,51 @@ class DBFileHandle(DBObject, HasLogRecord):
         r_n_columns = len(DBReplica.Columns)
         available_replicas_view = DBReplica.ViewWithRSEStatus
         if with_replicas:
-            sql = f"""\
-                select {h_columns}, {r_columns}, rse_available
-                    from file_handles h
-                        left outer join {available_replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
-                        where true and {wheres}
-                        order by h.namespace, h.name
-            """
+            if with_availability:
+                sql  = f"""\
+                    select {h_columns}, {r_columns}, r.rse_available
+                        from file_handles h
+                            left outer join 
+                            (   select rr.*, rs.is_available as rse_available
+                                    from replicas rr, rses rs
+                                        where rr.rse = rs.name
+                            ) r on (r.name = h.name and r.namespace = h.namespace)
+                        where (%(project_id)s is null or h.project_id = %(project_id)s)
+                        order by h.project_id, h.namespace, h.name
+                    """
+            else:
+                sql  = f"""\
+                    select {h_columns}, {r_columns}, null
+                        from file_handles h
+                            left outer join replicas r on (r.name = h.name and r.namespace = h.namespace)
+                        where (%(project_id)s is null or h.project_id = %(project_id)s)
+                        order by h.project_id, h.namespace, h.name
+                    """
+            c.execute(sql, {"project_id":project_id})
             #print("DBFileHandle.list: sql:", sql)
-            c.execute(sql)
             h = None
             for tup in cursor_iterator(c):
                 #print("DBFileHandle.list:", tup)
                 h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
-                if h is None:
-                    h = DBFileHandle.from_tuple(db, h_tuple)
+                #print("Handle.list: tuples:", h_tuple, r_tuple, rse_available)
                 h1 = DBFileHandle.from_tuple(db, h_tuple)
-                if h1.Namespace != h.Namespace or h1.Name != h.Name:
-                    if h:   
-                        #print("    yield:", h)
+                if h is None or h1.Namespace != h.Namespace or h1.Name != h.Name:
+                    if h is not None:
                         yield h
                     h = h1
+                    h.Replicas = {}
+                    h.Availability = "not found" if with_availability else None
                 if r_tuple[0] is not None:
+                    if h.Availability != "available":
+                        h.Availability = "found"
                     r = DBReplica.from_tuple(db, r_tuple)
-                    r.RSEAvailable = rse_available
-                    h.Replicas = h.Replicas or {}
+                    r.RSEAvailable = bool(rse_available)
                     h.Replicas[r.RSE] = r
+                    if with_availability and rse_available and r.Available:
+                        h.Availability = "available"
             if h is not None:
-                #print("    yield:", h)
+                #print("    yield:", h, len(h.Replicas))
                 yield h
-
         else:
             sql = f"""
                 select {h_columns}
@@ -1516,114 +1500,75 @@ class DBFileHandle(DBObject, HasLogRecord):
             """
             c.execute(sql)
             yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
-                    
-    def save(self):
-        c = self.DB.cursor()
-        try:
-            c.execute("begin")
-            c.execute("""
+    
+    
+    @transactioned
+    def save(self, transaction=None):
+        transaction.execute("""
                 update file_handles set state=%s, worker_id=%s, attempts=%s, attributes=%s
                     where project_id=%s and namespace=%s and name=%s
             """, (self.State, self.WorkerID, self.Attempts, json.dumps(self.Attributes), 
                     self.ProjectID, self.Namespace, self.Name
                 )            
             )
-            #print("DBFileHandle.save: attempts:", self.Attempts)
-            self.DB.commit()
-        except Exception as e:
-            c.execute("rollback")
-            raise
             
     @property
     def project(self):
         return DBProject.get(self.DB, self.ProjectID)
 
     @staticmethod
-    def reserve_for_worker(db, project_id, worker_id, proximity_map, cpu_site):
+    @transactioned
+    def reserve_for_worker(db, project_id, worker_id, transaction=None):
         h_table = DBFileHandle.Table
         rep_table = DBReplica.Table
         rse_table = DBRSE.Table
-        c = db.cursor()
-        c.execute("begin")
         reserved = None
-        try:
-            sql = f"""
-                    select h.namespace, h.name
-                        from {h_table} h
-                        where 
-                            h.project_id = %s and h.state = %s
-                            and exists (
-                                select * from {rep_table} r, {rse_table} s
-                                    where h.namespace = r.namespace and h.name = r.name 
-                                        and r.rse = s.name
-                                        and s.is_enabled and s.is_available
-                            )
-                        order by attempts
-                        limit 1
-                        for update skip locked
-            """
-            #print("sql:\n", sql)
-            c.execute(sql, (project_id, DBFileHandle.ReadyState))
-            tup = c.fetchone()
-            if tup:
-                namespace, name = tup
-                c.execute(f"""
-                    update {h_table}
-                        set state = %s, worker_id = %s, attempts = attempts + 1, reserved_since = now()
-                        where project_id = %s and namespace = %s and name = %s
-                """, (DBFileHandle.ReservedState, worker_id, project_id, namespace, name))
-                reserved = (namespace, name)
-            c.execute("""
-                commit
-            """)
-        except:
-            c.execute("rollback")
-            raise
+        sql = f"""
+                select h.namespace, h.name
+                    from {h_table} h
+                    where 
+                        h.project_id = %s and h.state = %s
+                        and exists (
+                            select * from {rep_table} r, {rse_table} s
+                                where h.namespace = r.namespace and h.name = r.name 
+                                    and r.rse = s.name
+                                    and s.is_enabled and s.is_available
+                        )
+                    order by attempts
+                    limit 1
+                    for update skip locked
+        """
+        #print("sql:\n", sql)
+        transaction.execute(sql, (project_id, DBFileHandle.ReadyState))
+        tup = transaction.fetchone()
+        if tup:
+            namespace, name = tup
+            transaction.execute(f"""
+                update {h_table}
+                    set state = %s, worker_id = %s, attempts = attempts + 1, reserved_since = now()
+                    where project_id = %s and namespace = %s and name = %s
+            """, (DBFileHandle.ReservedState, worker_id, project_id, namespace, name))
+            reserved = (namespace, name)
 
         if reserved:
             namespace, name = reserved
             reserved = DBFileHandle.get(db, project_id, namespace, name)
             reserved.record_state_change(DBFileHandle.ReservedState, 
                 event = "reserve",
-                old_state = DBFileHandle.ReadyState, worker=worker_id)
+                old_state = DBFileHandle.ReadyState, worker=worker_id,
+                transaction=transaction)
         return reserved
         
-    def ____reserve(self, worker_id):
-        c = self.DB.cursor()
-        try:
-            c.execute("begin")
-            c.execute("""
-                update file_handles
-                    set state=%s, worker_id=%s, attempts = attempts+1, reserved_since = now()
-                    where namespace=%s and name=%s and project_id=%s and state = %s and worker_id is null
-                    returning attempts, worker_id;
-            """, (self.ReservedState, worker_id, self.Namespace, self.Name, self.ProjectID, self.ReadyState))
-            tup = c.fetchone()
-            if tup and tup[1] == worker_id:
-                attempts = tup[0]
-                self.WorkerID = worker_id
-                self.State = self.ReservedState
-                self.Attempts = attempts
-                c.execute("commit")
-                self.add_log("state", event="reserve", state="reserved", worker=worker_id)
-                return True
-            else:
-                c.execute("rollback")
-                return False
-        except:
-            c.execute("rollback")
-            raise
-
     #
     # workflow
     #
 
     @staticmethod
-    def release_reserved_before(db, project_id, reserved_before):
+    @transactioned
+    def release_reserved_before(db, project_id, reserved_before, transaction=None):
         if reserved_before is None:
             return 0
-        c = db.cursor()
-        c.execute("""
+        transaction.execute("""
             update file_handles h_new
                 set state = %s, worker_id = null
                 from file_handles h_old                     -- this is the trick to get the worker_id before it is updated to null
@@ -1636,10 +1581,9 @@ class DBFileHandle(DBObject, HasLogRecord):
                 (project_id, namespace, name),
                 "state",
                 dict(event = "worker_timeout", state=DBFileHandle.ReadyState, worker=worker_id)
-            ) for namespace, name, worker_id in c.fetchall()
+            ) for namespace, name, worker_id in transaction.fetchall()
         ]
-        c.execute("commit")
-        DBFileHandle.add_log_bulk(db, log_records)
+        DBFileHandle.add_log_bulk(db, log_records, transaction=transaction)
         return len(log_records)
 
     def is_available(self):
@@ -1651,46 +1595,76 @@ class DBFileHandle(DBObject, HasLogRecord):
     def is_reserved(self):
         return self.State == self.ReservedState
 
-    def record_state_change(self, new_state, old_state=None, **log_data):
+    @transactioned
+    def record_state_change(self, new_state, old_state=None, transaction=None, **log_data):
         assert new_state in self.States, "Unknown file handle state: "+new_state
         old_state = old_state or self.State
         self.State = new_state
         data = log_data.copy()
         data["state"] = new_state
         data["old_state"] = old_state
-        self.add_log("state", data)
-            
-    def set_state(self, state, **log_data):
+        self.add_log("state", data, transaction=transaction)
+
+    @transactioned
+    def set_state(self, state, transaction=None, **log_data):
         assert state in self.States, "Unknown file handle state: "+new_state
         if self.State != state:
-            self.record_state_change(state, **log_data)
+            self.record_state_change(state, transaction=transaction, **log_data)
             self.State = state
             
-    def done(self):
-        self.set_state("done", event="done", worker=self.WorkerID)
+    @transactioned
+    def done(self, transaction=None):
+        self.set_state("done", event="done", worker=self.WorkerID, transaction=transaction)
         self.WorkerID = None
         self.save()
 
-    def failed(self, retry=True):
+    @transactioned
+    def failed(self, retry=True, transaction=None):
         state = self.ReadyState if retry else "failed"
-        self.set_state(state, event="failed", worker=self.WorkerID)
+        self.set_state(state, event="failed", worker=self.WorkerID, transaction=transaction)
         self.WorkerID = None
-        self.save()
+        self.save(transaction=transaction)
         
-    def reset(self):
-        self.set_state(self.ReadyState, event="reset", worker=self.WorkerID)
+    @transactioned
+    def reset(self, transaction=None):
+        self.set_state(self.ReadyState, event="reset", worker=self.WorkerID, transaction=transaction)
         self.WorkerID = None
-        self.save()
+        self.save(transaction=transaction)
 
+    LOG_EVENTS = "reserve,worker_timeout,reset,failed,done,create".split(",")
+
+    @staticmethod
+    def event_counts(db, t0, bin):
+        t_begin = datetime.fromtimestamp(t0, timezone.utc)
+        t1 = time.time()
+        t1 = int((t1 + bin - 1)/bin) * bin
+        t_end = datetime.fromtimestamp(t1, timezone.utc)
+        c = db.cursor()
+        c.execute(f"""
+            select (extract(epoch from t)/{bin}::int)*{bin}, data->'event', count(*) 
+                from file_handle_log 
+                where t >= %s and t < %s
+                group by data->'event', (extract(epoch from t)/{bin}::int)*{bin}
+                order by data->'event', (extract(epoch from t)/{bin}::int)*{bin};
+        """, (t_begin, t_end))
+        n_times = int((t1 - t0)/bin)
+        zeros = [0] * n_times
+        counts = {
+            event: zeros[:] for event in DBFileHandle.LOG_EVENTS
+        }
+        for t, event, count in c.fetchall():
+            i = int((float(t)-t0)/bin)
+            counts[event][i] += 1
+        return t0, t1, DBFileHandle.LOG_EVENTS, counts
 
 class DBRSE(DBObject):
     
-    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference"]
+    Columns = ["name", "description", "is_enabled", "is_available", "is_tape", "pin_url", "poll_url", "remove_prefix", "add_prefix", "pin_prefix", "preference", "type"]
     PK = ["name"]
     Table = "rses"
 
     def __init__(self, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
-                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0, type=None):
         self.DB = db
         self.Name = name
         self.Description = description
@@ -1703,6 +1677,7 @@ class DBRSE(DBObject):
         self.AddPrefix = add_prefix
         self.PinPrefix = pin_prefix
         self.Preference = preference
+        self.Type = type                            # "dcache", "eos", etc.
 
     def as_dict(self):
         return dict(
@@ -1716,31 +1691,24 @@ class DBRSE(DBObject):
             add_prefix      =   self.AddPrefix,
             pin_prefix      =   self.PinPrefix,
             preference      =   self.Preference,
-            is_enabled      =   self.Enabled
+            is_enabled      =   self.Enabled,
+            type            =   self.Type
         )
 
     as_jsonable = as_dict
 
     @classmethod
+    @transactioned
     def create(cls, db, name, description="", is_enabled=False, is_available=True, is_tape=False, pin_url=None, poll_url=None, 
-                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0):
-        c = db.cursor()
+                remove_prefix=None, add_prefix=None, pin_prefix=None, preference=0, type=None, transaction=None):
         table = cls.Table
         columns = cls.columns(as_text=True)
-        try:
-            c.execute("begin")
-            c.execute(f"""
-                begin;
+        transaction.execute(f"""
                 insert into {table}({columns})
-                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    on conflict(name) do nothing;
-                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, pin_prefix, preference)
+                    values(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    on conflict(name) do nothing
+                """, (name, description, is_enabled, is_available, is_tape, pin_url, poll_url, remove_prefix, add_prefix, pin_prefix, preference, type)
             )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
-        
         return DBRSE.get(db, name)
 
     @classmethod
@@ -1754,39 +1722,24 @@ class DBRSE(DBObject):
         """)
         return (cls.from_tuple(db, tup) for tup in cursor_iterator(c))
 
-    def save(self):
-        c = self.DB.cursor()
-        try:
-            #print("saving urls:", self.PinURL, self.PollURL)
-            c.execute("begin")
-            c.execute("""
-                begin;
-                update rses 
-                    set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, pin_prefix=%s, preference=%s
-                    where name=%s
-                """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
-                    self.AddPrefix, self.PinPrefix, self.Preference,
-                    self.Name)
-            )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
+    @transactioned
+    def save(self, transaction=None):
+        transaction.execute("""
+            update rses 
+                set description=%s, is_enabled=%s, is_available=%s, is_tape=%s, pin_url=%s, poll_url=%s, remove_prefix=%s, add_prefix=%s, pin_prefix=%s, preference=%s,
+                        type=%s
+                where name=%s
+            """, (self.Description, self.Enabled, self.Available, self.Tape, self.PinURL, self.PollURL, self.RemovePrefix, 
+                self.AddPrefix, self.PinPrefix, self.Preference, self.Type,
+                self.Name)
+        )
 
 
     @staticmethod
-    def create_many(db, names):
-        c = db.cursor()
-        table = DBRSE.Table
-        try:
-            c.execute("begin")
-            c.executemany(f"""insert into {table}(name) values(%s) on conflict(name) do nothing""",
-                [(name,) for name in names]
-            )
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            raise
+    @transactioned
+    def create_many(db, names, transaction=None):
+        for name in names:
+            DBRSE.create(db, name, transaction=transaction)
 
 class DBProximityMap(DBObject):
 
@@ -1799,7 +1752,7 @@ class DBProximityMap(DBObject):
         self.Defaults = defaults
         self.Overrides = overrides
         self.Default = default
-        self.Map = {}
+        self.Map = {}                   # {cpu -> {rse -> proximity}}
         if tuples is not None:
             self._load(tuples)
         else:
@@ -1808,7 +1761,7 @@ class DBProximityMap(DBObject):
         if rses is not None:
             rses = set(rses)
             for cpu, cpu_map in self.Map.items():
-                for rse in list(cpu_map.keys()):
+                for rse in list(cpu_map.keys()):        # need to convert to list because some keys may be deleted from inside the loop
                     if rse.upper() != "DEFAULT" and rse not in rses:
                         del cpu_map[rse]
 
