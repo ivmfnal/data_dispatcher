@@ -583,7 +583,7 @@ def main():
     config = yaml.load(open(config, "r"), Loader=yaml.SafeLoader)
 
     dbconfig = config["database"]
-    connection_pool = ConnectionPool(postgres=dbconfig)
+    connection_pool = ConnectionPool(postgres=dbconfig, max_connections=dbconfig.get("max_connections"))
 
     rse_config = RSEConfig(config.get("rses", {}), connection_pool)
     ssl_config = config.get("ssl", {})
