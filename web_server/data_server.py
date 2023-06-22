@@ -2,7 +2,7 @@ from webpie import WPApp, WPHandler
 from data_dispatcher.db import DBProject, DBFileHandle, DBRSE, DBProximityMap
 from data_dispatcher.logs import Logged, init_logger
 from data_dispatcher import Version
-from metacat.auth import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, \
+from metacat.common import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, \
     SignedTokenUnacceptedAlgorithmError, SignedTokenSignatureVerificationError
 from metacat.auth.server import BaseHandler, BaseApp, AuthHandler
 import json, urllib.parse, yaml, secrets, hashlib

@@ -1,5 +1,6 @@
 import os
-from metacat.util import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, to_bytes, to_str
+from metacat.util import to_bytes, to_str
+from metacat.common import SignedToken, SignedTokenExpiredError, SignedTokenImmatureError, 
 
 class TokenLib(object):
 

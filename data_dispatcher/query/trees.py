@@ -1,6 +1,6 @@
 from lark import Lark
-from lark import Transformer, Tree, Token
-import pprint
+from lark import Transformer, Tree
+import pprint, json
 from textwrap import dedent
 
 class SyntaxTreeConversionError(Exception):
@@ -122,37 +122,6 @@ class Node(object):
         #print("pretty---")
         head, lines = self._pretty(indent)
         return indent + head + "\n" + "\n".join(lines)
-        
-    def jsonable(self):
-        d = dict(T=self.T, M=self.M, C=[c.jsonable() if isinstance(c, Node) else c
-                        for c in self.C]
-        )
-        return d
-        
-    def to_json(self):
-        d = self.jsonable()
-        d["///class///"] = self.JSON_CLASS
-        return json.dumps(d)
-
-    @staticmethod
-    def from_jsonable(data):
-        if isinstance(data, dict) and data.get("///class///") == Node.JSON_CLASS:
-            typ = data["T"]
-            if typ == "DataSource":
-                return DataSource.from_jsonable(data)
-            elif typ == "MetaExp":
-                return MetaExp.from_jsonable(data)
-            else:
-                return Node(data["T"],
-                    children = [Node.from_jsonable(c) for c in data.get("C", [])],
-                    meta = data.get("M")
-            )
-        else:
-            return data
-
-    @staticmethod
-    def from_json(text):
-        return Node.from_jsonable(json.loads(text))
         
     def find_all(self, node_type=None, predicate=None, top_down=True):
         def match(c):

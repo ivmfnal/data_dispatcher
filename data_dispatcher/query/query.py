@@ -124,7 +124,7 @@ class ProjectQueryConverter(Converter):
                 ]
             )
         else:
-            return array_in
+            return array_not_in
 
     def in_range(self, args):
         assert len(args) == 3 and args[1].T in ("string", "int", "float") and args[2].T in ("string", "int", "float")

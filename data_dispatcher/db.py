@@ -21,6 +21,10 @@ def to_timedelta(t):
     return t
     
 class HasDB(object):
+    
+    Table = None
+    Columns = None
+    PK = None
 
     # instances must have DB attribute
     
@@ -67,8 +71,7 @@ class DBObject(HasDB):
             clist = [table_name+"."+cn for cn in clist]
         if as_text:
             return ",".join(clist)
-        else:
-            return clist
+        return clist
     
     @classmethod
     def pk_columns(cls, table_name=None, as_text=True, exclude=[]):
@@ -79,8 +82,7 @@ class DBObject(HasDB):
             clist = [table_name+"."+cn for cn in clist]
         if as_text:
             return ",".join(clist)
-        else:
-            return clist
+        return clist
     
     def pk(self):       # return PK values as a tuple in the same order as cls.PK
         raise NotImplementedError()
@@ -118,7 +120,7 @@ class DBObject(HasDB):
         return (cls.from_tuple(db, tup) for tup in cursor_iterator(c))
     
     def delete(self, cursor=None, do_commit=True):
-        pk_values = {column:value for column, value in zip(self.PK, self.pk())}
+        pk_values = dict(zip(self.PK, self.pk()))
         return self._delete(cursor=None, do_commit=True, **pk_values)
     
 class DBManyToMany(HasDB):
@@ -188,7 +190,7 @@ class DBOneToMany(HasDB):
     def list(self, transaction=None):
         out_columns = ",".join(f"{self.DstTable}.{c}" for c in self.DstClass.Columns)
         join_column_pairs = [
-            (f"{self.Table}.{dst_pk}", f"{self.DstTable}.{dst_fk}") 
+            (f"{self.Table}.{src_pk}", f"{self.DstTable}.{dst_fk}") 
             for src_pk, dst_fk in zip(self.SrcPKColumns, self.DstFKColumns)
         ]
         join_condition = " and ".join(f"{pk} = {fk}" for pk, fk in join_column_pairs)
@@ -241,6 +243,9 @@ class HasLogRecord(object):
     #   LogTable        - name of the table to store the log
     #   LogIDColumns    - list of columns in the log table identifying the parent
     #
+
+    LogIDColumns = None
+    LogTable = None
 
     @transactioned
     def add_log(self, type, data=None, transaction=None, **kwargs):
@@ -717,7 +722,7 @@ class DBProject(DBObject, HasLogRecord):
         for h in DBFileHandle.list(self.DB, project_id=self.ID):
             s = h.State
             counts[s] = counts.get(s, 0) + 1
-        return out
+        return counts
         
     def project_log(self):
         return self.get_log()
@@ -800,17 +805,6 @@ class DBProject(DBObject, HasLogRecord):
                         and end_timestamp < %s
             """, (t_retain,))
         return transaction.rowcount
-
-    def replicas_logs(self):
-        log_records = DBReplica.log_records_for_dids([(h.Namespace, h.Name) for h in self.handles()])
-        out = {}
-        for record in log_records:
-            namespace = record.IDColumns["namespace"]
-            name = record.IDColumns["name"]
-            out.setdefault((namespace, name), []).append(record)
-        for (namespace, name), lst in list(out.items()):
-            out[(namespace, name)] = sorted(lst, key=lambda r: r.T)
-        return out
 
     def release_timed_out_handles(self):
         if self.WorkerTimeout is None:
@@ -1323,59 +1317,6 @@ class DBFileHandle(DBObject, HasLogRecord):
 
     @staticmethod
     def get_bulk(db, project_id, dids, with_replicas=False):
-        namespace_names = tuple(tuple(did.split(":", 1)) for did in dids)       # must be tuple of tuples for SQL to work
-        #print("namespace_names:", type(namespace_names), namespace_names[:3])
-        h_columns = DBFileHandle.columns("h", as_text=True)
-        h_n_columns = len(DBFileHandle.Columns)
-        r_columns = DBReplica.columns("r", as_text=True)
-        r_n_columns = len(DBReplica.Columns)
-        available_replicas_view = DBReplica.ViewWithRSEStatus
-        c = db.cursor()
-        if with_replicas:
-            sql = f"""\
-                select {h_columns}, {r_columns}, rse_available
-                    from file_handles h
-                        inner join {available_replicas_view} r on (r.name = h.name and r.namespace = h.namespace)
-                        where project_id = %s
-                            and (h.namespace, h.name) in %s
-                        order by h.namespace, h.name
-            """
-            #print("DBFileHandle.list: sql:", sql)
-            #print(c.mogrify(sql, (project_id, namespace_names)).decode("utf-8"))
-            c.execute(sql, (project_id, namespace_names))
-            h = None
-            for tup in cursor_iterator(c):
-                #print("DBFileHandle.get_bulk:", tup)
-                h_tuple, r_tuple, rse_available = tup[:h_n_columns], tup[h_n_columns:h_n_columns+r_n_columns], tup[-1]
-                if h is None:
-                    h = DBFileHandle.from_tuple(db, h_tuple)
-                #print("DBFileHandle.get_bulk: h:", h)
-                h1 = DBFileHandle.from_tuple(db, h_tuple)
-                if h1.Namespace != h.Namespace or h1.Name != h.Name:
-                    if h:   
-                        #print("    yield:", h)
-                        yield h
-                    h = h1
-                if r_tuple[0] is not None:
-                    r = DBReplica.from_tuple(db, r_tuple)
-                    r.RSEAvailable = rse_available
-                    h.Replicas = h.Replicas or {}
-                    h.Replicas[r.RSE] = r
-            if h is not None:
-                #print("    yield:", h)
-                yield h
-        else:
-            sql = f"""
-                select {h_columns}
-                    from file_handles h
-                        where project_id = %s and (namespace, name) in %s
-                        order by h.namespace, h.name
-            """
-            c.execute(sql, (project_id, namespace_names))
-            yield from (DBFileHandle.from_tuple(db, tup) for tup in cursor_iterator(c))
-
-    @staticmethod
-    def get_bulk(db, project_id, dids, with_replicas=False):
         #print("namespace_names:", type(namespace_names), namespace_names[:3])
         dids = list(dids)
         h_columns = DBFileHandle.columns("h", as_text=True)
@@ -1607,7 +1548,7 @@ class DBFileHandle(DBObject, HasLogRecord):
 
     @transactioned
     def set_state(self, state, transaction=None, **log_data):
-        assert state in self.States, "Unknown file handle state: "+new_state
+        assert state in self.States, "Unknown file handle state: " + state
         if self.State != state:
             self.record_state_change(state, transaction=transaction, **log_data)
             self.State = state

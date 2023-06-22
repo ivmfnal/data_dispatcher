@@ -66,7 +66,7 @@ def text2datetime(t):
                             t = t.replace(tzinfo=tz)
                     except:
                         pass
-    if isinstance(t, (str, unicode)):
+    if isinstance(t, str):
         unit = 's'
         if t[-1] in 'dhms':
             unit = t[-1]
@@ -82,7 +82,8 @@ def text2datetime(t):
             t = t * mult
     if isinstance(t, (int, float)):
         if t < 0:
-            t = datetime.utcnow() - timedelta(seconds=-t)
+            t = timedelta(seconds=-t)
+            t = datetime.utcnow() - t
             t = t.replace(tzinfo=UTC())
         else:
             t = datetime.utcfromtimestamp(t)
