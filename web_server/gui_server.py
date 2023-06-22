@@ -115,6 +115,7 @@ class ProjectsHandler(BaseHandler):
         projects = sorted(projects, key=lambda p: p.ID)
             
         nprojects = len(projects)
+        print("projects found:", nprojects)
         npages = (nprojects + page_size - 1)//page_size
         projects = projects[istart:istart + page_size]
         for project in projects:
@@ -123,25 +124,30 @@ class ProjectsHandler(BaseHandler):
                 project._HandleShares = {state:float(count)/ntotal for state, count in project.HandleCounts.items()}
         if message:   message = urllib.parse.unquote_plus(message)
 
-        current_user, auth_error = self.authenticated_user()
-        
-        npages = (nprojects + page_size - 1)//page_size
+        last_page = npages - 1
+        next_page = page + 1
+        prev_page = page - 1
+        next_page_link = f"projects?page={next_page}&page_size={page_size}"
+        prev_page_link = f"projects?page={prev_page}&page_size={page_size}"
+        first_page_link = f"projecst?page=0&page_size={page_size}"
+        last_page_link = f"projects?page={last_page}&page_size={page_size}"
 
-        if not do_search:
-            search_user = current_user.Username if current_user else ""
-            search_active_only = True
-        
-        search_user = search_user if form_posted else (search_user or user and user.Username or "")
-        return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates,
-                    page_index = page_index(page, npages, page_size, "projects"), 
-                    message=message,
-                    search_user = search_user,
-                    search_created_before = None if search_created_before is None else search_created_before.strftime("%Y-%m-%d %H:%M:%S"),
-                    search_created_after = None if search_created_after is None else search_created_after.strftime("%Y-%m-%d %H:%M:%S"),
-                    search_active_only = search_active_only,
-                    query_text = query_text
-                    )
-        
+        index_page_links = None
+        if npages > 1:
+            index_page_links = {}
+            if page != first_page_link: index_page_links[0] = first_page_link
+            if prev_page >= 0: index_page_links[prev_page] = prev_page_link
+            if next_page < npages: index_page_links[next_page] = next_page_link
+            if page != last_page: index_page_links[last_page] = last_page_link
+            index_page_links[page] = None
+            index_page_links = sorted(index_page_links.items())
+
+        print("page_index:", index_page_links)
+
+        return self.render_to_response("projects.html", projects=projects, handle_states = DBFileHandle.DerivedStates, message=message,
+            page = page, page_index = index_page_links
+        )
+
     @sanitize()
     def handle_logs(self, request, relpath, project_id=None):
         db = self.App.db()
