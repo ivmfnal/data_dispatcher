@@ -1,6 +1,5 @@
 import requests, uuid, json, urllib.parse, os, time, random
-from metacat.auth import TokenAuthClientMixin
-from metacat.common import TokenLib, HTTPClient
+from metacat.common import TokenLib, HTTPClient, TokenAuthClientMixin
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
