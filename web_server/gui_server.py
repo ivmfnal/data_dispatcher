@@ -458,6 +458,7 @@ class RSEHandler(BaseHandler):
         self.redirect(f"./rses")
         
     def _do_update(self, rse, request):
+        rse.Type = request.POST.get("type", "")
         rse.Tape = request.POST.get("is_tape", "no") != "no"
         rse.Available = request.POST.get("is_available", "no") != "no"
         rse.RemovePrefix = request.POST.get("remove_pefix", "")

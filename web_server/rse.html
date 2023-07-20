@@ -95,14 +95,28 @@
             {% endif %}
         </td>
     </tr>
+    <tr><td colspan=2><hr/></td></tr>
     <tr>
-        <td colspan=2>dCache RSEs only</td>
+        <th>dCache RSEs only</th>
+    </tr>
+    
+    <tr>
+        <th>Interface</th>
+        <td>{% if mode == "create" or mode == "edit" %}
+                <select name="type">
+                    <option value=""></option>
+                    <option value="native" {% if rse.Type == "native" %}selected="selected" {%endif%}>native</option>
+                    <option value="wlcg" {% if rse.Type == "wlcg" %}selected="selected" {% endif %}>WLCG</option>
+                </select>
+            {% else %}
+                {{rse.Type or ''}}
+            {% endif %}
+        </td>
     </tr>
     <tr>
-        <th>Pin URL</th>
+        <th>Pin URL for native, Discovery URL for WLCG</th>
         <td>{% if mode == "create" or mode == "edit" %}
                 <input name="pin_url" type="text" size=50 {% if mode=="edit" %}value="{{rse.PinURL or ''}}"{% endif %}/>
-                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
             {% else %}
                 {{rse.PinURL or ''}}
             {% endif %}
@@ -111,18 +125,18 @@
     <tr>
         <th>Pin prefix</th>
         <td>{% if mode == "create" or mode == "edit" %}
-                <input name="pin_prefix" type="text" size=50 {% if mode=="edit" %}value="{{rse.PinPrefix or ''}}"{% endif %}/>
-                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
+                <input name="pin_prefix" type="text" size=50 
+                    {% if mode=="edit" %} value="{{rse.PinPrefix or ''}}"{% endif %}
+                />
             {% else %}
                 {{rse.PinPrefix or ''}}
             {% endif %}
         </td>
     </tr>
     <tr>
-        <th>Poll URL</th>
+        <th>Poll URL for native, not used for WLCG</th>
         <td>{% if mode == "create" or mode == "edit" %}
                 <input name="poll_url" type="text" size=50 {% if mode=="edit" %}value="{{rse.PollURL or ''}}"{% endif %}/>
-                &nbsp;&nbsp;&nbsp;<i>dCache RSEs only</i>
             {% else %}
                 {{rse.PollURL or ''}}
             {% endif %}

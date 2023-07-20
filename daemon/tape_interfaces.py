@@ -1,5 +1,5 @@
-#from wlcg import DCacheInterface - need to implement the URL discovery
-from dcache import DCacheInterface
+from wlcg import DCacheInterface as WLCGInterface
+from dcache import DCacheInterface as NativeInterface
 from pythreader import Primitive, synchronized
 
 class InterfaceLibrary(Primitive):
@@ -14,7 +14,8 @@ class InterfaceLibrary(Primitive):
         type = rse_config.type(rse)
         if interface is None:
             try:    interface_class = {
-                    "dcache":   DCacheInterface
+                    "dcache":   NativeInterface,
+                    "wlcg":   WLCGInterface
                 }[type]
             except KeyError:
                 raise ValueError(f"Unknown tape RSE type: {type}")

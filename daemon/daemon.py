@@ -169,9 +169,12 @@ class RSEConfig(Logged):
     def pin_prefix(self, rse):
         return self[rse].get("pin_prefix") or ""
         
-    def poll_url(self, rse):
-        return self[rse]["poll_url"]
-        
+    def poll_url(self, rse, default=None):
+        if default:
+            return self[rse].get("poll_url", default)
+        else:
+            return self[rse]["poll_url"]
+            
     def remove_prefix(self, rse):
         return self[rse].get("remove_prefix", "")
 

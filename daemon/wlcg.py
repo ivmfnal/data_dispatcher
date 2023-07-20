@@ -235,19 +235,18 @@ class DCacheInterface(Primitive, Logged):
     def __init__(self, rse, db, rse_config):
         Primitive.__init__(self, name=f"DCacheInterface({rse})")
         Logged.__init__(self, name=f"DCacheInterface({rse})")
-        #pin_url = self.discover(rse_config.pin_url(rse))
         pin_url = rse_config.pin_url(rse)
-        
-        #pin_url = "https://fndcadoor.fnal.gov:3880/api/v1/tape" # for now:
-        
-        poll_url = rse_config.poll_url(rse)
-        print(f"rse_config for {rse}:", rse_config)
-        print("rse_config.ssl_config(rse):", rse_config.ssl_config(rse))
+        pin_url = "https://fndca1.fnal.gov:3880/.well-known/wlcg-tape-rest-api"
+        if "/.well-known/" in pin_url:
+            pin_url = poll_url = self.discover(pin_url)
+            self.debug(f"WLCG interface discovered at:", pin_url)
+        else:
+            poll_url = pin_urlrse_config.poll_url(rse)
         self.Poller = DCachePoller(rse, db, poll_url, rse_config.max_burst(rse), rse_config.ssl_config(rse))
         self.Pinner = WLCGPinner(rse, db, pin_url, rse_config.pin_prefix(rse), rse_config.ssl_config(rse), self.Poller)
         self.Poller.start()
         self.Pinner.start()
-        self.debug("WLCG pinner started")
+        self.log("WLCG DCacheInterface created at:\n    pin URL:", pin_url, "\n    poll URL:", poll_url)
         
     def discover(self, url):
         if "/.well-known/" in url:
