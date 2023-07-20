@@ -1,4 +1,4 @@
-Version="1.26.1"
+Version="1.26.2"
 
 if __name__ == "__main__":
     # for Makefile
