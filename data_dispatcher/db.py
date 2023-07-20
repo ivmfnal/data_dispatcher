@@ -137,8 +137,6 @@ class DBManyToMany(HasDB):
         self.DstPKColumns = dst_class.PK
         self.PayloadColumns = payload_columns
         
-        print("DBManyToMany: table:", table, "  DstTable:", self.DstTable)
-
     @transactioned
     def add(self, dst_pk_values, payload={}, transaction=None):
         assert len(dst_pk_values) == len(self.DstFKColumns)
