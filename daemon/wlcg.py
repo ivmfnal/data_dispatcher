@@ -250,7 +250,7 @@ class DCacheInterface(Primitive, Logged):
         
     def discover(self, url):
         if "/.well-known/" in url:
-            response = requests.get(url)
+            response = requests.get(url, verify=False)
             response.raise_for_status()
             url = response.json()["endpoints"][0]["uri"]
         return url
