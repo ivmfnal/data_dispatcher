@@ -1,4 +1,5 @@
-from wlcg import DCacheInterface
+#from wlcg import DCacheInterface - need to implement the URL discovery
+from dcache import DCacheInterface
 from pythreader import Primitive, synchronized
 
 class InterfaceLibrary(Primitive):

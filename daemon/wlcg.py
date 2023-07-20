@@ -51,7 +51,7 @@ class WLCGPinRequest(Logged):
         }
         url = self.EndpointURL + ("/" if not self.EndpointURL.endswith("/") else "") + "stage"
             
-        self.debug("request data:", json.dumps(data, indent="  "))
+        self.debug("WLCG pin request: URL:", url, "  request data:\n", json.dumps(data, indent="  "))
         r = requests.post(url, data = json.dumps(data), headers=headers, verify=False, cert = self.CertTuple)
         self.debug("response:", r)
         self.debug("response headers:")
