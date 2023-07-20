@@ -9,34 +9,10 @@ drop table if exists proximity_map;
 drop table if exists replica_log;
 drop table if exists rses;
 
-create table if not exists users            -- do not create if we are adding DD schema to MetaCat
-(
-    username    text    primary key,
-    name        text,
-    email       text,
-    flags       text    default '',
-    auth_info   jsonb   default '{}',
-    auid        text                        -- anonymized user identificator
-);
-
-create table if not exists roles            -- do not create if we are adding DD schema to MetaCat
-(
-    name        text    primary key,
-    parent_role text    references roles(name),
-    description text
-);
-
-create table if not exists users_roles      -- do not create if we are adding DD schema to MetaCat
-(
-    username    text    references users(username),
-    role_name   text    references roles(name),
-    primary key(username, role_name)
-);
-
 create table projects
 (
     id                  bigserial primary key,
-    owner               text references users(username),
+    owner               text references metacat.users(username),
     created_timestamp   timestamp with time zone     default now(),
     end_timestamp       timestamp with time zone,
     state	            text,
@@ -50,14 +26,14 @@ create table projects
 create table project_users
 (
     project_id  bigint references projects(id) on delete cascade,
-    username    text references users(username) on delete cascade,
+    username    text references metacat.users(username) on delete cascade,
     primary key(project_id, username)
 );
 
 create table project_roles
 (
     project_id  bigint references projects(id) on delete cascade,
-    role_name   text references roles(name) on delete cascade,
+    role_name   text references metacat.roles(name) on delete cascade,
     primary key(project_id, role_name)
 );
 

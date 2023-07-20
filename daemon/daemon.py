@@ -457,7 +457,7 @@ class ProjectMaster(PyThread, Logged):
         GeneralTaskQueue.append(self.clean, interval = self.PurgeInterval)
         while not self.Stop:
             try:
-                active_projects = set(p.ID for p in DBProject.list(self.DB, state="active", with_handle_counts=True) if p.is_active())
+                active_projects = set(p.ID for p in DBProject.list(self.DB, state="active") if p.is_active())
                 #self.debug("run: active projects:", len(active_projects),"   known projects:", len(monitor_projects))
                 with self:
                     monitor_projects = set(self.Monitors.keys())
@@ -568,7 +568,6 @@ class RucioListener(PyThread, Logged):
                         name = payload.get("name")
                         self.debug(f"Transfer done: RSE:{rse} DID:{scope}:{name}")
                         self.add_replica(scope, name, payload)
-
 
 def main():
     import sys, yaml, getopt, os

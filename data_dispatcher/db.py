@@ -125,7 +125,7 @@ class DBObject(HasDB):
     
 class DBManyToMany(HasDB):
     
-    def __init__(self, db, table, src_fk_values, dst_fk_columns, payload_columns, dst_class):
+    def __init__(self, db, table, src_fk_values, dst_fk_columns, payload_columns, dst_class, dst_table=None):
         self.DB = db
         self.Table = table
         self.SrcFKColumns, self.SrcFKValues = zip(*list(src_fk_values.items()))
@@ -133,9 +133,11 @@ class DBManyToMany(HasDB):
         self.SrcFKValues = list(self.SrcFKValues)
         self.DstFKColumns = dst_fk_columns
         self.DstClass = dst_class
-        self.DstTable = dst_class.Table
+        self.DstTable = dst_table or dst_class.Table
         self.DstPKColumns = dst_class.PK
         self.PayloadColumns = payload_columns
+        
+        print("DBManyToMany: table:", table, "  DstTable:", self.DstTable)
 
     @transactioned
     def add(self, dst_pk_values, payload={}, transaction=None):
@@ -370,8 +372,8 @@ class DBProject(DBObject, HasLogRecord):
         self.Query = query
         self.WorkerTimeout = to_timedelta(worker_timeout)
         self.IdleTimeout = to_timedelta(idle_timeout)
-        self.Users = DBManyToMany(db, "project_users", {"project_id":id}, ["username"], [], DBUser)    # if other than the owner
-        self.Roles = DBManyToMany(db, "project_roles", {"project_id":id}, ["role_name"], [], DBRole)
+        self.Users = DBManyToMany(db, "project_users", {"project_id":id}, ["username"], [], DBUser, dst_table="metacat.users")    # if other than the owner
+        self.Roles = DBManyToMany(db, "project_roles", {"project_id":id}, ["role_name"], [], DBRole, dst_table="metacat.roles")
 
     def pk(self):
         return (self.ID,)
