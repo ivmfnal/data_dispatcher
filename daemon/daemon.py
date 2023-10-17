@@ -95,7 +95,7 @@ class RSEListLoader(PyThread, Logged):
     def run(self):
         while not self.Stop:
             rucio_rses = {info["rse"]: info for info in self.RucioClient.list_rses()}
-            dd_rses = {rse.Name: rse for rse in DBRSE.list(include_disabled=True)}
+            dd_rses = {rse.Name: rse for rse in DBRSE.list(self.DB, include_disabled=True)}
             new_rses = set(rucio_rses.keys()) - set(dd_rses.keys())
             if new_rses:
                 self.debug("new RSEs:", ",".join(new_rses))
