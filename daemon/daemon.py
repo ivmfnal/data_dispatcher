@@ -93,20 +93,18 @@ class RSEListLoader(PyThread, Logged):
         self.Stop = False
 
     def run(self):
-        last_set = None
         while not self.Stop:
-            rses = set(info["rse"] for info in self.RucioClient.list_rses())
-            new_set = set(rses)
-            if last_set is None or last_set != new_set:
-                last_set = last_set or set()
-                new_rses = new_set - last_set
-                removed_rses = last_set - new_set
-                DBRSE.create_many(self.DB, rses)
-                last_set = new_set
-                self.log("RSE list updated. New RSEs:", list(new_rses), "   removed RSEs:", list(removed_rses))
-            else:
-                # self.log("RSE list unchanged")
-                pass
+            rucio_rses = {info["rse"]: info for info in self.RucioClient.list_rses()}
+            dd_rses = {rse.Name: rse for rse in DBRSE.list(include_disabled=True)}
+            new_rses = set(rucio_rses.keys()) - set(dd_rses.keys())
+            if new_rses:
+                self.debug("new RSEs:", ",".join(new_rses))
+                with self.DB.transaction() as transaction:
+                    for name in new_rses:
+                        info = rucio_rses[name]
+                        is_tape = info.get("rse_type", "DISK") == "TAPE"
+                        dd_rse = DBRSE.create(self.DB, name, is_tape=is_tape, transaction=transaction)
+                        self.log(f"created RSE {name}, tape:", is_tape)
             if not self.Stop:
                 self.sleep(self.Interval)
 
