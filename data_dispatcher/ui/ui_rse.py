@@ -54,21 +54,20 @@ class ListCommand(CLICommand):
         rses = sorted(client.list_rses(), key=lambda r: r["name"])
         if "-j" in opts:
             print(pretty_json(rses))
-        else:
-            print("%-40s %4s %3s %6s %s" % (
-                    "Name", "Pref", "Tape", "Status", "Description"
+        elif rses:
+            print("%-40s %3s %6s %s" % (
+                    "Name", "Tape", "Status", "Description"
                 )) 
-            print("%s" % ("-"*110,)) 
+            print("%s" % ("-"*105,)) 
 
             for rse in rses:
-                print("%-40s %4s %3s %6s %s" % (
+                print("%-40s %3s %6s %s" % (
                     rse["name"],
-                    rse["preference"],
                     "tape" if rse["is_tape"] else "    ",
                     "up" if rse["is_available"] else "down",
                     rse["description"]
                 ))
-            print("%s" % ("-"*110,)) 
+            print("%s" % ("-"*105,)) 
     
 RSECLI = CLI(
     "list",         ListCommand(),
