@@ -1,4 +1,5 @@
 import json
+from .cli.tabular import Table, Column
 
 def to_did(namespace, name):
     return f"{namespace}:{name}"
@@ -30,10 +31,10 @@ def print_handles(handles, print_replicas):
         "failed":       4
     }
     
-    print("%10s %9s %8s %-30s %s" % (
-            "Status", "Replicas", "Attempts", "Worker", "File" + (" / replica pref., RSE, avlbl, URL" if print_replicas else "")
-        )) 
-    print("%s" % ("-"*130,)) 
+    table = Table("Status", "Replicas", "Attempts", "Worker", 
+            Column("File" + (" / RSE, avlbl, URL" if print_replicas else ""),
+                left=True)
+    )
 
     handles = list(handles)
 
@@ -50,18 +51,21 @@ def print_handles(handles, print_replicas):
         state = f["state"]
         if state == "initial" and available_replicas:
             state = "available"
-        print("%10s %4d/%-4d %8s %-30s %s:%s" % (
+        table.add_row(
             state,
-            available_replicas, nreplicas,
+            "%4d/%-4d" % (available_replicas, nreplicas),
             f["attempts"],
-            f["worker_id"] or "",
-            f["namespace"],
-            f["name"]                    
-        ))
+            f["worker_id"],
+            "%s:%s" % (f["namespace"], f["name"])
+        )
         if print_replicas:
-            for r in f["replicas"].values():
-                print("%60s %-4d %-10s %-3s %s" % ("", r["preference"], r["rse"], "yes" if r["available"] else "no", r["url"] or ""))
-    print("%s" % ("-"*130,)) 
+            for r in sorted(f["replicas"].values(), key=lambda r: r["preference"]):
+                table.add_row(None, None, None, None,
+                    " %-10s %-3s %s" % (r["rse"], 
+                        "yes" if r["available"] else "no", r["url"] or ""
+                    )
+                )
+    table.print()
 
 
 
