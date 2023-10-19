@@ -4,6 +4,7 @@ from metacat.webapi import MetaCatClient
 from .ui_lib import pretty_json, parse_attrs, print_handles
 
 from .cli import CLI, CLICommand, InvalidOptions, InvalidArguments
+from .cli.tabular import Table, Column
 
 class CreateCommand(CLICommand):
     
@@ -336,8 +337,7 @@ class ListCommand(CLICommand):
         if "-j" in opts:
             print(pretty_json(list(lst)))
         else:
-            print("%-15s %-15s %-19s %-15s %17s" % ("project id", "owner", "created", "state", "done/failed/files"))
-            print("%s %s %s %s %s" % ("-"*15, "-"*15, "-"*19, "-"*15, "-"*17))
+            table = Table("Project id", "Owner", "Created", "State", "Done/Failed/Total")
             for prj in lst:
                 ct = time.localtime(prj["created_timestamp"])
                 ct = time.strftime("%Y-%m-%d %H:%M:%S", ct)
@@ -352,10 +352,13 @@ class ListCommand(CLICommand):
                     elif h["state"] == "failed":
                         failed_files += 1
                 counts = "%d/%d/%d" % (done_files, failed_files, nfiles)
-                print("%-15s %-15s %19s %15s %17s" % (prj["project_id"], prj["owner"], ct, prj["state"], counts))
-            print("%s %s %s %s %s" % ("-"*15, "-"*15, "-"*19, "-"*15, "-"*17))
+                table.add_row(prj["project_id"], prj["owner"], ct, prj["state"], counts)
+            table.print()
 
 class SearchCommand(CLICommand):
+    
+    # Hidden for now
+    
     Opts = "ju:s:"
     Usage = """[options] (-q (<query file>|-) |<search query>)            -- search projects
             -j                                          - JSON output
@@ -426,7 +429,7 @@ ProjectCLI = CLI(
     "copy",     CopyCommand(),
     "show",     ShowCommand(),
     "list",     ListCommand(),
-    "search",   SearchCommand(),
+    # "search",   SearchCommand(),
     "restart",  RestartCommand(),
     "activate", ActivateCommand(),
     "cancel",   CancelCommand(),
