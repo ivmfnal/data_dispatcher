@@ -488,15 +488,15 @@ Here is an example of using this command:
             esac
         fi
         
-If "-j" option is used, then the JSON output will represent complete information about the 
-reserved file, including the list of
-available replicas sorted by the RSE preference as well as the file and project attributes defined at the time of the project creation. 
+If "-j" option is used, then the information about the reserved file and its available
+replicas will be stored in the provided file. 
 Replicas located in unavailable RSEs will _not_ be included, even if they are known to be staged in the RSE.
 
     .. code-block:: shell
 
         $ ddisp worker next -j file_info.json -w worker_123 70
         np04_reco_keepup:np04_raw_run006534_0005_dl1_reco_16440189_0_20190217T040518.root
+        
         $ cat file_info.json
         {
           "attempts": 1,
