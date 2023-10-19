@@ -219,22 +219,6 @@ class RSEConfig(Logged):
     def max_burst(self, rse):
         return self.get(rse).get("max_poll_burst", 100)
 
-class ListReplicasTask(Task):
-    
-    def __init__(self, master, rucio_client, dids):
-        Task.__init__(self)
-        self.Master = master        # to synchronize access to the client
-        self.Client = rucio_client
-        self.DIDs = dids
-        
-    def run(self):
-        self.Master.debug("ListReplicasTask started with", len(self.DIDs), "DIDs")
-        try:
-            with self.Master:
-                return self.Client.list_replicas(self.DIDs, all_states=False, ignore_availability=False)
-        finally:
-            self.Master = None      # unlink
-
 class ProjectMonitor(Primitive, Logged):
     
     UpdateInterval = 120        # replica availability update interval
