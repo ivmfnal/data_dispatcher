@@ -54,19 +54,20 @@ Using Data Dispatcher CLI
     my_project=...
     my_cpu_site=...
     
-    out=$(ddisp worker next -j -c $my_cpu_site $my_project)
+    out=$(ddisp worker next -j file_info.json -c $my_cpu_site $my_project)
     if [ $? -eq 0 ]
     then
-    
-         # process the file using $out as the JSON data
+         did=$out           # erserved file DID (namespace:name)
+
+         # process the file using the contents of file_info.json
          
          if [ $processed_successfully ]; then
-             ddisp worker done $my_project ${file_namespace}:${file_name}
+             ddisp worker done $my_project $did
          else
              if [ $retry ]; then
-                 ddisp worker failed $my_project ${file_namespace}:${file_name}
+                 ddisp worker failed $my_project $did
              else
-                 ddisp worker failed -f $my_project ${file_namespace}:${file_name}
+                 ddisp worker failed -f $my_project $did
              fi
          fi
     else

@@ -434,20 +434,25 @@ Getting next file to process
 
     .. code-block:: shell
 
-       $ ddisp worker next [-j] [-t <timeout>] [-c <cpu_site>] [-w <worker_id>] <project_id>  - get next available file
-             -c - choose the file according to the CPU/RSE proximity map for the CPU site
-             -j - as JSON
-             -t - wait for next file until "timeout" seconds, 
-                  otherwise, wait until the project finishes
-             -w - override worker id
-                                                                  
-In case when no file is available to be processed, but the project has not finished yet (not all files are done or failed permanently),
-the "dd next" command will block until a file becomes available for consumption. If "-t" is specified, the "dd next" command will block
-for the specified amount of time. Depending on the outcome, the command will:
+       $ ddisp worker [options] <project_id> -- get next available file              
+             -w <worker id>     -- specify worker id
+             -c <cpu site>      -- choose the file according to the CPU/RSE proximity map for the CPU site
+             -j <json file>     -- write reserved file information into a JSON file
+             -t <timeout>       -- wait for next file until "timeout" seconds, 
+                                   otherwise, wait until the project finishes or a file is reserved
 
-    * If a file becomes available
+The command will block until one of the following events occurs:
+
+* One of project files becomes available for consumption and is reserved for the worker
+* If a timeout was specified with ``-t`` and the timeout passes
+* The project finishes - all the files are processed successfully or failed permanently
+
+Depending on the outcome, the command will:
+
+    * If a file becomes available and was reserved for the worker
     
-        * print file info as JSON if "-j" was specified or just file DID (namespace:name) otherwise
+        * print the reserved file DID (namespace:name) and, optionally, write the file info in the 
+          JSON file specified with ``-j``
         * exit with 0 (success) code
        
     * If the command times out
@@ -455,7 +460,7 @@ for the specified amount of time. Depending on the outcome, the command will:
         * print "timeout"
         * exit with code 1
         
-    * If the project finishes (all the files are either done or failed permanently)
+    * If the project is done (all the files are either done or failed permanently)
     
         * print "done"
         * exit with code 1
@@ -468,10 +473,10 @@ Here is an example of using this command:
         
         ...
         
-        out=$(dd worker next -j $my_project)
+        out=$(dd worker next -j file_info.json -c $my_cpu_site $my_project)
         if [ $? -eq 0 ]
         then
-             # process the file using $out as the JSON data
+             # process the file using file info from the file_info.json
         else
             case $out in
                 done)
@@ -483,13 +488,16 @@ Here is an example of using this command:
             esac
         fi
         
-If "-j" option is used, then the JSON output will represent complete information about the file handle, including the list of
+If "-j" option is used, then the JSON output will represent complete information about the 
+reserved file, including the list of
 available replicas sorted by the RSE preference as well as the file and project attributes defined at the time of the project creation. 
 Replicas located in unavailable RSEs will _not_ be included, even if they are known to be staged in the RSE.
 
     .. code-block:: shell
 
-        $ ddisp worker next -j 70
+        $ ddisp worker next -j file_info.json -w worker_123 70
+        np04_reco_keepup:np04_raw_run006534_0005_dl1_reco_16440189_0_20190217T040518.root
+        $ cat file_info.json
         {
           "attempts": 1,
           "attributes": {
@@ -517,10 +525,9 @@ Replicas located in unavailable RSEs will _not_ be included, even if they are kn
             }
           ],
           "state": "reserved",
-          "worker_id": "hello_there_123"
+          "worker_id": "worker_123"
         }
 
-        
 Releasing the file
 ..................
 
