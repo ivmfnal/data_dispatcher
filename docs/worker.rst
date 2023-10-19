@@ -1,5 +1,20 @@
-Worker Workflow
-===============
+File Processing with Data Dispatcher
+====================================
+
+Basic file processing workflow looks like this:
+
+  1. Attempt to reserve a file using ``next file`` finction
+
+    * If reserved:
+
+      #. Process the file
+      #. Release the file
+
+        * if processed successfully, use ``file done`` function
+        * if processing failed, use ``file failed`` function
+
+    * If project is done, stop
+    * If timed out, go back to (1)
 
 Using Python API
 ----------------
@@ -13,6 +28,10 @@ Using Python API
   # create DD client object
   from data_dispatcher import DataDispatcherClient
   client = DataDispatcherClient(server_url)
+  
+  #
+  # Reserve a file to process
+  #
   
   project_done = False
   reserved_file = None
@@ -29,14 +48,20 @@ Using Python API
           project_done = True
           
   if reserved_file is not None:
-      # the file was successfully reserved
+      #
+      # A file was successfully reserved
+      #
       did = reserved_file["namespace"] + ':' + reserved_file["name"]
       replica = reserved_file["replicas"][0]         # get the closest replica
       url = reserved_file["url"]
   
-      # process the file
+      # process the file ...
   
-      if processing_successful:               # release the file
+      #
+      # Release the file
+      #
+
+      if processing_successful:
           client.file_done(project_id, did)
       else:
           # proessing failed
@@ -54,13 +79,17 @@ Using Data Dispatcher CLI
     my_project=...
     my_cpu_site=...
     
+    #
+    # Attempt to reserve a file
+    #
     out=$(ddisp worker next -j file_info.json -c $my_cpu_site $my_project)
     if [ $? -eq 0 ]
     then
-         did=$out           # erserved file DID (namespace:name)
+         did=$out           # reserved file DID (namespace:name)
 
-         # process the file using the contents of file_info.json
-         
+         #
+         # Process the file using the contents of file_info.json
+         #
          if [ $processed_successfully ]; then
              ddisp worker done $my_project $did
          else
@@ -76,7 +105,7 @@ Using Data Dispatcher CLI
                 # project is done
                 ;;
             timeout)
-                # timed out, can retry reserving a file
+                # timed out, can try to reserve again
                 ;;
         esac
     fi

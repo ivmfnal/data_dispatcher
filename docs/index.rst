@@ -8,6 +8,7 @@ Data Dispatcher Documentation
    install
    ui
    webapi
+   worker
    project_query
    dd-sam
 
