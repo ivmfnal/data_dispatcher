@@ -397,11 +397,10 @@ Deleting project
         $ ddisp project delete <project id>
 
 
-Workflow
-~~~~~~~~
+Data Processing Workflow (worker side)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The following commands are used by the worker process. The worker is assumed to know the id of the project it is working on.
-
 
 Setting worker id
 .................
@@ -483,13 +482,13 @@ Here is an example of using this command:
                     # project is done
                     ;;
                 timeout)
-                    # timed out
+                    # timed out, can try to reserve again
                     ;;
             esac
         fi
         
 If "-j" option is used, then the information about the reserved file and its available
-replicas will be stored in the provided file. 
+replicas will be stored in the provided file in JSON format. 
 Replicas located in unavailable RSEs will _not_ be included, even if they are known to be staged in the RSE.
 
     .. code-block:: shell
