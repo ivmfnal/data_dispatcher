@@ -10,7 +10,7 @@ class NextFileCommand(CLICommand):
     Usage = """[options] <project_id> -- get next available file
              -w <worker id>     -- specify worker id
              -c <cpu site>      -- choose the file according to the CPU/RSE proximity map for the CPU site
-             -j                 -- as JSON
+             -j <json file>     -- write reserved file information into a JSON file
              -t <timeout>       -- wait for next file until "timeout" seconds, 
                                    otherwise, wait until the project finishes
     """
@@ -18,7 +18,7 @@ class NextFileCommand(CLICommand):
     def __call__(self, command, client, opts, args):
         project_id = int(args[0])
         worker_id = opts.get("-w")
-        as_json = "-j" in opts
+        json_out = opts.get("-j")
         timeout = opts.get("-t")
         if timeout is not None: timeout = int(timeout)
         cpu_site = opts.get("-c")
@@ -30,11 +30,11 @@ class NextFileCommand(CLICommand):
             sys.exit(1)
 
         if isinstance(reply, dict):
-            if as_json:
+            print("%s:%s" % (reply["namespace"], reply["name"]))
+            if json_out:
                 reply["replicas"] = sorted(reply["replicas"].values(), key=lambda r: 1000000 if r.get("preference") is None else r["preference"])
-                print(pretty_json(reply))
-            else:
-                print("%s:%s" % (reply["namespace"], reply["name"]))
+                with open(json_out, "w") as jo:
+                    json.dump(reply, jo)
         else:
             print("timeout" if reply else "done")
             sys.exit(1)        # timeout
