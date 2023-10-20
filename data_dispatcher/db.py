@@ -976,7 +976,6 @@ class DBReplica(DBObject, HasLogRecord):
                 where row(r.namespace, r.name) in (select namespace, name from {temp_table})
                     and not row(r.namespace, r.name, r.rse) in (select namespace, name, rse from {temp_table});
         """)
-        ndeleted = c.rowcount;
         
         #
         # insert new replicas and update existing ones
