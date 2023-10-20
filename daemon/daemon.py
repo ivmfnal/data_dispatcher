@@ -345,7 +345,7 @@ class ProjectMonitor(Primitive, Logged):
                         #self.debug(namespace, name, rse, urls)
                         if rse in self.RSEConfig:
                             urls = sorted(urls, key=lambda url:
-                                self.SchemePreference.get(urlparse(url).scheme.lower(), 1000)
+                                self.SchemesPreference.get(urlparse(url).scheme.lower(), 1000)
                             )
                             #self.debug(f"RSE {rse} in config")
                             available = not self.RSEConfig.is_tape(rse)
@@ -363,7 +363,7 @@ class ProjectMonitor(Primitive, Logged):
             print("Exception in sync_replicas:", e, file=sys.stderr)
             traceback.print_exc()
             self.error("exception in sync_replicas:", e)
-            self.error(textwrap.indent(traceback.format_exc()), "  ")
+            self.error(textwrap.indent(traceback.format_exc(), "  "))
         if self.UpdateAvailabilityTask is None:
             self.UpdateAvailabilityTask = GeneralTaskQueue.add(self.update_replicas_availability, interval=self.UpdateInterval)
         self.debug("update_replicas_availability task schduled")
