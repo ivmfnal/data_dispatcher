@@ -60,6 +60,7 @@ create table replicas
     rse         text        references rses(name) on delete cascade,
     path        text,
     url         text,
+    urls        jsonb       default '[]'::jsonb,
     available   boolean     default false,
     preference  int         default 0,
     primary key (namespace, name, rse),

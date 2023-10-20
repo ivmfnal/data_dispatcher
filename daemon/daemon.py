@@ -225,7 +225,7 @@ class ProjectMonitor(Primitive, Logged):
     NewRequestInterval = 5      # interval to check on new pin request
     SyncInterval = 600          # interval to re-sync replicas with Rucio
     
-    def __init__(self, master, project_id, db, rse_config, rucio_client):
+    def __init__(self, master, project_id, db, rse_config, rucio_client, url_schemes=None):
         Logged.__init__(self, f"ProjectMonitor({project_id})")
         Primitive.__init__(self, name=f"ProjectMonitor({project_id})")
         self.Removed = False
@@ -243,6 +243,11 @@ class ProjectMonitor(Primitive, Logged):
         self.SyncTask = SyncTaskQueue.add(self.sync_replicas, interval=self.SyncInterval)
         self.CheckProjectTask = GeneralTaskQueue.add(self.check_project_state, interval=self.UpdateInterval)
         self.UpdateAvailabilityTask = None
+        url_schemes = [scheme.lower() for scheme in url_schemes]
+        self.URLSchemes = url_schemes or None
+        self.SchemesPreference = {scheme: i         # used for sorting
+            for i, scheme in enumerate(url_schemes or [])
+        }
 
     def tape_rse_interface(self, rse):
         interface = self.TapeRSEInterfaces.get(rse)
@@ -324,8 +329,9 @@ class ProjectMonitor(Primitive, Logged):
                 with self.Master:
                     # locked, in case the client needs to refresh the token
                     #self.debug("sync_replicas: calling list_replicas...")
-                    rucio_replicas = self.RucioClient.list_replicas(chunk, schemes=self.Master.URLSchemes,
-                                            all_states=False, ignore_availability=False)
+                    rucio_replicas = self.RucioClient.list_replicas(chunk, 
+                            schemes=self.URLSchemes,
+                            all_states=False, ignore_availability=False)
                 rucio_replicas = list(rucio_replicas)
                 n = len(rucio_replicas)
                 total_replicas += n
@@ -338,21 +344,15 @@ class ProjectMonitor(Primitive, Logged):
                     for rse, urls in r["rses"].items():
                         #self.debug(namespace, name, rse, urls)
                         if rse in self.RSEConfig:
+                            urls = sorted(urls, key=lambda url:
+                                self.SchemePreference.get(urlparse(url).scheme.lower(), 1000)
+                            )
                             #self.debug(f"RSE {rse} in config")
-                            preference = self.RSEConfig.preference(rse)
                             available = not self.RSEConfig.is_tape(rse)
-                            for url in urls:
-                                parsed = urlparse(url)
-                                scheme = parsed.scheme.lower()
-                                if scheme in ("root", "xroot", "xrootd"):
-                                    break
-                            else:
-                                # xrootd not found - use first URL on the list, assuming it's most preferred for the RSE
-                                url = urls[0]
-                            url = self.RSEConfig.fix_url(rse, url)
-                            path = self.RSEConfig.url_to_path(rse, url)
-                            data = dict(path=path, url=url, available=available, preference=preference)
-                            #self.debug("replica data:", data)
+                            data = {
+                                "available": available,
+                                "urls": [self.RSEConfig.fix_url(rse, url) for url in urls]
+                            }
                             by_namespace_name_rse.setdefault((namespace, name), {})[rse] = data
                             #self.debug("added replica:", data)
                         else:
@@ -463,7 +463,9 @@ class ProjectMaster(PyThread, Logged):
             project = DBProject.get(self.DB, project_id)
             if project is not None:
                 files = ({"namespace":f.Namespace, "name":f.Name} for f in project.handles(with_replicas=False))
-                monitor = self.Monitors[project_id] = ProjectMonitor(self, project_id, self.DB, self.RSEConfig, self.RucioClient)
+                monitor = ProjectMonitor(self, project_id, self.DB, 
+                        self.RSEConfig, self.RucioClient, self.URLSchemes)
+                self.Monitors[project_id] = monitor
             self.log("project added:", project_id)
 
     @synchronized

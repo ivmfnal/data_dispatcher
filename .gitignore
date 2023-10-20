@@ -5,6 +5,7 @@ dist
 *.egg-info
 __pycache__
 .*
+!.readthedocs.yaml
 !.gitignore
 *.ipynb
 *-hide
