@@ -816,7 +816,7 @@ class DBReplica(DBObject, HasLogRecord):
     Table = "replicas"
     ViewWithRSEStatus = "replicas_with_rse_availability"
     
-    Columns = ["namespace", "name", "rse", "path", "url", "preference", "available"]
+    Columns = ["namespace", "name", "rse", "path", "url", "urls", "preference", "available"]
     PK = ["namespace", "name", "rse"]
     
     LogIDColumns = ["namespace", "name", "rse"]
@@ -858,6 +858,7 @@ class DBReplica(DBObject, HasLogRecord):
             where {wheres}
         """)
         for tup in cursor_iterator(c):
+            print("DBReplica.list: tuple:", tup)
             r = DBReplica.from_tuple(db, tup[:-1])
             r.RSEAvailable = tup[-1]
             yield r
@@ -1205,6 +1206,9 @@ class DBFileHandle(DBObject, HasLogRecord):
     def replicas(self):
         if self.Replicas is None:
             self.Replicas = {r.RSE:r for r in DBReplica.list(self.DB, self.Namespace, self.Name)}
+            print("DBHandle.replicas:")
+            for r in self.Replicas.values():
+                print(r.as_jsonable())
         return self.Replicas
         
     def state(self):
@@ -1251,7 +1255,8 @@ class DBFileHandle(DBObject, HasLogRecord):
             reserved_since = self.ReservedSince.timestamp() if self.ReservedSince is not None else None
         )
         if with_replicas:
-            out["replicas"] = {rse:r.as_jsonable() for rse, r in self.replicas().items()}
+            out["replicas"] = {rse: r.as_jsonable() for rse, r in self.replicas().items()}
+        print("DBHandle.as_jsonable: out:", out)
         return out
         
     def attributes_as_json(self):
