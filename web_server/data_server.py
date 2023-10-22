@@ -243,12 +243,15 @@ class Handler(BaseHandler):
         else:
             pmap = self.App.proximity_map()
             info = handle.as_jsonable(with_replicas=True)
-            info["replicas"] = {rse:r for rse, r in info["replicas"].items() if r["available"] and r["rse_available"]}
+            info["replicas"] = {
+                    rse: r for rse, r in info["replicas"].items() 
+                    if r["available"] and r["rse_available"]
+            }
             for rse, r in info["replicas"].items():
                 try:    proximity = pmap.proximity(cpu_site, rse)
                 except KeyError:
                     proximity = None
-                r["preference"] = proximity
+                r["preference"] = r["proximity"] = proximity
             info["project_attributes"] = project.Attributes or {}
             out = {
                 "handle": info,
