@@ -154,6 +154,7 @@ class WLCGPinner(PyThread, Logged):
 
     @synchronized
     def pin_project(self, project_id, replicas):
+        # replicas: {did: path}
         self.log(f"pin_project({project_id}):", len(replicas), "replicas")
         self.FilesPerProject[project_id] = replicas.copy()
 

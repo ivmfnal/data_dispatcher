@@ -816,18 +816,20 @@ class DBReplica(DBObject, HasLogRecord):
     Table = "replicas"
     ViewWithRSEStatus = "replicas_with_rse_availability"
     
-    Columns = ["namespace", "name", "rse", "path", "url", "preference", "available"]
+    Columns = ["namespace", "name", "rse", "path", "url", "urls", "preference", "available"]
     PK = ["namespace", "name", "rse"]
     
     LogIDColumns = ["namespace", "name", "rse"]
     LogTable = "replica_log"
     
-    def __init__(self, db, namespace, name, rse, path, url, preference=0, available=None, rse_available=None):
+    def __init__(self, db, namespace, name, rse, path, url, 
+                urls=[], preference=0, available=None, rse_available=None):
         self.DB = db
         self.Namespace = namespace
         self.Name = name
         self.RSE = rse
         self.URL = url
+        self.URLs = urls
         self.Path = path
         self.Preference = preference
         self.Available = available
@@ -856,6 +858,7 @@ class DBReplica(DBObject, HasLogRecord):
             where {wheres}
         """)
         for tup in cursor_iterator(c):
+            print("DBReplica.list: tuple:", tup)
             r = DBReplica.from_tuple(db, tup[:-1])
             r.RSEAvailable = tup[-1]
             yield r
@@ -881,7 +884,7 @@ class DBReplica(DBObject, HasLogRecord):
         
     def as_jsonable(self):
         out = dict(name=self.Name, namespace=self.Namespace, path=self.Path, 
-            url=self.URL, rse=self.RSE,
+            rse=self.RSE, url=self.URL, urls=self.URLs,
             preference=self.Preference, available=self.Available,
             rse_available=self.RSEAvailable
         )
@@ -889,16 +892,16 @@ class DBReplica(DBObject, HasLogRecord):
 
     @staticmethod
     @transactioned
-    def create(db, namespace, name, rse, path, url, preference=0, available=False, error_if_exists=False, transaction=None):
+    def create(db, namespace, name, rse, path, url, urls, preference=0, available=False, error_if_exists=False, transaction=None):
         table = DBReplica.Table
         transaction.execute(f"""
-            insert into {table}(namespace, name, rse, path, url, preference, available)
-                values(%s, %s, %s, %s, %s, %s, %s)
+            insert into {table}(namespace, name, rse, path, url, urls, preference, available)
+                values(%s, %s, %s, %s, %s, %s, %s, %s)
                 on conflict(namespace, name, rse)
-                    do update set path=%s, url=%s, preference=%s, available=%s;
+                    do update set path=%s, url=%s, urls=%s, preference=%s, available=%s;
             commit
-        """, (namespace, name, rse, path, url, preference, available,
-                path, url, preference, available)
+        """, (namespace, name, rse, path, url, json.dumps(urls), preference, available,
+                path, url, urls, preference, available)
         )
         
         replica = DBReplica.get(db, namespace, name, rse)
@@ -918,10 +921,11 @@ class DBReplica(DBObject, HasLogRecord):
             c.execute(f"""
                 begin;
                 update {table}
-                     set path=%s, url=%s, preference=%s, available=%s
+                     set path=%s, url=%s, urls=%s, preference=%s, available=%s
                      where namespace=%s and name=%s and rse=%s;
                 commit
-            """, (self.Path, self.URL, self.Preference, self.Available, self.Namespace, self.Name, self.RSE))
+            """, (self.Path, self.URL, json.dumps(self.URLs), self.Preference, self.Available, 
+                    self.Namespace, self.Name, self.RSE))
         except:
             c.execute("rollback")
             raise
@@ -932,75 +936,63 @@ class DBReplica(DBObject, HasLogRecord):
     #
     
     @staticmethod
-    def sync_replicas(db, by_namespace_name):
-        # by_namespace_name: {(namespace, name) -> {rse: dict(path=path, url=url, available=available, preference=preference)}}
+    @transactioned
+    def sync_replicas(db, by_namespace_name, transaction=None):
+        # by_namespace_name: {(namespace, name) -> {rse: dict(urls=urls, available=available}}
         # The input dictionary is presumed to have all the replicas found for (namespace, name). I.e. if the replica is not found
         # in the input dictionary, it should be deleted
 
         t = int(time.time()*1000)
         temp_table = f"replicas_temp_{t}"
-        c = db.cursor()
-        c.execute(f"""
-            begin;
-        """)
 
         records = []
         for (namespace, name), by_rse in by_namespace_name.items():
             for rse, info in by_rse.items():
                 records.append((namespace, name, rse, info))
 
-
-        csv = ['%s\t%s\t%s\t%s\t%s\t%s\t%s' % (namespace, name, rse, info["path"], info["url"], 'true' if info["available"] else 'false', info["preference"]) 
+        csv = ['%s\t%s\t%s\t%s\t%s' % (namespace, name, rse, 
+                json.dumps(info.get("urls", [])),
+                'true' if info["available"] else 'false') 
             for namespace, name, rse, info in records
         ]
         csv = io.StringIO("\n".join(csv))
         
-        try:
-            c.execute(f"""
-                create temp table {temp_table}
+        transaction.execute(f"""
+            create temp table {temp_table}
+            (
+                namespace   text,
+                name        text,
+                rse         text,
+                urls        jsonb,
+                available   boolean
+        )
+        """)
+        transaction.copy_from(csv, temp_table)
+        
+        #
+        # delete replicas if (namespace, name, rse) not present in the list for (namespace, name)
+        #
+        transaction.execute(f"""
+            delete from replicas r 
+                where row(r.namespace, r.name) in (select namespace, name from {temp_table})
+                    and not row(r.namespace, r.name, r.rse) in (select namespace, name, rse from {temp_table});
+        """)
+        
+        #
+        # insert new replicas and update existing ones
+        #
+        transaction.execute(f"""
+            insert into replicas(namespace, name, rse, urls, available)
                 (
-                    namespace   text,
-                    name        text,
-                    rse         text,
-                    path        text,
-                    url         text,
-                    available   boolean,
-                    preference  int
-            )
-            """)
-            c.copy_from(csv, temp_table)
-            
-            #
-            # delete replicas if (namespace, name, rse) not present in the list for (namespace, name)
-            #
-            c.execute(f"""
-                delete from replicas r 
-                    where row(r.namespace, r.name) in (select namespace, name from {temp_table})
-                        and not row(r.namespace, r.name, r.rse) in (select namespace, name, rse from {temp_table});
-            """)
-            ndeleted = c.rowcount;
-            
-            #
-            # insert new replicas and update existing ones
-            #
-            c.execute(f"""
-                insert into replicas(namespace, name, rse, path, url, preference, available)
-                    (
-                        select namespace, name, rse, path, url, preference, available
-                            from {temp_table}
-                    )
-                    on conflict(namespace, name, rse)
-                    do update set path=excluded.path,
-                        url=excluded.url,
-                        preference=excluded.preference,
-                        available=replicas.available or excluded.available
-            """)
-            c.execute(f"drop table {temp_table}")
-            c.execute("commit")
-        except:
-            c.execute("rollback")
-            traceback.print_exc()
-            raise
+                    select namespace, name, rse, urls, available
+                        from {temp_table}
+                )
+                on conflict(namespace, name, rse)
+                do update set 
+                    urls=excluded.urls,
+                    available=replicas.available or excluded.available
+        """)
+        transaction.execute(f"drop table {temp_table}")
     
     @staticmethod
     def remove_bulk(db, rse=None, dids=None):
@@ -1029,7 +1021,7 @@ class DBReplica(DBObject, HasLogRecord):
         return nremoved
 
     @staticmethod
-    def create_bulk(db, rse, available, preference, replicas):
+    def _______create_bulk(db, rse, available, preference, replicas):
         
         r = DBRSE.get(db, rse)
         if r is None or not r.Enabled:
@@ -1214,6 +1206,9 @@ class DBFileHandle(DBObject, HasLogRecord):
     def replicas(self):
         if self.Replicas is None:
             self.Replicas = {r.RSE:r for r in DBReplica.list(self.DB, self.Namespace, self.Name)}
+            print("DBHandle.replicas:")
+            for r in self.Replicas.values():
+                print(r.as_jsonable())
         return self.Replicas
         
     def state(self):
@@ -1260,7 +1255,8 @@ class DBFileHandle(DBObject, HasLogRecord):
             reserved_since = self.ReservedSince.timestamp() if self.ReservedSince is not None else None
         )
         if with_replicas:
-            out["replicas"] = {rse:r.as_jsonable() for rse, r in self.replicas().items()}
+            out["replicas"] = {rse: r.as_jsonable() for rse, r in self.replicas().items()}
+        print("DBHandle.as_jsonable: out:", out)
         return out
         
     def attributes_as_json(self):
