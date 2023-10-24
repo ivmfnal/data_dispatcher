@@ -13,11 +13,14 @@ class WLCGPinRequest(Logged):
     # see https://docs.google.com/document/d/1Zx_H5dRkQRfju3xIYZ2WgjKoOvmLtsafP2pKGpHqcfY/edit
     
     PinLifetime = 3600
+    MaxPinSize = 100
+    LowWater = 50
     
     def __init__(self, rse, url, pin_prefix_ignored, ssl_config, paths):
         Logged.__init__(self, f"WLCGPinRequest({rse})")
         self.EndpointURL = url
-        self.Paths = set(paths)
+        self.Paths = set(paths)             # paths on this request
+        self.StagedPaths = set()         # staged paths
         self.SSLConfig = ssl_config
         self.URL = None
         self.RequestID = None
@@ -27,14 +30,13 @@ class WLCGPinRequest(Logged):
         self.Complete = False
         self.Expiration = None
         self.Error = None
-        self.StagedReplicas = set()         # set of paths
         self.debug("created for", len(paths),"replicas")
 
     def __len__(self):
         return len(self.Paths)
 
     def send(self):
-        self.StagedReplicas = set()
+        self.StagedPaths = set()
         self.Expiration = time.time() + self.PinLifetime
         headers = { "accept" : "application/json",
                     "content-type" : "application/json"}
@@ -87,15 +89,15 @@ class WLCGPinRequest(Logged):
         self.debug("My URL:", self.URL, "   query response:", r)
         self.debug("response text:", "\n"+r.text)
         r.raise_for_status()
-        self.StagedReplicas = set(
+        self.StagedPaths = set(
             item["path"] for item in data["files"]
             if item.get("onDisk") or item.get("state", "").upper() == "COMPLETED"
         )
         self.Complete = data.get("completedAt", time.time() + 1000000) < time.time()
         return data
         
-    def staged_replicas(self):
-        return self.StagedReplicas
+    def staged_paths(self):
+        return self.StagedPaths
 
     def delete(self):
         assert self.URL is not None
@@ -107,7 +109,7 @@ class WLCGPinRequest(Logged):
             return "ERROR"
         r.raise_for_status()
         self.debug("delete: my URL:", self.URL, "   response:", r.text)
-        self.StagedReplicas = set()
+        self.StagedPaths = set()
         #return r.json()
 
     def status(self):
@@ -122,12 +124,12 @@ class WLCGPinRequest(Logged):
     def update_staged_set(self):
         # query and update staged set unless already complete, return stged set
         _ = self.complete()
-        return self.StagedReplicas
+        return self.StagedPaths
 
     def will_expire(self, t):
         return self.Expiration is None or time.time() >= self.Expiration - t
 
-    def same_files(self, paths):
+    def same_paths(self, paths):
         paths = set(paths)
         same = paths == self.Paths
         return same
@@ -146,21 +148,49 @@ class WLCGPinner(PyThread, Logged):
         self.Prefix = prefix
         self.SSLConfig = ssl_config
         self.FilesPerProject = {}        # {project_id -> {did: path, ...}}
-        self.PinRequest = None
+        self.PinRequests = {}            # request id -> WLCGPinRequest
         self.DB = db
         self.Poller = poller
         self.Stop = False
-        self.StagedReplicas = []
+        self.StagedPaths = []
 
     @synchronized
-    def pin_project(self, project_id, replicas):
-        self.log(f"pin_project({project_id}):", len(replicas), "replicas")
+    def pin_project(self, project_id, files):
+        # files: {did -> path}
+        self.log(f"pin_project({project_id}):", len(files), "files")
         self.FilesPerProject[project_id] = replicas.copy()
 
     @synchronized
     def unpin_project(self, project_id):
         self.log(f"unpin_project({project_id})")
         self.FilesPerProject.pop(project_id, None)
+        
+    @synchronized
+    def pinned_dids(self, project_id=None):
+        out = set()
+        if project_id is None:
+            for project_id in self.FilesPerProject.keys():
+                out.update(self.pinned_dids(project_id))
+        else:
+            did_mapping = self.FilesPerProject[project_id]
+            reverse_mapping = {path: did for did, path in did_mapping.items()}
+            for r in self.PinRequests.values():
+                out.update(r.update_staged_set())
+        return out
+
+    def update_replicas_availability(self):
+        if self.PinRequests:
+            staged_paths = set()
+            for request in self.PinRequests.values():
+                staged_paths.update(request.update_staged_set())
+            staged_dids = [did for did, path in all_files.items() if path in staged_paths]
+            pending_dids_paths = [(did, path) for did, path in all_files.items() if path not in staged_paths]
+            self.log("files staged:", len(staged_dids), "    still pending:", len(pending_dids_paths))
+            if staged_dids:
+                DBReplica.update_availability_bulk(self.DB, True, self.RSE, staged_dids)
+            if pending_dids_paths:
+                self.debug("sending", len(pending_dids_paths), "dids/paths to poller")
+                self.Poller.submit(pending_dids_paths)
 
     def run(self):
         time.sleep(self.InitialSleepInterval)          # initial sleep so pprojects have a chance to send their pin requests
@@ -169,68 +199,74 @@ class WLCGPinner(PyThread, Logged):
             next_run = self.UpdateInterval
             try:
                 with self:
-                    all_files = {}              # {did -> path} for all projects, combined
+                    files_to_pin = {}              # {did -> path} for all projects, combined
                     for project_files in self.FilesPerProject.values():
-                        all_files.update(project_files)
-                    all_paths = set(all_files.values())
-                    
-                    self.debug("existing pin request:", None if self.PinRequest is None else self.PinRequest.URL)
-                    
-                    if self.PinRequest is not None:
-                        if not self.PinRequest.same_files(all_paths):
-                            self.log("file set changed -- deleting pin request")
-                            self.debug("file set changed -- deleting pin request")
-                            # debug
-                            for path in sorted(all_paths - self.PinRequest.Paths):
-                                self.debug(" +", path)
-                            for path in sorted(self.PinRequest.Paths - all_paths):
-                                self.debug(" -", path)
-                            self.PinRequest.delete()
-                            self.PinRequest = None
-                        elif self.PinRequest.will_expire(self.UpdateInterval*3):
-                            self.debug("pin request is about to expire -- deleting pin request")
-                            self.log("pin request is about to expire -- deleting pin request")
-                            try:    self.PinRequest.delete()
-                            except Exception as e:
-                                self.error("Exception deleting pin request:", e, "   -- ignoring, the pin request will expire")
-                                self.debug("Exception deleting pin request:", e, "   -- ignoring, the pin request will expire")
-                            self.PinRequest = None
-                    if all_files:       # anything to pin ??
-                        if self.PinRequest is None:
-                            self.debug("sending pin request for", len(all_paths), "replicas...")
-                            pin_request = WLCGPinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, all_paths)
-                            try:
-                                created = pin_request.send()
-                            except Exception as e:
-                                self.error("exception sending pin request: " + traceback.format_exc())
-                                self.log("Failed to create pin request because of exception:", e)
+                        files_to_pin.update(project_files)
+                    paths_to_pin = set(files_to_pin.values())
+                    paths_already_requested = set()
+                    for rid, r in self.PinRequests.items():
+                        paths_already_requested.update(r.Paths)
+
+                    if paths_to_pin != paths_already_requested:
+                        new_paths = paths_to_pin - paths_already_requested
+                        kept_paths = set()
+
+                        new_requests_dict = {}
+                        requests_to_delete = {}                 # {rid -> r}
+                        for r in self.PinRequests.values():
+                            if all(path in paths_to_pin for path in r.Paths) and \
+                                        len(r) >= WLCGPinRequest.LowWater:
+                                kept_paths.update(r.Paths)
+                                new_requests_dict[r.RequestID] = r
                             else:
-                                if created:
-                                    self.PinRequest = pin_request
-                                    self.debug("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
-                                    self.log("pin request created for %d files. URL:%s" % (len(all_paths), self.PinRequest.URL))
-                                    next_run = 5            # check request status kinda soon
+                                requests_to_delete[r.RequestID] = r
+
+                        paths_to_pin = paths_to_pin - kept_paths
+                        if paths_to_pin:
+                            new_paths_to_pin = sorted(paths_to_pin)
+                            while new_paths_to_pin:
+                                chunk, new_paths_to_pin = (
+                                    new_paths_to_pin[:WLCGPinRequest.MaxPinSize],
+                                    new_paths_to_pin[WLCGPinRequest.MaxPinSize:]
+                                )
+                                pin_request = WLCGPinRequest(self.RSE, self.URL, self.Prefix, self.SSLConfig, chunk)
+                                try:
+                                    created = pin_request.send()
+                                except Exception as e:
+                                    self.error("exception sending pin request: " + traceback.format_exc())
+                                    self.log("Failed to create pin request because of exception:", e)
                                 else:
-                                    self.log("error sending pin request:", pin_request.Error)
-                                    self.error("error sending pin request:", pin_request.Error)
-                        else:
-                            staged_paths = self.PinRequest.update_staged_set()
-                            staged_dids = [did for did, path in all_files.items() if path in staged_paths]
-                            pending_dids_paths = [(did, path) for did, path in all_files.items() if path not in staged_paths]
-                            self.log("files staged:", len(staged_dids), "    still pending:", len(pending_dids_paths))
-                            if staged_dids:
-                                DBReplica.update_availability_bulk(self.DB, True, self.RSE, staged_dids)
-                            if pending_dids_paths:
-                                self.debug("sending", len(pending_dids_paths), "dids/paths to poller")
-                                self.Poller.submit(pending_dids_paths)
-                    else:
-                        #self.debug("no files to pin")
-                        pass
+                                    if created:
+                                        self.debug("pin request created for %d files. URL:%s" % (len(chunk), self.PinRequest.URL))
+                                        self.log("pin request created for %d files. URL:%s" % (len(chunk), self.PinRequest.URL))
+                                        new_requests_dict[pin_request.RequestID] = pin_request
+                                        next_run = 5            # check request status kinda soon
+                                    else:
+                                        self.log("error sending pin request:", pin_request.Error)
+                                        self.error("error sending pin request:", pin_request.Error)
+
+                        for rid, request in requests_to_delete.itema():
+                            try:
+                                request.delete()
+                                self.debug("Request", rid, "deleted")
+                                self.log("Request", rid, "deleted")
+                            except Exception as e:
+                                self.error("exception deleting pin request: " + traceback.format_exc())
+                                self.log("Failed to delete pin request because of exception:", e)
+
+                        selt.PinRequests = new_requests_dict
+                    
+                    if selt.PinRequests:
+                        for request in selt.PinRequests.values():
+                            request.update_staged_set()
+                    
             except Exception as e:
                 self.error("exception in run:\n", traceback.format_exc())
             time.sleep(next_run)       
 
 class DCacheInterface(Primitive, Logged):
+    
+    """WLCG version of the interface"""
     
     def __init__(self, rse, db, rse_config):
         Primitive.__init__(self, name=f"DCacheInterface({rse})")
@@ -247,6 +283,7 @@ class DCacheInterface(Primitive, Logged):
         self.Poller.start()
         self.Pinner.start()
         self.log("WLCG DCacheInterface created at:\n    pin URL:", pin_url, "\n    poll URL:", poll_url)
+        self.KnownFiles = {}            # {did -> path}
         
     def discover(self, url):
         if "/.well-known/" in url:
@@ -261,10 +298,10 @@ class DCacheInterface(Primitive, Logged):
 
     def unpin_project(self, project_id):
         return self.Pinner.unpin_project(project_id)
+        
+    def staged_dids(self, project_id=None):
+        if 
 
     def poll(self, files):
         # files: {did -> path}
         self.Poller.submit(files)
-
-
-print("wlcg module imported")

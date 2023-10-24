@@ -35,8 +35,10 @@ class DCachePoller(PyThread, Logged):
                     nburst = min(self.MaxBurst, n)
                     burst, items = items[:nburst], items[nburst:]
                     self.Files = dict(items)
-                headers = { "accept" : "application/json",
-                        "content-type" : "application/json"}
+                headers = { 
+                    "accept" : "application/json",
+                    "content-type" : "application/json"
+                }
                 available_dids = []
                 unavailable_dids = []
                 remove_dids = []

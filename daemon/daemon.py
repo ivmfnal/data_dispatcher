@@ -108,6 +108,7 @@ class RSEListLoader(PyThread, Logged):
             if not self.Stop:
                 self.sleep(self.Interval)
 
+
 class RSEConfig(Logged):
     
     def __init__(self, config, db):
@@ -218,6 +219,7 @@ class RSEConfig(Logged):
 
     def max_burst(self, rse):
         return self.get(rse).get("max_poll_burst", 100)
+
 
 class ProjectMonitor(Primitive, Logged):
     
@@ -403,7 +405,7 @@ class ProjectMonitor(Primitive, Logged):
                 rse_interface = self.tape_rse_interface(rse)
                 self.debug("pinning", len(replica_paths), "in", rse)
                 rse_interface.pin_project(self.ProjectID, replica_paths)
-                
+
             project = DBProject.get(self.DB, self.ProjectID)
             if project is not None and project.WorkerTimeout is not None:
                 self.debug("releasing timed-out handles, timeout=", project.WorkerTimeout)
