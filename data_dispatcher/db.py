@@ -858,7 +858,7 @@ class DBReplica(DBObject, HasLogRecord):
             where {wheres}
         """)
         for tup in cursor_iterator(c):
-            print("DBReplica.list: tuple:", tup)
+            #print("DBReplica.list: tuple:", tup)
             r = DBReplica.from_tuple(db, tup[:-1])
             r.RSEAvailable = tup[-1]
             yield r
