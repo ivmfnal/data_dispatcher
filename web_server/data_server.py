@@ -244,8 +244,12 @@ class Handler(BaseHandler):
             pmap = self.App.proximity_map()
             info = handle.as_jsonable(with_replicas=True)
             info["replicas"] = {
+<<<<<<< HEAD
                     rse:r 
                     for rse, r in info["replicas"].items() 
+=======
+                    rse: r for rse, r in info["replicas"].items() 
+>>>>>>> main
                     if r["available"] and r["rse_available"]
             }
             for rse, r in info["replicas"].items():
