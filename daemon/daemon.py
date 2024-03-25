@@ -44,6 +44,53 @@ delegate = TaskQueueDelegate()
 SyncTaskQueue = TaskQueue(5, name="SyncTaskQueue", delegate=delegate)
 GeneralTaskQueue = TaskQueue(100, name="GeneralTaskQueue", delegate=delegate)
 
+class RuciolessMockClient:
+    """ 
+        For experiments that only use site DCache...
+        A minimal mock for:
+        * ReplicaClient
+        * RSEClient
+        * RucioListener
+        That lets you use file.location in the metadata and not use 
+        Rucio, 
+    """
+
+    def __init__(self, metacat_client, def_rse = "DCACHE"):
+        self.metacat = metacat_client
+        self.rse = "DCACHE"
+
+    # ReplicaClient emulation -- we only call list_replicas
+
+    def list_replicas(did_list, schemes, all_states, ignore_availability)
+        """ return the single location from the metacat data"""
+        mdl = self.metacat.get_files(did_list, with_metadata=True)
+        res = [{
+                 "scope": md.namespace,
+                 "name": md.name,
+                 "filesize": md.size,
+                 "adler32": md["checksums"]["adler32"],
+                 "rses":[ { self.rse: [ md["metadata"]["file.location"] ] } ]
+              } for md in mdl]
+        return res
+
+    # RSECLient emulation, we only call list_replicas
+    
+    def list_rses():
+        """ return the fake RSE entry (entries?)  for DCache """
+        rsel = [ {...} ]
+        return rsel
+
+    # RucioListener emulation -- it runs as a thread...
+
+    def start():
+        """ vacuously start the RucioListener -- do nothing """
+        pass
+
+    def join():
+        """ do nothing to match start() """
+        pass
+
+
 class ProximityMapDownloader(PyThread, Logged):
 
     def __init__(self, db, url, interval=300):
@@ -565,6 +612,7 @@ def main():
     from rucio.client.replicaclient import ReplicaClient
     from rucio.client.rseclient import RSEClient
     from data_dispatcher.logs import init_logger
+    from metacat.webapi import MetaCatClient 
 
     opts, args = getopt.getopt(sys.argv[1:], "c:d")
     opts = dict(opts)
@@ -601,8 +649,15 @@ def main():
         connection.close()
         del connection
 
-    replica_client = ReplicaClient()        # read standard Rucio config file for now
-    rse_client = RSEClient()
+    if self.config.get("rucioless", False):
+        replica_client = RuciolessMockClient(MetacatClient())
+        rse_client = replica_client
+        rucio_listener = replica_client
+      
+    else:
+        replica_client = ReplicaClient()        # read standard Rucio config file for now
+        rse_client = RSEClient()
+        rucio_listener = RucioListener(connection_pool, rucio_config, rse_config)
     
     proximity_map_loader = None
     proximity_map_url = config.get("proximity_map", {}).get("url")
@@ -617,11 +672,10 @@ def main():
         print("Proximity map URL is not configured")
 
     rse_list_loader = RSEListLoader(connection_pool, rse_client)
+
     rse_list_loader.start()
     
-    rucio_listener = RucioListener(connection_pool, rucio_config, rse_config)
     rucio_listener.start()
-        
 
     schemes = config.get("replica_url_schemes")
 
