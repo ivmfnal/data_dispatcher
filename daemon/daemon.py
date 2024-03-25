@@ -59,6 +59,8 @@ class RuciolessMockClient:
         self.metacat = metacat_client
         self.rse = "DCACHE"
 
+    # ReplicaClient emulation -- we only call list_replicas
+
     def list_replicas(did_list, schemes, all_states, ignore_availability)
         """ return the single location from the metacat data"""
         mdl = self.metacat.get_files(did_list, with_metadata=True)
@@ -71,13 +73,21 @@ class RuciolessMockClient:
               } for md in mdl]
         return res
 
+    # RSECLient emulation, we only call list_replicas
+    
     def list_rses():
         """ return the fake RSE entry (entries?)  for DCache """
         rsel = [ {...} ]
         return rsel
 
+    # RucioListener emulation -- it runs as a thread...
+
     def start():
         """ vacuously start the RucioListener -- do nothing """
+        pass
+
+    def join():
+        """ do nothing to match start() """
         pass
 
 
