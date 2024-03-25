@@ -91,7 +91,7 @@ class RuciolessMockClient:
         pass
 
 
-class P(PyThread, Logged):
+class ProximityMapDownloader(PyThread, Logged):
 
     def __init__(self, db, url, interval=300):
         PyThread.__init__(self, name="ProximityMapDownloader", daemon=True)
